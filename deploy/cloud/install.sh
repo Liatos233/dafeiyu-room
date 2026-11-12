@@ -12,9 +12,11 @@ REPO="${REPO:-https://github.com/Liatos233/dafeiyu-room.git}"
 APP_DIR="${APP_DIR:-/opt/dafeiyu-room}"
 PUBLIC_HOST="${PUBLIC_HOST:-$(curl -s -m 5 ifconfig.me || echo 127.0.0.1)}"
 WITH_ASTRBOT=0
+DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --with-astrbot) WITH_ASTRBOT=1 ;;
+    --dry-run) DRY_RUN=1 ;;
   esac
 done
 
@@ -44,6 +46,13 @@ else
     rm -rf "$KEEP"
     echo "   state/ 与 config.json 已还原"
   fi
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+  log "dry-run：代码已就位，跳过依赖/服务/nginx/备份"
+  echo "  APP_DIR=$APP_DIR"
+  ls -1 "$APP_DIR" | head -n 8
+  exit 0
 fi
 
 log "3/8 安装依赖"
