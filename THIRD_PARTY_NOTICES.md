@@ -1,5 +1,12 @@
 # 第三方素材与依赖
 
+## 上游项目
+
+- **仓库**：<https://github.com/sh2234113/feiyu-room-template>（作者 sh2234113）
+- **关系**：本仓库 fork 自上游「大肥鱼房子模板」，并在其基础上继续开发
+- **上游许可**：代码 MIT；2D 立绘与动作素材 CC BY-NC-SA 4.0
+- **保留义务**：沿用上游的署名要求，保留本文件与 `public/room/assets/pet/CREDITS.md`，不得商业使用上游素材
+
 ## 代码
 
 本项目代码：MIT，见 `LICENSE`。
