@@ -134,3 +134,44 @@ bili_whale / dafeiyu_clean / dafeiyu_signature / dafeiyu_sing
 
 > 内存注意：全量插件下 AstrBot 占用约 1.1 GB（2 GB 机器 + 4G swap 可跑）。
 > 如果频繁 OOM，优先停 `livingmemory` / `meme_manager`（两者都带 faiss 索引）。
+
+
+## 八、AstrBot 全量状态同步（无缝衔接）
+
+同步内容：`plugin_data/`（livingmemory 记忆、memewiki 词库、meme_manager 表情库、qzone/qqprofile/proactive_chat 等状态）、`config/*.json`、`cmd_config.json`、`plugins.json`、`data_v4.db`。
+
+**不包含**：`plugin_data/pulids_snowluma_go_to_astrbot`（QQ 客户端安装目录，与机器绑定）。
+
+### 本地 → 云端（让云端 = 本地）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\data\sync-state.ps1 -Direction push
+```
+
+### 云端 → 本地（让本地 = 云端）
+
+```powershell
+# 先在本机 launcher 里停掉 AstrBot
+powershell -ExecutionPolicy Bypass -File deploy\data\sync-state.ps1 -Direction pull
+```
+
+### 手工分步
+
+```bash
+# 云端打包 / 恢复
+bash /usr/local/bin/pack-astrbot-state.sh /root/astrbot-full-state.tar.gz
+bash /usr/local/bin/restore-astrbot-state.sh /root/astrbot-full-state.tar.gz
+```
+
+```powershell
+# 本机打包 / 恢复
+python scripts\pack-astrbot-state.py
+powershell -ExecutionPolicy Bypass -File deploy\data\apply-state-windows.ps1 -Tar _migrate\astrbot-full-state.tar.gz
+```
+
+### 重要约定
+
+- **同一时间只让一端在线**：两端同时跑会各自产生新记忆，再次同步时后写的一方覆盖先写的一方（不是合并）。
+- 同步包约 **1 GB**（meme_manager 900MB + livingmemory 172MB + memewiki 52MB），首次上传约 10 分钟。
+- 每次同步会覆盖 `data_v4.db`：另一端当天产生的对话记录会被覆盖掉，重要内容先导出。
+- `livingmemory` 的一致性由脚本用 sqlite backup 保证（不会拷到写一半的库）。
