@@ -1,48 +1,85 @@
 # 迁移到云服务器（Ubuntu 24.04）
 
-服务器：`101.245.76.51`（Ubuntu 24.04，2C2G，40G 盘，2Mbps，100G/月）
-目标：AstrBot + QQ(NapCat) + dafeiyu-room 上云；DSH 暂留本机，通过隧道供云端调用。
+服务器：`101.245.76.51`（Ubuntu 24.04，2C2G，40G 盘，2Mbps，100G/月，4G swap）
+目标：AstrBot（含 room_link）+ QQ（Snowluma Go 插件）+ dafeiyu-room 整体上云。
+
+## 当前状态
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| 0 初始化 | ✅ | Node 24.21、4G swap、ufw（22/3100/7000）、nginx |
+| 1 AstrBot | ✅ | 4.29.4，systemd 常驻，面板 6185（仅回环，经 SSH 隧道访问） |
+| 1.1 room_link 插件 | ✅ | HTTP 6188；能读取云端房间实时状态 |
+| 1.2 配置迁移 | ✅ | 3 个 provider、人格、面板账号已迁；实测能正常回复 |
+| 2 QQ（Snowluma Go） | ⏳ | 插件已加载，**等待在面板里安装 SnowLuma 并扫码登录** |
+| 3 房间 | ✅ | `http://101.245.76.51:3100/room/` 公网可访问 |
+| 3.1 存档迁移 | ✅ | home.json / room.json / garden.json 已迁，历史事件与亲近度保留 |
+| 4 验收（QQ→房间） | ⏳ | 等 QQ 登录后验证 |
+| 5 systemd 常驻 | ✅ | `dafeiyu-room`、`astrbot`、`nginx` 全部 active + 自启 |
+| 5.1 备份 | ✅ | 每日 04:00 打包房间状态 + AstrBot 配置/数据库到 `/var/backups/dafeiyu`，保留 7 份 |
+| 6 DSH 上云 | 暂不需要 | QQ 与人格由 AstrBot 负责，房间只做状态/表现 |
 
 ## 架构
 
 ```
-手机/浏览器 ──> 101.245.76.51:3100  房间（Node bridge + 静态站）
-                     │
-                     ├── AstrBot :6188（插件 room_link）
-                     │        │
-                     │        └── 房间桥接（同机 127.0.0.1:3100）
-                     │
-                     └── NapCat（QQ 客户端，OneBot WS/HTTP :3000/:3001）
-                              │
-                              └── 房间 bridge 把 QQ 消息转给 DSH
+手机/浏览器 ──> 101.245.76.51:3100 (nginx)
+                     └─> 127.0.0.1:3101  bridge（房间状态 + API + 静态站）
 
-本机(Windows) DSH Web ──frpc──> 服务器 frps :7000 ──> 127.0.0.1:3080（bridge 配置的 DSH 地址）
+AstrBot(6185 面板 / 6188 插件 HTTP)
+   ├─ pulids_snowluma_go_to_astrbot ── SnowLuma ── QQ 账号
+   └─ astrbot_plugin_room_link ──> http://127.0.0.1:3101/api/*  （读状态、下指令）
 ```
 
-## 阶段与验收
-
-| 阶段 | 内容 | 验收 |
-|---|---|---|
-| 0 | 初始化：swap 4G、Node 24、Python venv、ufw、时区 | `node -v` = 24.x，`free -h` 有 4G swap |
-| 1 | AstrBot + `astrbot_plugin_room_link` | 面板可开，`/room/ping` 返回 ok |
-| 2 | NapCat + QQ 扫码登录 | OneBot 的 `/get_login_info` 返回账号 |
-| 3 | dafeiyu-room（bridge + 房间 + 376MB 素材） | `http://101.245.76.51:3100/room/` 打开，房间有状态 |
-| 4 | 隧道打通 DSH | bridge 能拿到 DSH 回复，QQ 里说话她能动 |
-| 5 | 数据迁移（state/记忆/角色卡）+ systemd 常驻 + 备份 | 重启服务器后自动恢复；备份可回滚 |
-| 6 | （可选）DSH 迁移到 Linux | `dsh web` 在 Ubuntu 跑通 |
-
-## 端口规划
+## 端口
 
 | 端口 | 用途 | 对外 |
 |---|---|---|
-| 3100 | 房间 + bridge API | 是（受 token 保护） |
-| 6188 | AstrBot 插件 HTTP | 否（仅本机） |
-| 3000/3001 | NapCat OneBot HTTP/WS | 否 |
-| 7000 | frps 隧道 | 是（建议加 token） |
-| 22 | SSH | 是（建议改端口 + 禁密码） |
+| 3100 | 房间（nginx → bridge 3101） | 是 |
+| 6185 | AstrBot 面板 | 否（SSH 隧道 `-L 16185:127.0.0.1:6185`） |
+| 6188 | room_link 插件 HTTP | 否（仅本机） |
+| 3000/3001 | SnowLuma OneBot（装好后） | 否 |
 
-## 风险
+## 关键配置
 
-- 2Mbps：首次加载房间要拉多段 webm，慢；必要时素材迁 CDN。
-- 2GB 内存：DSH/NapCat/AstrBot 同机容易 OOM，必须 4G swap，观察后决定是否升配。
-- QQ 云端登录有风控风险，建议用小号先试。
+`/opt/dafeiyu-room/config.json`
+
+```json
+{
+  "consolePort": 3101,
+  "room": { "access": "loopback", "allowedHosts": ["101.245.76.51:3100"] },
+  "astrbot": { "baseUrl": "http://127.0.0.1:6188" }
+}
+```
+
+`/root/data/config/astrbot_plugin_room_link_config.json`
+
+```json
+{
+  "bridge_dir": "/opt/dafeiyu-room",
+  "bridge_node": "/usr/bin/node",
+  "bridge_port": 3101,
+  "bridge_auto_start": false,
+  "listen_host": "127.0.0.1"
+}
+```
+
+## 常用命令
+
+```bash
+systemctl status dafeiyu-room astrbot nginx
+journalctl -u astrbot -n 50 --no-pager
+tail -f /var/log/dafeiyu-room.log
+bash /usr/local/bin/dafeiyu-backup.sh      # 手动备份
+ls -lh /var/backups/dafeiyu
+```
+
+## 踩坑记录
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| SSH `Permission denied (publickey)` | `ssh-keygen -N '""'` 把引号当成了口令 | `ssh-keygen -p -P '""' -N ''` 解除 |
+| 房间页卡在加载屏 | `app.js` 是 ES module，带 `Origin` 头，bridge 只认回环 Host | bridge 支持 `room.allowedHosts`；nginx `proxy_set_header Origin ""` |
+| bridge 403 | nginx 转发 `Host: 127.0.0.1`（无端口） | nginx 固定 `Host: 127.0.0.1:3101` |
+| `astrbot run` 报 `/root is not a valid root` | 需要先初始化 | `astrbot init -y` |
+| service `status=209/STDOUT` | 日志目录不存在 | `mkdir -p /root/data/logs` |
+| pip 安装极慢 | 默认 PyPI | 换清华镜像 |
