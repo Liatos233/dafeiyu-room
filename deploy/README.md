@@ -24,6 +24,9 @@ deploy/
 ## 一、新服务器一键部署
 
 ```bash
+# 只验证「拉代码 + 数据保留」，不装依赖/不改服务
+bash /opt/src/deploy/cloud/install.sh --dry-run
+
 # 以 root 登录新服务器后
 git clone https://github.com/Liatos233/dafeiyu-room.git /opt/src
 bash /opt/src/deploy/cloud/install.sh --with-astrbot
@@ -82,4 +85,5 @@ deploy\local\stop-room.bat
 - **QQ 重启后可能停在快速登录页**：`DISPLAY=:99 xdotool mousemove 400 385 click 1`
 - **2Mbps 带宽**：素材多，外网首次加载慢；量大时把 `public/room/assets` 迁 CDN
 - **QQ 账号有风控风险**，建议用小号
+
 

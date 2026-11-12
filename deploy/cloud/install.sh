@@ -22,8 +22,12 @@ done
 
 log() { echo -e "\n\033[1;36m==> $*\033[0m"; }
 
-log "1/8 基础环境（Node 24 / swap / ufw / git）"
-bash "$(dirname "$0")/10-bootstrap.sh"
+if [ "$DRY_RUN" = "1" ]; then
+  log "dry-run：跳过基础环境安装"
+else
+  log "1/8 基础环境（Node 24 / swap / ufw / git）"
+  bash "$(dirname "$0")/10-bootstrap.sh"
+fi
 
 log "2/8 拉取代码到 $APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
