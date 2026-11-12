@@ -1,0 +1,128 @@
+{
+  "listen_host": {
+    "type": "string",
+    "description": "房间接口监听地址，保持 127.0.0.1 只允许本机访问",
+    "default": "127.0.0.1"
+  },
+  "listen_port": {
+    "type": "int",
+    "description": "房间接口端口（房间桥接要填这个地址）",
+    "default": 6188
+  },
+  "api_token": {
+    "type": "string",
+    "description": "房间调用接口时带的密钥（请求头 X-Room-Token）；留空不校验",
+    "default": ""
+  },
+  "webchat_username": {
+    "type": "string",
+    "description": "房间对话以谁的身份进入 AstrBot（填主人 QQ 号）",
+    "default": "630151911"
+  },
+  "owner_qq": {
+    "type": "string",
+    "description": "只有这个 QQ 号能在群里/私聊里指挥她",
+    "default": "630151911"
+  },
+  "room_conversation_id": {
+    "type": "string",
+    "description": "房间对话在 webchat 里的会话 id",
+    "default": "room"
+  },
+  "reply_timeout": {
+    "type": "int",
+    "description": "等 AstrBot 回复的超时秒数",
+    "default": 90
+  },
+  "notify_owner": {
+    "type": "bool",
+    "description": "房间活动变化时主动推 QQ（默认关）",
+    "default": false
+  },
+  "owner_session": {
+    "type": "string",
+    "description": "主动通知发到哪个会话",
+    "default": "aiocqhttp:FriendMessage:630151911"
+  },
+  "bridge_auto_start": {
+    "type": "bool",
+    "description": "AstrBot 启动时自动拉起房间桥接（3100）",
+    "default": true
+  },
+  "bridge_dir": {
+    "type": "string",
+    "description": "房间桥接目录（feiyu-room-template/app）",
+    "default": "C:\\Users\\liato\\dafeiyu-room\\app"
+  },
+  "bridge_node": {
+    "type": "string",
+    "description": "node.exe 路径，留空则用 PATH 里的 node",
+    "default": "C:\\Program Files\\nodejs\\node.exe"
+  },
+  "bridge_port": {
+    "type": "int",
+    "description": "桥接端口（用来判断是否已在运行）",
+    "default": 3100
+  },
+  "places": {
+    "type": "dict",
+    "description": "可去地点表：显示名 -> 房间id/站位id（在面板里增删改即可）",
+    "default": {
+      "厨房": "kitchen/stove",
+      "冰箱": "kitchen/fridge",
+      "水槽": "kitchen/sink",
+      "餐厅": "dining/dining",
+      "客厅": "living/sofa",
+      "沙发": "living/sofa",
+      "电视": "living/tv",
+      "书架": "living/shelf",
+      "卧室": "her_room/bed",
+      "床上": "her_room/bed",
+      "书桌": "her_room/desk",
+      "衣柜": "her_room/wardrobe",
+      "窗边": "her_room/window",
+      "阳台": "balcony/rail",
+      "躺椅": "balcony/chair",
+      "卫生间": "bathroom/sink",
+      "洗澡": "bathroom/shower",
+      "走廊": "corridor/gallery",
+      "玄关": "foyer/door",
+      "门口": "foyer/door",
+      "洗衣机": "laundry/washer",
+      "菜园": "garden/plot0",
+      "屋外": "yard/path"
+    }
+  },
+  "room_names": {
+    "type": "dict",
+    "description": "房间显示名覆盖：房间id -> 你想起的名字（留空=用房间原名）",
+    "default": {
+      "kitchen": "厨房",
+      "dining": "餐厅",
+      "living": "客厅",
+      "her_room": "她的房间",
+      "corridor": "走廊",
+      "bathroom": "卫生间",
+      "laundry": "家政间",
+      "balcony": "阳台",
+      "foyer": "玄关",
+      "garden": "菜园",
+      "yard": "屋外小径"
+    }
+  },
+  "home_name": {
+    "type": "string",
+    "description": "整个房间/家的名字，用于状态回答和房间网页标题",
+    "default": "小蓝鱼的家"
+  },
+  "use_live_context": {
+    "type": "bool",
+    "description": "回复前从房间桥接读取实时状态（位置/在做什么/需求/心情），建议开",
+    "default": true
+  },
+  "bridge_token": {
+    "type": "string",
+    "description": "房间桥接的访问令牌；留空则自动读 bridge_dir/state/console-token",
+    "default": ""
+  }
+}

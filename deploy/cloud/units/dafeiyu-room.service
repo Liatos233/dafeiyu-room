@@ -1,0 +1,19 @@
+[Unit]
+Description=dafeiyu-room bridge (room state + API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dafeiyu-room
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node src/bridge.js
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=append:/var/log/dafeiyu-room.log
+StandardError=append:/var/log/dafeiyu-room.log
+
+[Install]
+WantedBy=multi-user.target
