@@ -90,7 +90,7 @@ git init
 git add .
 git commit -m "Initial room template"
 git branch -M main
-git remote add origin https://github.com/sh2234113/feiyu-room-template.git
+git remote add origin https://github.com/Liatos233/dafeiyu-room.git
 git push -u origin main
 ```
 
