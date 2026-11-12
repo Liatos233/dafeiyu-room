@@ -87,3 +87,50 @@ deploy\local\stop-room.bat
 - **QQ 账号有风控风险**，建议用小号
 
 
+
+
+## 六、日常更新（服务器上）
+
+```bash
+# 只更新房间（代码 + 依赖 + 重启，自动先备份）
+bash /usr/local/bin/update.sh          # 或 /opt/dafeiyu-room/deploy/cloud/update.sh
+
+# 连 AstrBot 一起更新
+bash /usr/local/bin/update.sh --astrbot
+
+# 更新房间 + 同步插件包
+bash /usr/local/bin/update.sh --plugins /root/astrbot-plugins.tar.gz
+```
+
+`update.sh` 流程：备份 → `git reset --hard origin/main` → `npm ci` → 重启并自检；
+`state/`、`config.json` 不会被覆盖。
+
+## 七、插件同步（本地 → 云端）
+
+本地打包（只打包插件目录 + 配置，不含 `__pycache__`）：
+
+```bash
+# 在仓库根目录
+python scripts/pack-astrbot-plugins.py      # 产物：_migrate/astrbot-plugins.tar.gz
+scp _migrate/astrbot-plugins.tar.gz root@<服务器>:/root/
+```
+
+云端安装：
+
+```bash
+bash /usr/local/bin/sync-plugins.sh /root/astrbot-plugins.tar.gz
+# 不覆盖云端已有配置：FORCE_CONFIG=0 bash ...
+```
+
+`sync-plugins.sh` 会：停 AstrBot → 覆盖插件目录 → 复制配置 → 逐个插件 `pip install -r requirements.txt` → 启动 → 打印加载结果 → 自检 room_link。
+
+当前云端已同步的插件（13 个）：
+
+```
+room_link / snowluma_go / group_chat_plus / livingmemory / memewiki /
+proactive_chat / qqprofile / qzone / seed_audio_tts / meme_manager /
+bili_whale / dafeiyu_clean / dafeiyu_signature / dafeiyu_sing
+```
+
+> 内存注意：全量插件下 AstrBot 占用约 1.1 GB（2 GB 机器 + 4G swap 可跑）。
+> 如果频繁 OOM，优先停 `livingmemory` / `meme_manager`（两者都带 faiss 索引）。
