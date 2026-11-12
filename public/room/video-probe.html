@@ -1,0 +1,10 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>VP</title>
+<style>body{margin:0;background:#111;display:flex;gap:6px;padding:6px}figure{margin:0;flex:1}
+video{width:100%;background:#222}figcaption{color:#eee;text-align:center;font:13px sans-serif}</style></head><body>
+<figure><video src="assets/pet/mutter.webm" autoplay muted loop></video><figcaption>mutter</figcaption></figure>
+<figure><video src="assets/pet/nap.webm" autoplay muted loop></video><figcaption>nap</figcaption></figure>
+<figure><video src="assets/pet/sleep_loop.webm" autoplay muted loop></video><figcaption>sleep_loop</figcaption></figure>
+<figure><video src="assets/pet/idle_hum.webm" autoplay muted loop></video><figcaption>idle_hum</figcaption></figure>
+<script>setTimeout(()=>{for(const v of document.querySelectorAll('video')){try{v.pause();v.currentTime=1.2;}catch(e){}}},1500);</script>
+</body></html>

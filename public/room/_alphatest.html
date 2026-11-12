@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>alpha test</title>
+<style>html,body{margin:0;background:#ff0000}canvas{display:block}</style></head>
+<body>
+<canvas id="c" width="640" height="400"></canvas>
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+const params = new URLSearchParams(location.search);
+const file = params.get('file') || 'assets/pet-gen/游泳.webm';
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), alpha: true, antialias: false });
+renderer.setClearColor(0x000000, 0);
+renderer.setSize(640, 400, false);
+const scene = new THREE.Scene();
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2);
+cam.position.z = 1;
+const video = document.createElement('video');
+video.src = './' + file;
+video.muted = true; video.playsInline = true; video.crossOrigin = 'anonymous';
+const tex = new THREE.VideoTexture(video);
+tex.colorSpace = THREE.SRGBColorSpace;
+const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.02, depthWrite: false });
+const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+scene.add(mesh);
+window.__result = null;
+video.addEventListener('loadeddata', () => {
+  video.currentTime = 2;
+  video.addEventListener('seeked', () => {
+    video.play().catch(() => {});
+    renderer.render(scene, cam);
+    // 读回像素：只要有透明，红色背景就会透出来
+    const gl = renderer.getContext();
+    const w = 640, h = 400;
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let red = 0, other = 0, transparent = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
+      if (a < 8) { transparent++; continue; }
+      if (r > 200 && g < 60 && b < 60) red++; else other++;
+    }
+    window.__result = { file, transparentPct: +(100*transparent/(w*h)).toFixed(1), redPct: +(100*red/(w*h)).toFixed(1), otherPct: +(100*other/(w*h)).toFixed(1) };
+  });
+});
+</script>
+</body></html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RP</title>
+<style>body{margin:0;background:#111;display:flex;flex-wrap:wrap;gap:6px;padding:6px}
+figure{margin:0;width:200px}canvas{width:100%;background:#222}</style></head><body>
+<script>
+const marks = [0, 0.8, 1.6, 2.4, 3.2, 4.0, 4.8, 5.6, 6.4, 7.2];
+document.write(marks.map((t, i) => `<figure><canvas id="c${i}" width="200" height="356"></canvas></figure>`).join(''));
+(async () => {
+  const v = document.createElement('video');
+  v.src = 'assets/pet/run_happy.webm';
+  v.muted = true;
+  v.preload = 'auto';
+  await new Promise((res) => {
+    if (v.readyState >= 4) return res();
+    v.addEventListener('canplaythrough', res, { once: true });
+    v.addEventListener('error', res, { once: true });
+    v.load();
+    setTimeout(res, 4000);
+  });
+  for (let i = 0; i < marks.length; i++) {
+    await new Promise((res) => {
+      v.addEventListener('seeked', res, { once: true });
+      v.currentTime = marks[i];
+      setTimeout(res, 1500);
+    });
+    const c = document.getElementById('c' + i).getContext('2d');
+    c.fillStyle = '#000'; c.fillRect(0, 0, 200, 356);
+    c.drawImage(v, 0, 0, 200, 356);
+    c.fillStyle = '#0f0'; c.font = '16px monospace';
+    c.fillText(marks[i].toFixed(1) + 's / ' + v.currentTime.toFixed(1), 8, 22);
+  }
+  document.title = 'RP_READY dur=' + v.duration.toFixed(2);
+})();
+</script>
+</body></html>
