@@ -413,15 +413,67 @@ export function createDevEditor({ world, camera, canvas, view }) {
 
   ui.querySelector('#deView')?.addEventListener('click', () => resetView());
 
+  // 兼容 http 页面：navigator.clipboard 在非 https/localhost 下不可用
+  function legacyCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  function showDump(text) {
+    let box = document.getElementById('deDump');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'deDump';
+      box.style.cssText = [
+        'position:fixed', 'left:50%', 'top:50%', 'transform:translate(-50%,-50%)',
+        'z-index:80', 'width:min(560px,86vw)', 'background:rgba(18,22,28,.97)',
+        'border:1px solid rgba(255,204,85,.5)', 'border-radius:12px', 'padding:12px',
+        'box-shadow:0 16px 40px rgba(0,0,0,.55)', 'display:none'
+      ].join(';');
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b style="color:#ffcc55;font:13px ui-monospace,monospace">补丁 JSON（全选复制）</b>
+          <button id="deDumpClose" style="padding:2px 8px">关闭</button>
+        </div>
+        <textarea id="deDumpText" spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;
+          background:#0e1218;color:#d7e3ef;border:1px solid #2b3644;border-radius:8px;padding:8px;
+          font:11px/1.5 ui-monospace,monospace"></textarea>`;
+      document.body.appendChild(box);
+      box.querySelector('#deDumpClose').addEventListener('click', () => { box.style.display = 'none'; });
+    }
+    box.querySelector('#deDumpText').value = text;
+    box.style.display = 'block';
+    const ta = box.querySelector('#deDumpText');
+    ta.focus();
+    ta.select();
+  }
+
   ui.querySelector('#deCopy')?.addEventListener('click', async () => {
     const text = JSON.stringify(patches, null, 2);
+    const n = Object.keys(patches).length;
+    info.textContent = `准备复制 ${n} 条补丁…`;
     try {
-      await navigator.clipboard.writeText(text);
-      info.textContent = `已复制 ${Object.keys(patches).length} 条补丁到剪贴板`;
-    } catch {
-      console.log('[dev-editor] patches', text);
-      info.textContent = '复制失败，已打印到控制台';
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        info.textContent = `已复制 ${n} 条补丁到剪贴板`;
+        return;
+      }
+    } catch { /* 走备用方案 */ }
+    if (legacyCopy(text)) {
+      info.textContent = `已复制 ${n} 条补丁（备用方案）`;
+      return;
     }
+    console.log('[dev-editor] patches', text);
+    showDump(text);
+    info.textContent = '浏览器禁止写剪贴板，已弹出文本框，Ctrl+A / Ctrl+C 复制';
   });
   ui.querySelector('#deReset')?.addEventListener('click', () => {
     if (!selected) return;
