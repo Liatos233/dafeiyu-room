@@ -2,6 +2,7 @@
 // 右键选中（整组/单个）→ 方向键或 WASD 在地面平面移动，Q/E 旋转，Shift+W/S 升降
 // 地板会显示网格，方便对齐。改动存 localStorage，可一键复制补丁。
 import * as THREE from './vendor/three.module.js';
+import { NAV_DATA } from './nav-data.js';
 
 const STORE_KEY = 'home-edit-patches';
 const SNAP = 0.05;          // 移动吸附（米）
@@ -243,7 +244,18 @@ export function createDevEditor({ world, camera, canvas, view }) {
     }
     const name = label || nearestHotspotName(center) || `组合×${members.length}`;
     const key = named ? `unit:${named.userData.unitName}` : unitKey(members);
-    selected = { pivot, members, label: name, base, idx: -1, key, named, nearHotspots };
+    // 找出与这个单元包围盒重叠的禁走区（K区），记录它们按同样位移移动后的矩形
+    const box = new THREE.Box3();
+    for (const mem of members) box.expandByObject(mem);
+    const dx0 = box.min.x, dz0 = box.min.z, dx1 = box.max.x, dz1 = box.max.z;
+    const kKeepouts = [];
+    ((NAV_DATA && NAV_DATA.keepout) || []).forEach((k, i) => {
+      const r = k.rect;
+      if (!r) return;
+      const overlap = r[0] < dx1 && r[2] > dx0 && r[1] < dz1 && r[3] > dz0;
+      if (overlap) kKeepouts.push({ i, rect: r.slice() });
+    });
+    selected = { pivot, members, label: name, base, idx: -1, key, named, nearHotspots, kKeepouts };
     helper = new THREE.BoxHelper(pivot, 0xffcc55);
     helper.material.depthTest = false;
     helper.renderOrder = 999;
@@ -282,7 +294,8 @@ export function createDevEditor({ world, camera, canvas, view }) {
         title: h.title,
         x: +h.mesh.position.x.toFixed(2),
         z: +h.mesh.position.z.toFixed(2)
-      }))
+      })),
+      keepouts: selected.kKeepouts || []
     };
     savePatches(patches);
   }
