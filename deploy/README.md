@@ -72,6 +72,24 @@ powershell -ExecutionPolicy Bypass -File deploy\local\restore-windows.ps1 -Backu
 
 备份内容：`state/`（房间、菜园、记忆卡）+ `cmd_config.json` + `data_v4.db` + 插件配置/数据；保留最近 7 份。
 
+### 备份内容与脱敏
+
+| 项 | 默认行为 |
+|---|---|
+| API Key / token / 密码 | **脱敏成 `REDACTED`** |
+| `plugin_data/meme_manager`（表情库 ~900MB） | 跳过（`FULL=1` 包含） |
+| `plugin_data/pulids_snowluma_go_to_astrbot`（QQ 安装目录） | 永远跳过 |
+| 日包体积 | 约 **77 MB** |
+
+```bash
+bash /usr/local/bin/dafeiyu-backup.sh              # 日常（脱敏 + 跳过表情库）
+FULL=1 bash /usr/local/bin/dafeiyu-backup.sh       # 含表情库
+KEEP_SECRETS=1 bash /usr/local/bin/dafeiyu-backup.sh  # 保留明文密钥（仅离线自用）
+```
+
+> 从脱敏备份恢复后，需要在面板里重新填一次 API Key（provider 的 key 变成 `REDACTED`）。
+> 从 `KEEP_SECRETS=1` 的包恢复则不需要。
+
 ## 四、切换回云端
 
 云端恢复后把 QQ 重新登录（SnowLuma 面板 → 启动 → 扫码/快速登录），本机 bridge 关掉即可：
