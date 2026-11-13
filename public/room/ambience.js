@@ -95,7 +95,7 @@ function makeWind(ctx, dest, { strength = 1, gust = 0.5 } = {}) {
   const g = gainNode(ctx);
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.value = 420;
+  lp.frequency.value = 300;
   const src = loopSource(ctx, noiseBuffer(ctx, 5, 'brown'));
   src.connect(lp);
   lp.connect(g);
@@ -114,12 +114,12 @@ function makeWind(ctx, dest, { strength = 1, gust = 0.5 } = {}) {
   const volLfo = ctx.createOscillator();
   volLfo.frequency.value = 0.05 + gust * 0.08;
   const volGain = ctx.createGain();
-  volGain.gain.value = 0.05 * strength;
+  volGain.gain.value = 0.018 * strength;
   volLfo.connect(volGain);
   volGain.connect(g.gain);
   volLfo.start();
 
-  g.gain.value = 0.08 * strength;
+  g.gain.value = 0.06 * strength;
   return {
     gain: g,
     stop: () => {
@@ -348,15 +348,39 @@ function sceneLayers(weather) {
 function makeSampleBed(name, gainValue, dest) {
   const buf = sampleBuf[name];
   if (!buf) return null;
-  const g = gainNode(ctxOf(), 0);
-  const src = ctxOf().createBufferSource();
+  const ctx = ctxOf();
+  const g = gainNode(ctx, 0);
+  const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
-  src.connect(g);
+  let tail = src;
+  let lfo = null;
+  // 风声柔化：低通压掉砂砾感，再用极慢 LFO 让滤波缓慢游走，避免「死板」
+  if (name === 'wind' || name === 'storm') {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = name === 'wind' ? 1100 : 2600;
+    lp.Q.value = 0.5;
+    src.connect(lp);
+    tail = lp;
+    if (name === 'wind') {
+      lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.045;
+      const depth = ctx.createGain();
+      depth.gain.value = 260;
+      lfo.connect(depth);
+      depth.connect(lp.frequency);
+      lfo.start();
+    }
+  }
+  tail.connect(g);
   g.connect(dest);
   src.start();
-  g.gain.linearRampToValueAtTime(gainValue, ctxOf().currentTime + 1.2);
-  return { gain: g, stop: () => { try { src.stop(); } catch { /* 忽略 */ } } };
+  g.gain.linearRampToValueAtTime(gainValue, ctx.currentTime + 2.2);
+  return {
+    gain: g,
+    stop: () => { try { src.stop(); if (lfo) lfo.stop(); } catch { /* 忽略 */ } }
+  };
 }
 
 function ctxOf() { return state.ctx; }
