@@ -193,3 +193,48 @@ powershell -ExecutionPolicy Bypass -File deploy\data\apply-state-windows.ps1 -Ta
 - 同步包约 **1 GB**（meme_manager 900MB + livingmemory 172MB + memewiki 52MB），首次上传约 10 分钟。
 - 每次同步会覆盖 `data_v4.db`：另一端当天产生的对话记录会被覆盖掉，重要内容先导出。
 - `livingmemory` 的一致性由脚本用 sqlite backup 保证（不会拷到写一半的库）。
+
+
+## 九、开发与部署流程（唯一正确姿势）
+
+云端 `/opt/dafeiyu-room` 现在是**真正的 git checkout**，以 GitHub `main` 为唯一事实来源。
+
+### 标准流程
+
+```
+1. 本地改代码（C:\Users\liato\dafeiyu-room\app）
+2. 本地自检：node --check <改动的 js>；必要时 npm test
+3. git add -A && git commit && git push
+4. 云端：bash /usr/local/bin/update.sh         # 自动备份 → git reset → npm ci → 重启
+5. 云端：bash /usr/local/bin/check-drift.sh    # 应输出「✅ 与远端一致」
+```
+
+### 紧急热修（不想等 npm ci）
+
+```
+1. scp 单个文件到 /opt/dafeiyu-room/...
+2. systemctl restart dafeiyu-room
+3. 立刻把同样的改动 commit + push
+4. 跑 check-drift.sh —— 显示「有改动的文件」就说明你忘了提交
+```
+
+> 热修后不提交，下次 `update.sh` 会把你的改动覆盖掉，这是最容易踩的坑。
+
+### 脚本对照
+
+| 脚本 | 用途 |
+|---|---|
+| `deploy/cloud/install.sh` | 新机器初始化（首次部署） |
+| `deploy/cloud/update.sh` | 日常更新（git pull + 依赖 + 重启，自动备份） |
+| `deploy/cloud/check-drift.sh` | 检查云端是否与 main 漂移 |
+| `deploy/cloud/sync-plugins.sh` | 同步 AstrBot 插件包 |
+| `deploy/cloud/backup.sh` | 备份（默认脱敏） |
+
+### 以前的做法（已废弃）
+
+早期是「本地 scp 覆盖云端」，云端没有 git 元数据，导致：
+- 无法确认线上跑的是哪个版本
+- 热修没有提交记录，换服务器时丢失
+- `update.sh` 无法工作
+
+现在统一用 git，scp 只作为热修手段且必须补提交。
