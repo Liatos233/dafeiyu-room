@@ -1076,7 +1076,19 @@ export function positionOnRoute(route, now) {
   return pts.at(-1).slice();
 }
 
+// 上/下座插值：t=0 在地面座点，t=1 在座面上
+function seatLerp(seg, now) {
+  const t = Math.max(0, Math.min(1, (now - seg.t0) / Math.max(1, seg.dur)));
+  const e = t * t * (3 - 2 * t);
+  const x = seg.from[0] + (seg.to[0] - seg.from[0]) * e;
+  const z = seg.from[1] + (seg.to[1] - seg.from[1]) * e;
+  const y = (seg.seatY || 0) * (seg.up ? e : 1 - e);
+  return { pos: [x, z], elev: y, done: t >= 1 };
+}
+
 export function currentPosition(state, now) {
+  if (state.mounting) return seatLerp(state.mounting, now).pos;
+  if (state.dismounting) return seatLerp(state.dismounting, now).pos;
   if (state.route) {
     const p = positionOnRoute(state.route, now);
     if (p) return p;
@@ -1146,6 +1158,31 @@ function setActivity(state, kind, activity, pose, elev, facing) {
 }
 
 function beginRoute(state, target, now, env = {}) {
+  // 从坐具上离开：先退到座点并落地，再开始寻路
+  {
+    const cur = spotOf(state.room, state.spot);
+    const curY = Number(SURFACES[cur?.support || 'floor'] || 0);
+    if (!state.dismounting && curY > 0.05 && Array.isArray(cur?.mount) && !state.route) {
+      state.dismounting = {
+        from: (cur.pos || currentPosition(state, now)).slice(),
+        to: cur.mount.slice(),
+        seatY: curY,
+        t0: now,
+        dur: 520,
+        up: false,
+        target
+      };
+      state.elev = curY;
+      state.pose = 'stand';
+      state.kind = 'idle';
+      state.activity = '起身';
+      state.walking = false;
+      state.route = null;
+      state.spot = 'free';
+      state.freePos = cur.mount.slice();
+      return;
+    }
+  }
   const prevRoom = state.room;
   const speed = target.urgent ? 1.45 : 1.05;
   const rawFrom = currentPosition(state, now);
@@ -1226,6 +1263,29 @@ function arrive(state, now) {
     emit(state, 'sleep', '关了灯，钻进被窝', now, { room: 'her_room', spot: 'bed' });
     state.dwell = null;
     return;
+  }
+  // 坐具：不瞬移，走「座点 → 座面」的上座过渡
+  {
+    const spDef = spotOf(t.room, t.spot);
+    const seatY = Number(SURFACES[spDef?.support || 'floor'] || 0);
+    if (seatY > 0.05 && Array.isArray(spDef?.mount)) {
+      state.mounting = {
+        from: spDef.mount.slice(),
+        to: (spDef.pos || currentPosition(state, now)).slice(),
+        seatY,
+        t0: now,
+        dur: 620,
+        up: true,
+        target: t
+      };
+      state.pose = 'stand';
+      state.elev = 0;
+      state.kind = 'idle';
+      state.activity = '坐上去';
+      state.walking = false;
+      state.dwell = null;
+      return;
+    }
   }
   setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
   state.clip = t.clip || null;
@@ -1676,6 +1736,38 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
         changed = true;
       }
     }
+  }
+
+  // 上座推进
+  if (state.mounting) {
+    const seg = seatLerp(state.mounting, now);
+    state.elev = seg.elev;
+    if (seg.done) {
+      const t = state.mounting.target;
+      state.mounting = null;
+      state.elev = seg.elev;
+      setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
+      state.clip = t.clip || null;
+      state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
+      changed = true;
+    } else {
+      changed = true;
+    }
+  }
+
+  // 下座推进：落地后重新开始寻路
+  if (state.dismounting) {
+    const seg = seatLerp(state.dismounting, now);
+    state.elev = seg.elev;
+    if (seg.done) {
+      const target = state.dismounting.target;
+      state.dismounting = null;
+      state.elev = 0;
+      state.spot = 'free';
+      state.freePos = seg.pos.slice();
+      beginRoute(state, target, now, env);
+    }
+    changed = true;
   }
 
   // 路线推进
