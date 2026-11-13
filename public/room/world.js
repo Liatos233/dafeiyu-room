@@ -2147,35 +2147,89 @@ function buildPoolDeck(world, M) {
   makeLounger(LOUNGER_X, POOL_MID_Z - LOUNGER_DZ, Math.PI);
   makeLounger(LOUNGER_X, POOL_MID_Z + LOUNGER_DZ, Math.PI);
 
-  // 一把大伞：立杆在两把躺椅之间的空档里（不会刺穿椅子），
-  // 伞面压成长椭圆，向南北各伸出一截，把两张躺椅都罩住
+  // ── 遮阳伞：分片伞面 + 伞骨/撑杆 + 顶饰 + 配重底座 ─────────────
   {
     const px = 12.42;
     const pz = POOL_MID_Z;
-    cyl(p, 0.034, 0.034, 2.15, M.steel, px, DECK_TOP + 1.07, pz, 10);
+    const g = new THREE.Group();
+    g.position.set(px, DECK_TOP, pz);
+    g.scale.set(0.92, 1, 1.52);   // 伞面向南北拉长，罩住两张躺椅
+    p.add(g);
 
-    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.0, 0.5, 12, 1, true), M.fabricCream);
-    canopy.position.set(px, DECK_TOP + 2.12, pz);
-    canopy.scale.set(0.86, 1, 1.5);   // 南北拉长：z 半径 ≈1.55
-    p.add(canopy);
+    // 两个点之间的一根圆杆（伞骨/撑杆都用它）
+    const rod = (a, b, radius, mat) => {
+      const dir = new THREE.Vector3().subVectors(b, a);
+      const len = dir.length();
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 6), mat);
+      m.position.copy(a).addScaledVector(dir, 0.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+      m.castShadow = true;
+      g.add(m);
+      return m;
+    };
 
-    const liner = new THREE.Mesh(new THREE.ConeGeometry(0.96, 0.42, 12, 1, true), M.fabricBlue);
-    liner.position.set(px, DECK_TOP + 2.06, pz);
-    liner.scale.set(0.86, 1, 1.5);
-    p.add(liner);
+    const EDGE_Y = 1.56;
+    const APEX_Y = 2.02;
+    const POLE_TOP = 1.62;     // 伞面以下露出的杆高
+    const R = 1.0;
 
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.018), M.fabricBlue);
-      rib.position.set(px + Math.cos(a) * 0.45, DECK_TOP + 2.02, pz + Math.sin(a) * 1.52 * 0.5);
-      rib.rotation.y = -a;
-      p.add(rib);
+    // 底座：配重盘 + 收颈
+    cyl(g, 0.19, 0.21, 0.055, M.steel, 0, 0.027, 0, 18);
+    cyl(g, 0.085, 0.11, 0.09, M.steel, 0, 0.10, 0, 14);
+
+    // 立杆
+    cyl(g, 0.027, 0.032, POLE_TOP - 0.12, M.steel, 0, (POLE_TOP + 0.12) / 2, 0, 12);
+
+    // 伞面：外布 + 内衬（开口锥，双面渲染）
+    const canopy = new THREE.Mesh(
+      new THREE.ConeGeometry(R, APEX_Y - EDGE_Y, 16, 1, true),
+      new THREE.MeshStandardMaterial({
+        color: 0xf2ead8, roughness: 0.82, metalness: 0.02, side: THREE.DoubleSide
+      })
+    );
+    canopy.position.set(0, (EDGE_Y + APEX_Y) / 2, 0);
+    canopy.castShadow = true;
+    g.add(canopy);
+
+    const liner = new THREE.Mesh(
+      new THREE.ConeGeometry(R * 0.965, (APEX_Y - EDGE_Y) * 0.92, 16, 1, true),
+      new THREE.MeshStandardMaterial({
+        color: 0xb9cbe0, roughness: 0.9, metalness: 0.0, side: THREE.BackSide
+      })
+    );
+    liner.position.set(0, (EDGE_Y + APEX_Y) / 2 - 0.015, 0);
+    g.add(liner);
+
+    // 伞骨：顶端到每一条分片缝
+    const ribTop = new THREE.Vector3(0, APEX_Y - 0.015, 0);
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const edge = new THREE.Vector3(Math.cos(a) * R, EDGE_Y + 0.005, Math.sin(a) * R);
+      rod(ribTop, edge, 0.0085, M.fabricBlue);
+      // 撑杆：杆身中段 → 伞骨中点
+      const mid = ribTop.clone().lerp(edge, 0.52);
+      rod(new THREE.Vector3(0, 1.30, 0), mid, 0.006, M.steel);
     }
-    // 伞面边缘挂边（南北两端各一条）
-    for (const dz of [-1.5, 1.5]) {
-      const hem = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.03), M.fabricBlue);
-      hem.position.set(px, DECK_TOP + 1.86, pz + dz);
-      p.add(hem);
+
+    // 顶饰：顶帽 + 小球
+    cyl(g, 0.032, 0.05, 0.045, M.steel, 0, APEX_Y + 0.02, 0, 10);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), M.steel);
+    finial.position.set(0, APEX_Y + 0.075, 0);
+    finial.castShadow = true;
+    g.add(finial);
+
+    // 伞沿包边 + 一圈垂边（每片一个小三角，形成波浪感）
+    const hem = new THREE.Mesh(new THREE.TorusGeometry(R, 0.011, 6, 32), M.fabricBlue);
+    hem.rotation.x = Math.PI / 2;
+    hem.position.y = EDGE_Y;
+    g.add(hem);
+    for (let i = 0; i < 16; i += 1) {
+      const a = (i / 16) * Math.PI * 2 + Math.PI / 16;
+      const drop = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.075, 4, 1, false), M.fabricBlue);
+      drop.position.set(Math.cos(a) * (R - 0.03), EDGE_Y - 0.038, Math.sin(a) * (R - 0.03));
+      drop.rotation.y = -a;
+      drop.rotation.x = Math.PI;
+      g.add(drop);
     }
   }
 
