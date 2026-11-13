@@ -3,6 +3,7 @@
 import * as THREE from './vendor/three.module.js';
 import { ambience } from './ambience.js';
 import { createWorld } from './world.js';
+import { createDevEditor } from './dev-editor.js';
 import { SpriteActor, CLIPS } from './actor.js';
 import { ACTION_GROUPS } from './action-manifest.js';
 import { NAV_DATA } from './nav-data.js';
@@ -12,6 +13,7 @@ import { getGardenFraming } from './garden-camera.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+const EDIT_MODE = params.get('edit') === '1';   // ?edit=1 打开模型编辑模式
 const SHOT = params.get('shot') === '1';
 const SHOT_VIEW = params.get('shotView') || (params.get('pov') === '1' ? 'eyes' : 'overview');
 const SHOT_LOOK = params.get('shotLook') || 'forward';
@@ -109,7 +111,7 @@ const PET_NAME = (() => {
 })();
 window.__PET_NAME = PET_NAME;
 
-const world = createWorld(renderer, { quality: tier });
+const world = createWorld(renderer, { quality: tier, editable: EDIT_MODE });
 
 // ── 电视投屏（浏览器标签页 → 电视纹理）───────────────────────────────────
 // 抖音网页不能可靠地 iframe 进 3D 画布；这里用用户主动选择的屏幕共享流做实时纹理，
@@ -736,6 +738,15 @@ function setMode(mode, requestedRoom = null) {
     eyesPrev = null;   // 刚切进她的视角：不要拿旧位置算方向
   }
 }
+if (EDIT_MODE) {
+  try {
+    const ed = createDevEditor({ world, camera, canvas });
+    ed.setEnabled(true);
+  } catch (e) {
+    console.warn('[dev-editor] 启动失败', e);
+  }
+}
+
 window.__setMode = setMode;   // 调试/截图用
 window.__camera = camera;
 window.__VIEW = VIEW;
@@ -992,6 +1003,7 @@ function cancelCharDrag() {
 
 canvas.addEventListener('pointerdown', (e) => {
   if (SHOT || charDrag?.active) return;
+  if (window.__devEditor?.busy?.()) return;
   if (e.button !== 0) return;
   // 有 UI 浮在画布上方时（按钮、面板、气泡），不要当成点地面
   if (typeof document.elementFromPoint === 'function'
@@ -1013,6 +1025,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (window.__devEditor?.busy?.()) return;
   if (charDrag?.active) { updateCharDrag(e); return; }
   if (!dragging) return;
   const dx = e.clientX - last.x;
@@ -1034,6 +1047,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 canvas.addEventListener('pointerup', (e) => {
+  if (window.__devEditor?.busy?.()) return;
   if (charDrag?.active) { finishCharDrag(e); return; }
   const wasDragging = dragging;
   dragging = false;

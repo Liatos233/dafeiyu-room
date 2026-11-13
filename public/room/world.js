@@ -576,8 +576,10 @@ function skyTexture(hour, weather = 'clear') {
 }
 
 // ── 世界构建 ──────────────────────────────────────────────────────────────
-export function createWorld(renderer, { quality = 'balanced' } = {}) {
+export function createWorld(renderer, { quality = 'balanced', editable = false } = {}) {
   const scene = new THREE.Scene();
+  // 编辑模式：跳过静态合批，保证每个模型都能单独选中/移动
+  const EDIT_MODE = editable === true;
   scene.fog = new THREE.Fog(0x9db6c9, 38, 100);
   const root = new THREE.Group();
   scene.add(root);
@@ -658,6 +660,7 @@ export function createWorld(renderer, { quality = 'balanced' } = {}) {
   const world = {
     scene,
     root,
+    editable: EDIT_MODE,
     textures,
     mats: M,
     hotspots: [],
@@ -877,7 +880,7 @@ function mergeStaticDecor(world) {
 
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
-  try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
+  if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
   world.updateSun = (dt = 0.016) => {
     if (!world.sun) return;
     const k = Math.min(1, dt * 2.4);
