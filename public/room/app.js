@@ -1003,7 +1003,6 @@ function cancelCharDrag() {
 
 canvas.addEventListener('pointerdown', (e) => {
   if (SHOT || charDrag?.active) return;
-  if (window.__devEditor?.busy?.()) return;
   if (e.button !== 0) return;
   // 有 UI 浮在画布上方时（按钮、面板、气泡），不要当成点地面
   if (typeof document.elementFromPoint === 'function'
@@ -1025,7 +1024,6 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (window.__devEditor?.busy?.()) return;
   if (charDrag?.active) { updateCharDrag(e); return; }
   if (!dragging) return;
   const dx = e.clientX - last.x;
@@ -1047,7 +1045,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 canvas.addEventListener('pointerup', (e) => {
-  if (window.__devEditor?.busy?.()) return;
+  if (window.__devEditor?.blockClick?.()) return;
   if (charDrag?.active) { finishCharDrag(e); return; }
   const wasDragging = dragging;
   dragging = false;
