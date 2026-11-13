@@ -63,12 +63,14 @@ export function createDevEditor({ world, camera, canvas, view }) {
   const flatIgnore = new Set();     // 地板/墙/天花板这类大平面：不参与聚类，也不给点选
   function buildClusters() {
     const items = [];
+    let nextEid = 0;
     world.root.updateMatrixWorld(true);
     world.root.traverse((o) => {
       if (!o.isMesh || o.isInstancedMesh) return;
       if (ignore.has(o) || o.userData?.ignorePick) return;
       const mat = o.material;
       if (mat?.transparent && (mat.opacity ?? 1) < 0.5) return;
+      if (!Number.isFinite(o.userData.eid)) o.userData.eid = nextEid++;
       const box = new THREE.Box3().setFromObject(o);
       if (!isFinite(box.min.x)) return;
       const sx = box.max.x - box.min.x;
@@ -115,6 +117,13 @@ export function createDevEditor({ world, camera, canvas, view }) {
   }
 
   // 最近的房间热点名，用来给整组起个中文名
+  function unitKey(members) {
+    const eids = members.map((m) => m.userData.eid).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+    if (!eids.length) return 'x';
+    const sum = eids.reduce((a, b) => a + b, 0) % 1000003;
+    return `${eids[0]}:${members.length}:${sum}`;
+  }
+
   function nearestHotspotName(pos) {
     let best = null;
     let bestD = 1.4;
@@ -141,34 +150,24 @@ export function createDevEditor({ world, camera, canvas, view }) {
     world.root.remove(pivot);
   }
 
-  // 重载后把保存的改动套回去（按“原始中心最近”匹配，避免索引漂移）
+  // 重载后把保存的改动套回去：按「成员 eid 签名」精确匹配，避免张冠李戴
   function applySavedPatches() {
-    const entries = Object.entries(patches);
+    const entries = Object.values(patches).filter((p) => p && typeof p.key === 'string');
     if (!entries.length) return;
+    const map = new Map();
     const seen = new Set();
-    const groups = [];
     for (const arr of clusters.values()) {
       if (seen.has(arr)) continue;
       seen.add(arr);
-      const box = new THREE.Box3();
-      for (const m of arr) box.expandByObject(m);
-      groups.push({ members: arr, center: box.getCenter(new THREE.Vector3()) });
+      map.set(unitKey(arr), arr);
     }
-    for (const [, pt] of entries) {
-      if (!Array.isArray(pt.ref)) continue;
-      const ref = new THREE.Vector3(pt.ref[0], pt.ref[1], pt.ref[2]);
-      let best = null;
-      let bestD = 1.2;
-      for (const g of groups) {
-        const d = g.center.distanceTo(ref);
-        if (d < bestD) { bestD = d; best = g; }
-      }
-      if (!best) continue;
-      const pivot = makePivot(best.members);
+    for (const pt of entries) {
+      const members = map.get(pt.key);
+      if (!members) continue;
+      const pivot = makePivot(members);
       pivot.position.set(pt.x, pt.y, pt.z);
       pivot.rotation.y = pt.ry || 0;
-      releasePivot(pivot, best.members);
-      best.center.set(pt.x, pt.y, pt.z);
+      releasePivot(pivot, members);
     }
   }
 
@@ -201,13 +200,17 @@ export function createDevEditor({ world, camera, canvas, view }) {
     if (!selected) return;
     const p = selected.pivot;
     const ref = selected.base;
-    patches[selected.label] = {
+    const key = unitKey(selected.members);
+    selected.key = key;
+    patches[key] = {
+      label: selected.label,
       x: +p.position.x.toFixed(3),
       y: +p.position.y.toFixed(3),
       z: +p.position.z.toFixed(3),
       ry: +p.rotation.y.toFixed(4),
       ref: [+ref.x.toFixed(3), +ref.y.toFixed(3), +ref.z.toFixed(3)],
-      n: selected.members.length
+      n: selected.members.length,
+      key
     };
     savePatches(patches);
   }
@@ -480,7 +483,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     const p = selected.pivot;
     p.position.set(selected.base.x, selected.base.y, selected.base.z);
     p.rotation.y = selected.base.ry;
-    delete patches[selected.label];
+    delete patches[selected.key || unitKey(selected.members)];
     savePatches(patches);
     helper?.update();
     setInfo();
@@ -492,13 +495,24 @@ export function createDevEditor({ world, camera, canvas, view }) {
   });
 
   // ── 启停 ────────────────────────────────────────────────
+  function pruneLegacyPatches() {
+    let dropped = 0;
+    for (const [k, v] of Object.entries(patches)) {
+      if (!v || typeof v.key !== 'string') { delete patches[k]; dropped += 1; }
+    }
+    if (dropped) {
+      savePatches(patches);
+      console.info(`[dev-editor] 清理 ${dropped} 条旧格式补丁（旧版本按名字/索引存，会互相冲突）`);
+    }
+  }
+
   function setEnabled(next) {
     enabled = next;
     ui.style.display = next ? 'block' : 'none';
     if (next) {
       if (!grid) grid = buildGrid();
       grid.visible = true;
-      if (!clusters.size) { buildClusters(); applySavedPatches(); }
+      if (!clusters.size) { pruneLegacyPatches(); buildClusters(); applySavedPatches(); }
       setInfo();
       rafId = requestAnimationFrame(tick);
     } else {
