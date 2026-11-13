@@ -3,6 +3,7 @@
 set -euo pipefail
 
 TAR="${1:-/root/deploy-incoming.tar}"
+COMMIT="${2:-}"
 APP="${APP_DIR:-/opt/dafeiyu-room}"
 [ -f "$TAR" ] || { echo "找不到 $TAR" >&2; exit 1; }
 
@@ -24,8 +25,12 @@ else
 fi
 
 date '+%F %T' > "$APP/.deployed-at"
-git rev-parse --short HEAD > "$APP/.deployed-commit" 2>/dev/null || \
-  echo "local-$(date +%Y%m%d-%H%M)" > "$APP/.deployed-commit"
+if [ -n "$COMMIT" ]; then
+  echo "$COMMIT" > "$APP/.deployed-commit"
+else
+  git rev-parse --short HEAD > "$APP/.deployed-commit" 2>/dev/null || \
+    echo "local-$(date +%Y%m%d-%H%M)" > "$APP/.deployed-commit"
+fi
 
 echo "==> 启动"
 systemctl start dafeiyu-room

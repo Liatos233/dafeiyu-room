@@ -51,7 +51,7 @@ if ($NoRestart) {
   exit 0
 }
 
-& $ssh -o BatchMode=yes -i $Key "${User}@${Server}" "bash /usr/local/bin/apply-deploy.sh /root/deploy-incoming.tar"
+& $ssh -o BatchMode=yes -i $Key "${User}@${Server}" "bash /usr/local/bin/apply-deploy.sh /root/deploy-incoming.tar $head"
 if ($LASTEXITCODE -ne 0) { throw "服务器端部署失败" }
 
 Write-Host "==> 完成：$head" -ForegroundColor Green
