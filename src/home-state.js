@@ -51,7 +51,7 @@ export const HOME_LAYOUT = Object.freeze({
       fridge: { pos: [1.5, 2.7], pose: 'stand', facing: -90, label: '冰箱前', access: 'k_fridge' },
       sink: { pos: [1.3, 1.45], pose: 'stand', facing: 0, label: '水槽前', access: 'k_sink' },
       stove: { pos: [2.85, 1.45], pose: 'stand', facing: 0, label: '灶台前', access: 'kitchen' },
-      dining: { pos: [2.1, 6.3], pose: 'sit', facing: 0, label: '餐桌边', access: 'dining_s', elev: 0.46 }
+      dining: { pos: [2.1, 6.3], pose: 'stand', facing: 0, label: '餐桌边', access: 'dining_s' }
     },
     living: {
       sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', elev: 0.48 },
@@ -63,7 +63,7 @@ export const HOME_LAYOUT = Object.freeze({
     her_room: {
       bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', elev: 0.54 },
       bedside: { pos: [10.1, 1.55], pose: 'stand', facing: 90, label: '床边', access: 'beside' },
-      desk: { pos: [9.5, 3.15], pose: 'sit', facing: -90, label: '书桌前', access: 'desk', elev: 0.44 },
+      desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk' },
       wardrobe: { pos: [12.1, 3.45], pose: 'stand', facing: 0, label: '衣柜前', access: 'wardrobe' },
       window: { pos: [12.55, 2.75], pose: 'stand', facing: 90, label: '窗边', access: 'window_n' }
     },
@@ -72,7 +72,7 @@ export const HOME_LAYOUT = Object.freeze({
     },
     bathroom: {
       sink: { pos: [12.0, 6.45], pose: 'stand', facing: 90, label: '洗手台前', access: 'bath_vanity' },
-      toilet: { pos: [11.9, 6.2], pose: 'sit', facing: -90, label: '马桶边', access: 'bath_toilet', elev: 0.4 },
+      toilet: { pos: [11.9, 6.2], pose: 'stand', facing: -90, label: '马桶边', access: 'bath_toilet' },
       shower: { pos: [11.5, 7.1], pose: 'stand', facing: 180, label: '淋浴间', access: 'bath_shower' }
     },
     laundry: {
@@ -604,6 +604,12 @@ export function normalizeHomeState(raw, now = Date.now()) {
   // elev 只能来自坐/躺；0 是合法值（贴地），不能用 || 回退到座位高度
   const rawElev = Number(raw.elev);
   out.elev = Number.isFinite(rawElev) ? rawElev : (Number(sp.elev) || 0);
+  // 点位本身没有座面高度（书桌/餐桌/马桶等站立动作点位）：强制贴地 + 站姿，
+  // 否则旧存档里的 elev 会让角色悬空。
+  if (!sp.elev) {
+    out.elev = 0;
+    if (sp.pose && sp.pose !== 'sit' && sp.pose !== 'lie') out.pose = sp.pose;
+  }
   if (out.pose !== 'sit' && out.pose !== 'lie') out.elev = 0;
   out.facing = Number(raw.facing) || sp.facing || 0;
   out.kind = sanitizeText(raw.kind, 24) || 'idle';

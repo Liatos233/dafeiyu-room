@@ -3984,6 +3984,32 @@ async function main() {
         const { 'Cache-Control': _cc, ...rest } = SECURITY_HEADERS;
         return rest;
       })();
+      // 客户端调试埋点：只写本地状态日志，供排查悬空/动画问题
+      if (req.method === 'POST' && url.pathname === '/api/debug/client') {
+        let raw = '';
+        req.on('data', (c) => {
+          raw += c;
+          if (raw.length > 200_000) { try { req.destroy(); } catch { /* 忽略 */ } }
+        });
+        req.on('end', () => {
+          try {
+            const body = JSON.parse(raw || '{}');
+            const file = path.join(ROOT, 'state', 'client-debug.log');
+            fs.appendFileSync(file, JSON.stringify({ t: Date.now(), ...body }) + '\n');
+            const st = fs.statSync(file);
+            if (st.size > 4 * 1024 * 1024) {
+              const keep = fs.readFileSync(file, 'utf8').split('\n').slice(-2000).join('\n');
+              fs.writeFileSync(file, keep + '\n');
+            }
+            res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' });
+            res.end();
+          } catch {
+            res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+            res.end('bad json');
+          }
+        });
+        return;
+      }
       const sendJson = (obj, status = 200) => {
         res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS });
         res.end(JSON.stringify(obj, null, 2));
