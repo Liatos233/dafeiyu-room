@@ -2852,9 +2852,10 @@ function buildDevQuickMenu() {
     mark('anim', devMode);
   });
   el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
-    const panel = document.getElementById('petPanel');
-    const shown = panel && !panel.classList.contains('hide');
-    if (panel) panel.classList.toggle('hide', shown);
+    const panel = document.getElementById('petActions');
+    if (!panel) return;
+    const hidden = panel.style.display === 'none';
+    panel.style.display = hidden ? '' : 'none';
   });
   el.querySelector('[data-dev="top"]').addEventListener('click', () => {
     if (VIEW.mode !== 'overview') setMode('overview');
