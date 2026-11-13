@@ -21,8 +21,15 @@ for d in plugin_data/*/; do
   cp -a "$d" "$WORK/plugin_data/$name"
 done
 
-echo "==> config"
-[ -d config ] && cp -a config "$WORK/config"
+echo "==> config（排除环境相关配置）"
+mkdir -p "$WORK/config"
+for f in config/*.json; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in
+    astrbot_plugin_room_link_config.json|pulids_snowluma_go_to_astrbot_config.json) continue ;;
+  esac
+  cp -a "$f" "$WORK/config/"
+done
 
 echo "==> 核心文件"
 for f in cmd_config.json plugins.json mcp_server.json data_v4.db; do

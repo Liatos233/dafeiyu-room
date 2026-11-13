@@ -4,7 +4,7 @@ short_desc: 让 3D 房间和 QQ 共用同一只大肥鱼的人格与记忆
 desc: >-
   把 3D 房间接到 AstrBot 主线：房间里的对话走 AstrBot 自己的管线（同一人格、同一记忆），
   房间里的动作会上报成状态，QQ 里可以直接问她「在房间干嘛」，也可以指挥她去厨房、浇花、睡觉。
-version: 0.2.0
+version: 0.2.1
 author: liato
 repo: https://github.com/liato/astrbot_plugin_room_link
 astrbot_version: ">=4.0.0"

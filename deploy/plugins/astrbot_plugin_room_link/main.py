@@ -532,6 +532,32 @@ class RoomLinkPlugin(Star):
 
     # ---------------------------------------------------------------- QQ 侧
 
+    # ---------------------------------------------------------------- LLM 注入
+    @filter.on_llm_request(priority=90000)
+    async def inject_room_state(self, event: AstrMessageEvent, req):
+        """每轮把房间实时状态写进系统提示，避免她凭记忆“演”房间。
+
+        同时明确：主人让你去某处/做动作/播动画时，必须调用 room_* 工具。
+        """
+        try:
+            ctx = await self._live_context(ttl=5.0)
+            if not ctx:
+                return
+            her = ctx.get("her") or {}
+            line = str(ctx.get("line") or "").strip()
+            if not line:
+                return
+            extra = (
+                "\n【房间实时状态（每轮刷新，以此为准，不要凭记忆猜）】"
+                + line
+                + "\n如果主人让你去某个地方、做某件事或播某个动画，必须调用 "
+                "room_command / room_play 工具真正执行，只回一句话而不调用工具等于没做。"
+                "如果主人问你此刻在哪、在做什么，必须先调用 room_status 再回答。"
+            )
+            req.system_prompt = f"{req.system_prompt or ''}{extra}"
+        except Exception as exc:  # noqa: BLE001 - 注入失败不影响正常对话
+            logger.debug(f"[room_link] 注入房间状态失败：{exc}")
+
     @filter.llm_tool(name="room_status")
     async def room_status(self, event: AstrMessageEvent):
         """查看自己此刻在房间里做什么、在哪里、多久了、最近做过什么。

@@ -60,8 +60,13 @@ for name in PLUGIN_DATA_KEEP:
 cfg_src = os.path.join(DATA, "config")
 cfg_dst = os.path.join(tmp, "config")
 os.makedirs(cfg_dst, exist_ok=True)
+# 环境相关配置不随包走（换了机器会因为路径/端口不对而失效）
+ENV_SPECIFIC_CFG = {
+    "astrbot_plugin_room_link_config.json",      # bridge_dir / bridge_port
+    "pulids_snowluma_go_to_astrbot_config.json",  # 本机 SnowLuma 路径
+}
 for f in os.listdir(cfg_src):
-    if f.endswith(".json"):
+    if f.endswith(".json") and f not in ENV_SPECIFIC_CFG:
         shutil.copy2(os.path.join(cfg_src, f), os.path.join(cfg_dst, f))
 
 # 3) 主配置 / 核心库 / 插件清单
