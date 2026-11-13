@@ -627,6 +627,8 @@ export function normalizeHomeState(raw, now = Date.now()) {
   out.sayUntil = Math.max(0, Number(raw.sayUntil) || 0);
   out.lastSayAt = Math.max(0, Number(raw.lastSayAt) || 0);
   out.freestyleNextAt = Math.max(0, Number(raw.freestyleNextAt) || 0);
+  // 菜园工作期间由 garden-autonomy 写入的冻结窗口，必须随存档保留
+  out.freestyleHoldUntil = Math.max(0, Number(raw.freestyleHoldUntil) || 0);
   out.lastFreestyleAt = Math.max(0, Number(raw.lastFreestyleAt) || 0);
   out.recentFreestyle = Array.isArray(raw.recentFreestyle) ? raw.recentFreestyle.map((x) => sanitizeText(x, 40)).filter(Boolean).slice(0, 8) : [];
   out.freestylePick = raw.freestylePick && typeof raw.freestylePick === 'object' ? {
