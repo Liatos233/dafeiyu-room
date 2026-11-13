@@ -138,7 +138,7 @@ export function createDevEditor({ world, camera, canvas }) {
       start: unit.position.clone(),
       startHit: hitPoint.clone()
     };
-    canvas.setPointerCapture?.(ev.pointerId);
+    try { canvas.setPointerCapture?.(ev.pointerId); } catch { /* 合成事件没有真实指针 */ }
     canvas.style.cursor = 'grabbing';
   };
 
