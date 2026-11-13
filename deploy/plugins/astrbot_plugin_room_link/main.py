@@ -548,13 +548,21 @@ class RoomLinkPlugin(Star):
             if not line:
                 return
             extra = (
-                "\n【房间实时状态（每轮刷新，以此为准，不要凭记忆猜）】"
+                "\n【房间实时状态（最高优先级，覆盖你记忆和之前对话里的任何位置描述）】"
                 + line
-                + "\n如果主人让你去某个地方、做某件事或播某个动画，必须调用 "
+                + "\n你之前说过自己在别处，那是过时信息，一律以本条为准。"
+                "\n如果主人让你去某个地方、做某件事或播某个动画，必须调用 "
                 "room_command / room_play 工具真正执行，只回一句话而不调用工具等于没做。"
-                "如果主人问你此刻在哪、在做什么，必须先调用 room_status 再回答。"
+                "如果主人问你此刻在哪、在做什么，必须先调用 room_status 再回答，再按工具结果说话。"
             )
             req.system_prompt = f"{req.system_prompt or ''}{extra}"
+            # 同时贴到本轮用户消息末尾：离生成最近，模型最难忽略
+            if getattr(req, "prompt", None):
+                req.prompt = f"{req.prompt}\n\n（房间实时状态，以此为准：{line}）"
+            try:
+                logger.info(f"[room_link] 注入房间状态（{len(line)} 字）：{line[:70]}")
+            except Exception:
+                pass
         except Exception as exc:  # noqa: BLE001 - 注入失败不影响正常对话
             logger.debug(f"[room_link] 注入房间状态失败：{exc}")
 
