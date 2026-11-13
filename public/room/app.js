@@ -2576,7 +2576,7 @@ function showInfo(hs) {
   $('info').dataset.spot = hs.spot || '';
   $('info').classList.remove('hide');
 }
-$('infoClose').addEventListener('click', () => $('info').classList.add('hide'));
+$('infoClose')?.addEventListener('click', () => $('info').classList.add('hide'));
 $('infoGo').addEventListener('click', () => {
   const room = $('info').dataset.room;
   const spot = $('info').dataset.spot;
@@ -2585,10 +2585,12 @@ $('infoGo').addEventListener('click', () => {
   // 和左侧「沙发玩 / 躺椅玩」同一套行为：有站位脚本的走脚本，
   // 其余交给服务端 spot（服务端会按 support/mount 处理，避免穿模）。
   if (room === 'living' && spot === 'sofa') { void sofaPlay(); return; }
-  if ((room === 'pool' || room === 'balcony') && (spot === 'chair' || spot === 'deck_e' || spot === 'lounger')) {
-    void chaisePlay();
+  if (room === 'pool' && (spot === 'lounger' || spot === 'deck_e')) {
+    // 沙滩躺椅：走服务端 spot（带 support/mount），不要用阳台躺椅的客户端脚本
+    act('command', { room: 'pool', spot: 'lounger' });
     return;
   }
+  if (room === 'balcony' && spot === 'chair') { act('command', { room: 'balcony', spot: 'chair' }); return; }
   act('command', { room, spot });
 });
 
@@ -2833,7 +2835,10 @@ function buildDevQuickMenu() {
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
     <button data-dev="anim" class="dq">动画状态 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
-    <button data-dev="top" class="dq">俯视视角</button>
+    <button data-dev="her" class="dq">状态卡 <b></b></button>
+    <button data-dev="events" class="dq">事件卡 <b></b></button>
+    <button data-dev="bubble" class="dq">头顶气泡 <b></b></button>
+    <button data-dev="all" class="dq">全部卡片 <b></b></button>
     <button data-dev="edit" class="dq">进入编辑模式</button>
   `;
   const st = document.createElement('style');
@@ -2848,32 +2853,59 @@ function buildDevQuickMenu() {
     const b = el.querySelector(`[data-dev="${k}"] b`);
     if (b) b.textContent = on ? '✓' : '';
   };
+  const cardEls = () => ({
+    her: document.querySelector('.her-panel'),
+    events: document.querySelector('.events-panel'),
+    actions: document.getElementById('petActions'),
+    bubble: document.getElementById('bubble')
+  });
+
+  const showEl = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
+  const isShown = (el) => !!el && getComputedStyle(el).display !== 'none';
+
   el.querySelector('[data-dev="nav"]').addEventListener('click', () => {
-    showNavMap(!navMapBig);
-    mark('nav', true);
+    if (navMapEl && document.body.contains(navMapEl)) { navMapEl.remove(); navMapEl = null; }
+    else showNavMap();
+    mark('nav', !!navMapEl);
   });
   el.querySelector('[data-dev="labels"]').addEventListener('click', () => {
-    const next = !roomLabelsOn;
-    setRoomLabels(next);
-    mark('labels', next);
+    if (typeof setRoomLabels === 'function') {
+      const next = !roomLabelsOn;
+      setRoomLabels(next);
+      mark('labels', next);
+    }
   });
   el.querySelector('[data-dev="anim"]').addEventListener('click', () => {
     setDevMode(!devMode);
     mark('anim', devMode);
   });
   el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
-    const panel = document.getElementById('petActions');
-    if (!panel) return;
-    const hidden = panel.style.display === 'none';
-    panel.style.display = hidden ? '' : 'none';
+    const el2 = cardEls().actions;
+    showEl(el2, !isShown(el2));
+    mark('actions', isShown(el2));
   });
-  el.querySelector('[data-dev="top"]').addEventListener('click', () => {
-    if (VIEW.mode !== 'overview') setMode('overview');
-    VIEW.follow = false;
-    VIEW.target.set(6.6, 0.3, 4.8);
-    VIEW.az = 0;
-    VIEW.elev = 1.45;
-    VIEW.radius = 20;
+  el.querySelector('[data-dev="her"]').addEventListener('click', () => {
+    const el2 = cardEls().her;
+    showEl(el2, !isShown(el2));
+    mark('her', isShown(el2));
+  });
+  el.querySelector('[data-dev="events"]').addEventListener('click', () => {
+    const el2 = cardEls().events;
+    showEl(el2, !isShown(el2));
+    mark('events', isShown(el2));
+  });
+  el.querySelector('[data-dev="bubble"]').addEventListener('click', () => {
+    const el2 = cardEls().bubble;
+    showEl(el2, !isShown(el2));
+    mark('bubble', isShown(el2));
+  });
+  el.querySelector('[data-dev="all"]').addEventListener('click', () => {
+    const els = Object.values(cardEls()).filter(Boolean);
+    const anyShown = els.some((e) => isShown(e)) || !!navMapEl;
+    for (const e3 of els) showEl(e3, !anyShown);
+    if (navMapEl && !anyShown) { navMapEl.remove(); navMapEl = null; }
+    else if (anyShown === false && !navMapEl) showNavMap();
+    mark('all', !anyShown);
   });
   el.querySelector('[data-dev="edit"]').addEventListener('click', () => {
     if (window.__devEditor) {
@@ -2883,6 +2915,19 @@ function buildDevQuickMenu() {
       location.search = '?edit=1';
     }
   });
+
+  // 默认全开（编辑模式除外）
+  setTimeout(() => {
+    if (typeof setRoomLabels === 'function' && !roomLabelsOn) setRoomLabels(true);
+    mark('labels', true);
+    mark('her', true);
+    mark('events', true);
+    mark('actions', true);
+    mark('bubble', true);
+    mark('nav', !!navMapEl);
+    mark('anim', devMode);
+  }, 60);
+
   devQuickEl = el;
   return el;
 }
@@ -2975,6 +3020,12 @@ function showNavMap(bigMode = navMapBig) {
   if (old) old.remove();
   document.body.appendChild(cv);
   navMapEl = cv;
+  let navZoom = 1;
+  cv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    navZoom = Math.min(3, Math.max(0.5, navZoom * (1 - e.deltaY * 0.0015)));
+    cv.style.zoom = navZoom;
+  }, { passive: false });
   const ctx = cv.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -3779,9 +3830,16 @@ function frame(now) {
       if (!el) {
         el = document.createElement('div');
         el.id = '__animdbg';
-        el.style.cssText = 'position:fixed;right:12px;top:120px;z-index:99999;background:rgba(0,0,0,.78);color:#9fe8ff;font:12px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none;max-width:320px';
         document.body.appendChild(el);
       }
+      el.style.cssText = [
+        'position:fixed', 'left:16px', 'bottom:96px', 'z-index:50', 'min-width:220px',
+        'max-width:300px', 'padding:9px 11px', 'border-radius:12px',
+        'background:rgba(18,22,28,.88)', 'border:1px solid rgba(143,193,255,.22)',
+        'box-shadow:0 8px 24px rgba(0,0,0,.35)', 'color:#cfe0f0',
+        'font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
+        'white-space:pre-wrap', 'pointer-events:none'
+      ].join(';');
       const pick = her.freestylePick;
       const lines = [
         'animdbg',
