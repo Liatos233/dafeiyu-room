@@ -2822,7 +2822,7 @@ function buildDevQuickMenu() {
   const el = document.createElement('div');
   el.id = 'devQuickMenu';
   el.style.cssText = [
-    'position:fixed', 'left:14px', 'top:96px', 'z-index:55', 'width:172px',
+    'position:fixed', 'left:308px', 'top:96px', 'z-index:55', 'width:176px',
     'background:rgba(18,22,28,.92)', 'border:1px solid rgba(143,193,255,.35)',
     'border-radius:12px', 'padding:8px', 'display:none',
     'font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace', 'color:#dbe7f5'
