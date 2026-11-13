@@ -819,6 +819,57 @@ function mergeStaticDecor(world) {
   return merged;
 }
 
+  // ── 地面材质（地板/地砖/露台）：用于「湿反光」与「积雪」 ──────────
+  world.collectGroundMats = () => {
+    if (world._groundMats) return world._groundMats;
+    const out = [];
+    const pos = new THREE.Vector3();
+    world.scene.traverse((o) => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      const g = o.geometry;
+      if (!g) return;
+      if (!g.boundingBox) g.computeBoundingBox?.();
+      if (!g.boundingBox) return;
+      const sx = g.boundingBox.max.x - g.boundingBox.min.x;
+      const sz = g.boundingBox.max.z - g.boundingBox.min.z;
+      const sy = g.boundingBox.max.y - g.boundingBox.min.y;
+      o.getWorldPosition(pos);
+      // 贴地、面积大、很薄 → 视为地面
+      if (pos.y > 0.35 || pos.y < -0.4) return;
+      if (sx * sz < 2.5 || sy > 0.3) return;
+      const m = o.material;
+      if (!m.color || m.__wxOrig) return;
+      m.__wxOrig = m.color.clone();
+      m.__wxRough = typeof m.roughness === 'number' ? m.roughness : 0.8;
+      out.push(m);
+    });
+    world._groundMats = out;
+    return out;
+  };
+
+  // wet: 0..1 湿滑反光；snow: 0..1 积雪覆盖
+  world.setGroundWeather = (wet, snow) => {
+    const mats = world.collectGroundMats();
+    const w = Math.max(0, Math.min(1, wet || 0));
+    const sn = Math.max(0, Math.min(1, snow || 0));
+    world._groundWet = w;
+    world._groundSnow = sn;
+    for (const m of mats) {
+      const c = m.__wxOrig.clone();
+      if (w > 0) c.lerp(new THREE.Color(0x1b2430), w * 0.38);
+      if (sn > 0) c.lerp(new THREE.Color(0xf1f6fb), sn * 0.78);
+      m.color.copy(c);
+      m.roughness = Math.max(0.05, (m.__wxRough || 0.8) * (1 - w * 0.72) + sn * 0.35);
+      if ('metalness' in m) m.metalness = Math.min(0.35, w * 0.3);
+      m.needsUpdate = false;
+    }
+  };
+
+  // 闪电：短时间内抬高环境光，再衰减
+  world.flashLightning = (power = 1) => {
+    world._flash = Math.max(world._flash || 0, Math.max(0.2, Math.min(2, power)));
+  };
+
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
   try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
@@ -832,6 +883,21 @@ function mergeStaticDecor(world) {
     }
     if (world.hemi && typeof world.hemiTargetIntensity === 'number') {
       world.hemi.intensity += (world.hemiTargetIntensity - world.hemi.intensity) * k;
+    }
+    // 雾的距离与颜色也做平滑，天气切换不再硬跳
+    const fog = world.scene?.fog;
+    if (fog) {
+      if (typeof world.fogTargetNear === 'number') fog.near += (world.fogTargetNear - fog.near) * Math.min(1, dt * 1.6);
+      if (typeof world.fogTargetFar === 'number') fog.far += (world.fogTargetFar - fog.far) * Math.min(1, dt * 1.6);
+      if (world.fogTargetColor && fog.color) fog.color.lerp(world.fogTargetColor, Math.min(1, dt * 1.6));
+    }
+    // 闪电：给环境光与太阳光叠一层瞬时亮度
+    if (world._flash > 0.001) {
+      const f = world._flash;
+      const boost = f * 2.6;
+      if (world.hemi) world.hemi.intensity += boost;
+      if (world.sun) world.sun.intensity += boost * 0.6;
+      world._flash = Math.max(0, f - dt * 5.2);
     }
   };
   world.setMemoryNotes = (lines) => setMemoryNotes(world, lines);
@@ -2386,7 +2452,7 @@ function buildRain(world) {
   world.updateRain = (dt) => {
     if (!rain.visible) return;
     const arr = geo.attributes.position.array;
-    const fall = 11 * Math.min(dt, 0.05);
+    const fall = (world.rainSpeed || 11) * Math.min(dt, 0.05);
     for (let i = 0; i < COUNT; i++) {
       arr[i * 6 + 1] -= fall;
       arr[i * 6 + 4] -= fall;
@@ -2425,7 +2491,7 @@ function buildSnow(world) {
     if (!snow.visible) return;
     world._snowT += dt;
     const arr = geo.attributes.position.array;
-    const fall = 0.85 * Math.min(dt, 0.05) * (world.snowSpeedMul || 1);
+    const fall = 0.85 * Math.min(dt, 0.05) * (world.snowSpeedMul || 1) * (0.7 + (world.weatherIntensity ?? 0.6) * 0.6);
     for (let i = 0; i < COUNT; i++) {
       arr[i * 3 + 1] -= fall * (0.7 + (seed[i] % 1));
       arr[i * 3] += Math.sin(world._snowT * 1.3 + seed[i]) * dt * 0.18;
@@ -2468,7 +2534,9 @@ function buildSand(world) {
 }
 
 // ── 时间/灯/屏幕 ──────────────────────────────────────────────────────────
-function updateEnvironment(world, { hour = null, lamp = true, asleep = false, kind = 'idle', realTime = true, weather = 'clear', rain: rainFlag = null } = {}) {
+function updateEnvironment(world, { hour = null, lamp = true, asleep = false, kind = 'idle', realTime = true, weather = 'clear', rain: rainFlag = null, intensity = null } = {}) {
+  const inten = Math.max(0, Math.min(1, intensity == null ? (world.weatherIntensity ?? 0.6) : intensity));
+  world.weatherIntensity = inten;
   let srcHour = hour;
   if (srcHour === null || srcHour === undefined || realTime) {
     const d = new Date();
@@ -2542,14 +2610,26 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
     world.snowSpeedMul = wx === 'hail' ? 2.4 : wx === 'blizzard' ? 1.8 : 1;
   }
   if (world.sand) world.sand.visible = sandy || wx === 'blizzard';
+
+  // 降水强度：影响不透明度、下落速度、颗粒大小
+  if (world.rain?.material) world.rain.material.opacity = 0.22 + inten * 0.5;
+  world.rainSpeed = 7 + inten * 7;
+  if (world.sand?.material) world.sand.material.opacity = 0.3 + inten * 0.45;
+
+  // 地面湿滑（雨天）与积雪（雪天），随强度缩放
+  const wetKind = ['rain', 'storm', 'sleet', 'hail'].includes(wx);
+  const snowKind = ['snow', 'blizzard', 'sleet'].includes(wx);
+  const wet = wetKind ? 0.35 + inten * 0.65 : 0;
+  const snowCover = snowKind ? (wx === 'blizzard' ? 1 : 0.45 + inten * 0.5) : 0;
+  if (world.setGroundWeather) world.setGroundWeather(wet, snowCover);
   // 雾的浓度按天气分档
   const fogRange = {
     fog: [10, 42], sand: [16, 58], storm: [22, 64], snow: [22, 66],
     rain: [28, 80], overcast: [30, 86], clear: [38, 100],
     sleet: [24, 70], hail: [20, 60], haze: [8, 34], blizzard: [12, 44], meteor: [30, 90]
   }[wx] || [38, 100];
-  world.scene.fog.near = fogRange[0];
-  world.scene.fog.far = fogRange[1];
+  world.fogTargetNear = fogRange[0];
+  world.fogTargetFar = fogRange[1];
 
   // 太阳/半球光由上面的「太阳弧线」统一给目标值（updateSun 平滑插值），
   // 这里只补雾色和阴影开关，不再直接写 sun.position/intensity，
@@ -2572,6 +2652,8 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
     sleet: 0x8a97a3, hail: 0x4a5563, haze: 0xc9bda9, blizzard: 0xd7e2ea, meteor: 0x0a1526
   };
   if (fogByWeather[wx] !== undefined) world.scene.fog.color.set(fogByWeather[wx]);
+  if (!world.fogTargetColor) world.fogTargetColor = world.scene.fog.color.clone();
+  world.fogTargetColor.copy(world.scene.fog.color);
 
   const sunNowI = typeof world.sunTargetIntensity === 'number' ? world.sunTargetIntensity : world.sun.intensity;
   world.sun.castShadow = !night && world.quality !== 'low' && !gloomy && sunNowI > 0.5;

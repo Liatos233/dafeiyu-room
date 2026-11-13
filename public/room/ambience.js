@@ -518,6 +518,11 @@ export const ambience = {
     else rebuildRoomLayer();
     applyLevels();
   },
+  // 供闪电/雷雨调用的一声雷
+  thunder() {
+    if (!state.ctx || !state.enabled) return;
+    try { thunder(state.ctx, state.shotBus); } catch { /* 忽略 */ }
+  },
   setSpeaking(v) {
     if (state.speaking === !!v) return;
     state.speaking = !!v;

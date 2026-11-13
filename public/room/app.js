@@ -1377,6 +1377,10 @@ function scheduleAutoWeather() {
   const [lo, hi] = AUTO_SPAN_MS;
   autoSkyTimer = setTimeout(applyAutoWeather, lo + Math.random() * (hi - lo));
 }
+// 降水/风力强度（0..1），影响粒子密度、下落速度、地面湿度
+let weatherIntensity = Number(localStorage.getItem('home-wx-intensity') || 60) / 100;
+if (!Number.isFinite(weatherIntensity)) weatherIntensity = 0.6;
+
 const SKY_FROM_URL = params.get('sky');
 // 地板上的房间名：默认关闭，用户可在「设置 → 房间名」打开
 let roomLabelsOn = localStorage.getItem('home-labels') === '1';
@@ -1535,7 +1539,7 @@ function stormFlashTick(now) {
 function refreshSky() {
   try {
     world.updateEnvironment({
-      ...skyOptions(),
+      ...skyOptions(), intensity: weatherIntensity,
       lamp: state?.env?.lamp !== false,
       asleep: state?.her?.asleep,
       kind: state?.her?.kind
@@ -3268,7 +3272,7 @@ function updateAutoBtn() {
   if (!b) return;
   b.setAttribute('aria-pressed', autoSkyOn ? 'true' : 'false');
   b.classList.toggle('on', autoSkyOn);
-  b.innerHTML = autoSkyOn ? '<b>🎲</b> 自动天气：开' : '<b>🎲</b> 自动天气：关';
+  b.textContent = autoSkyOn ? '🎲 自动 · 开' : '🎲 自动';
 }
 document.getElementById('autoSkyBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3283,6 +3287,26 @@ document.getElementById('autoSkyBtn')?.addEventListener('click', (e) => {
     toast?.('自动天气：关');
   }
 });
+document.getElementById('wxIntensity')?.addEventListener('input', (e) => {
+  const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+  weatherIntensity = v / 100;
+  localStorage.setItem('home-wx-intensity', String(v));
+  const st = document.getElementById('wxIntensityState');
+  if (st) st.textContent = `${v}%`;
+  refreshSky();
+});
+
+// 闪电：雷雨/冰雹时随机闪一下，并让环境音补一声雷
+let lastFlashAt = 0;
+function maybeLightning(now, weather) {
+  if (!['storm', 'hail'].includes(weather)) return;
+  if (now - lastFlashAt < 3500) return;
+  if (Math.random() > 0.045) return;
+  lastFlashAt = now;
+  try { world?.flashLightning?.(0.5 + Math.random() * 0.8); } catch { /* 忽略 */ }
+  try { ambience.thunder?.(); } catch { /* 忽略 */ }
+}
+
 
 skyMenu?.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-sky]');
@@ -3304,6 +3328,13 @@ skyMenu?.addEventListener('click', (e) => {
   toast(`天空：${SKY_LABEL[skyMode]}`);
 });
 updateAutoBtn();
+{
+  const vol = document.getElementById('wxIntensity');
+  const st = document.getElementById('wxIntensityState');
+  const v = Math.round(weatherIntensity * 100);
+  if (vol) vol.value = String(v);
+  if (st) st.textContent = `${v}%`;
+}
 if (autoSkyOn) scheduleAutoWeather();
 
 document.addEventListener('click', (e) => {
@@ -3575,6 +3606,7 @@ function frame(now) {
   updateCamera(dt);
   updateCompass();
   watchLayers(now);
+  maybeLightning(now, skyOptions().weather === 'storm' ? 'storm' : skyOptions().weather);
   // 每秒把天气/房间同步给环境音（切天气不一定伴随房间状态变化）
   if (now - (window.__ambSyncAt || 0) > 1000) {
     window.__ambSyncAt = now;
