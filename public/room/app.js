@@ -747,6 +747,7 @@ if (EDIT_MODE) {
   }
 }
 
+if (EDIT_MODE) { try { buildDevQuickMenu().style.display = 'block'; } catch { /* 忽略 */ } }
 window.__setMode = setMode;   // 调试/截图用
 window.__camera = camera;
 window.__VIEW = VIEW;
@@ -2577,7 +2578,15 @@ $('infoGo').addEventListener('click', () => {
   const room = $('info').dataset.room;
   const spot = $('info').dataset.spot;
   $('info').classList.add('hide');
-  if (room && spot) act('command', { room, spot });
+  if (!room || !spot) return;
+  // 和左侧「沙发玩 / 躺椅玩」同一套行为：有站位脚本的走脚本，
+  // 其余交给服务端 spot（服务端会按 support/mount 处理，避免穿模）。
+  if (room === 'living' && spot === 'sofa') { void sofaPlay(); return; }
+  if ((room === 'pool' || room === 'balcony') && (spot === 'chair' || spot === 'deck_e' || spot === 'lounger')) {
+    void chaisePlay();
+    return;
+  }
+  act('command', { room, spot });
 });
 
 function toast(text) {
@@ -2803,7 +2812,73 @@ let devMode = false;
 
 document.getElementById('roomLabelBtn')?.addEventListener('click', () => setRoomLabels(!roomLabelsOn));
 
+// ── 开发者快捷菜单：地图 / 动画状态 / 动作 / 编辑模式 ──────────
+let devQuickEl = null;
+function buildDevQuickMenu() {
+  if (devQuickEl) return devQuickEl;
+  const el = document.createElement('div');
+  el.id = 'devQuickMenu';
+  el.style.cssText = [
+    'position:fixed', 'left:14px', 'top:96px', 'z-index:55', 'width:172px',
+    'background:rgba(18,22,28,.92)', 'border:1px solid rgba(143,193,255,.35)',
+    'border-radius:12px', 'padding:8px', 'display:none',
+    'font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace', 'color:#dbe7f5'
+  ].join(';');
+  el.innerHTML = `
+    <div style="color:#8fc1ff;font-weight:700;margin:2px 4px 6px">开发菜单</div>
+    <button data-dev="nav" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">地图 <b></b></button>
+    <button data-dev="labels" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">房间标签 <b></b></button>
+    <button data-dev="anim" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">动画状态 <b></b></button>
+    <button data-dev="actions" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">动作面板 <b></b></button>
+    <button data-dev="top" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">俯视视角</button>
+    <button data-dev="edit" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">进入编辑模式</button>
+  `;
+  document.body.appendChild(el);
+  const mark = (k, on) => {
+    const b = el.querySelector(`[data-dev="${k}"] b`);
+    if (b) b.textContent = on ? '✓' : '';
+  };
+  el.querySelector('[data-dev="nav"]').addEventListener('click', () => {
+    showNavMap(!navMapBig);
+    mark('nav', true);
+  });
+  el.querySelector('[data-dev="labels"]').addEventListener('click', () => {
+    const next = !roomLabelsOn;
+    setRoomLabels(next);
+    mark('labels', next);
+  });
+  el.querySelector('[data-dev="anim"]').addEventListener('click', () => {
+    setDevMode(!devMode);
+    mark('anim', devMode);
+  });
+  el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
+    const panel = document.getElementById('petPanel');
+    const shown = panel && !panel.classList.contains('hide');
+    if (panel) panel.classList.toggle('hide', shown);
+  });
+  el.querySelector('[data-dev="top"]').addEventListener('click', () => {
+    if (VIEW.mode !== 'overview') setMode('overview');
+    VIEW.follow = false;
+    VIEW.target.set(6.6, 0.3, 4.8);
+    VIEW.az = 0;
+    VIEW.elev = 1.45;
+    VIEW.radius = 20;
+  });
+  el.querySelector('[data-dev="edit"]').addEventListener('click', () => {
+    if (window.__devEditor) {
+      window.__devEditor.setEnabled(!window.__devEditor.enabled);
+      mark('edit', window.__devEditor.enabled);
+    } else {
+      location.search = '?edit=1';
+    }
+  });
+  devQuickEl = el;
+  return el;
+}
+
 function setDevMode(on) {
+  const q = buildDevQuickMenu();
+  q.style.display = on || EDIT_MODE ? 'block' : 'none';
   devMode = !!on;
   // 开发模式同时打开「动作触发」浮层（原来的 ?animdbg=1）
   window.__ANIMDBG = devMode;
