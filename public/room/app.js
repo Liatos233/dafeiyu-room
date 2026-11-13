@@ -1160,7 +1160,14 @@ let bubbleKind = '';
 // 动作气泡的时间戳：界定「到站后接管」的有效窗口，避免过期的动作文案一直占位。
 let bubbleKindAt = 0;
 let lastSleep = false;
-let flipState = false;   // 侧跑朝向：跟随镜头横向方向，带滞回
+let flipState = false;   // 侧跑朝向：由屏幕横向速度决定，带死区与锁
+// 行走方向（屏幕空间）：x = 镜头右向分量，z = 远离镜头分量
+let walkScreenVel = { x: 0, z: 0 };
+let walkSector = 'side';          // front（朝镜头）/ side / away（背向镜头）
+let walkSectorPending = 'side';
+let walkSectorSince = 0;
+let flipLockUntil = 0;
+let walkWasMoving = false;
 let motionWalking = false;   // 真正在移动（按画面位移判断，不依赖轮询状态）
 let walkPrevPos = null;
 let stillMs = 0;
@@ -1928,8 +1935,8 @@ function isBackView() {
 function isSideRun(her = state?.her) {
   if (!her?.walking || charMode !== 'webm') return false;
   if (VIEW.mode === 'first' || VIEW.mode === 'eyes') return false;
-  // 背面奔跑已删除：镜头在背后时用侧跑帧，不再切 back_run。
-  return viewDiff(her) >= 48;
+  // 方向由屏幕空间位移判定：只有「正朝镜头走」才用正面跑，其余用侧跑帧
+  return walkSector !== 'front';
 }
 
 function clipFor(her) {
@@ -3694,9 +3701,72 @@ function frame(now) {
       };
     }
     const walkingNow = derivedWalk;
+    // ── 行走方向：只看「屏幕空间的实际位移」，不再依赖服务端 facing ──────
+    {
+      const prev = lastDisplayPos || displayPos;
+      const mdx = displayPos[0] - prev[0];
+      const mdz = displayPos[1] - prev[1];
+      camera.updateMatrixWorld();
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      right.y = 0;
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+      right.normalize();
+      const fwd = new THREE.Vector3(
+        VIEW.target.x - camera.position.x,
+        0,
+        VIEW.target.z - camera.position.z
+      );
+      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+      fwd.normalize();
+      const rawX = mdx * right.x + mdz * right.z;
+      const rawZ = mdx * fwd.x + mdz * fwd.z;
+      // EMA 平滑：单帧抖动不至于让方向翻来覆去
+      walkScreenVel.x += (rawX - walkScreenVel.x) * 0.3;
+      walkScreenVel.z += (rawZ - walkScreenVel.z) * 0.3;
+      const ax = Math.abs(walkScreenVel.x);
+      const az = Math.abs(walkScreenVel.z);
+      const moving = walkingNow && (ax + az) > 1e-4;
+
+      if (moving) {
+        // 扇区判定：远近轴明显占优 → front/away，否则 side
+        let cand = walkSector;
+        if (az > ax * 1.35) cand = walkScreenVel.z > 0 ? 'away' : 'front';
+        else if (ax > az * 1.1) cand = 'side';
+        if (cand !== walkSector) {
+          if (cand !== walkSectorPending) {
+            walkSectorPending = cand;
+            walkSectorSince = now;
+          } else if (now - walkSectorSince > 120) {
+            walkSector = cand;
+          }
+        } else {
+          walkSectorPending = cand;
+        }
+
+        // 翻转只跟屏幕横向速度有关；死区 + 150ms 锁，避免边缘抖动
+        if (walkSector !== 'front' && ax > 0.0004 && now > flipLockUntil) {
+          if (walkScreenVel.x > 0.00015) {
+            flipState = true;
+            flipLockUntil = now + 150;
+          } else if (walkScreenVel.x < -0.00015) {
+            flipState = false;
+            flipLockUntil = now + 150;
+          }
+        }
+      }
+
+      // 刚起步：立刻按当前横向方向定一次，避免沿用上一次的镜像
+      if (!walkWasMoving && moving) {
+        if (Math.abs(walkScreenVel.x) > 0.0002) flipState = walkScreenVel.x > 0;
+        walkSector = 'side';
+        walkSectorPending = 'side';
+        flipLockUntil = now + 120;
+      }
+      walkWasMoving = moving;
+    }
     lastDisplayPos = displayPos;
     const backNow = isBackView();
-    // 镜头从正面转到侧面时，虽然背面状态没变，也要切到侧跑帧。
+    // 镜头/方向变化时把立绘切到对应姿态（正面/侧面/背面）
     const viewZone = her.walking ? (isSideRun(her) ? 'side' : 'front') : (backNow ? 'back' : 'front');
     if (viewZone !== lastViewZone) {
       lastViewZone = viewZone;
@@ -3706,28 +3776,15 @@ function frame(now) {
     world.updateCutaway(camera.position, new THREE.Vector3(displayPos[0], 1, displayPos[1]), VIEW.mode !== 'first' && VIEW.mode !== 'eyes');
     const facing = (her.facing || 0) * Math.PI / 180;
     gardenController?.updateCharacter(dragging || placeHold || VIEW.mode === 'eyes' ? { ...her, gardenWork: null } : her, { x: displayPos[0], y: her.elev || 0, z: displayPos[1] }, facing);
-    // run_hurry 原片是“朝左跑”：只有侧面跑时按屏幕横向速度决定是否镜像；
-    // 正面/背面/待机不镜像，避免左右脸和朝向突然翻面。
     let flip = flipState;
-  // 游泳：原画头朝左，按「游动方向在屏幕上的左右」决定是否镜像，
-  // 这样去程和回程的头都朝着前进方向。
-  if (her.kind === 'swim' && her.swim && !dragging && !placeHold) {
-    const leg = Math.max(1200, Number(her.swim.oneWayMs) || 5000);
-    const phase = ((Date.now() - her.swim.startedAt) / leg) % 2;
-    const dirX = phase < 1 ? 1 : -1;
-    camera.updateMatrixWorld();
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    flip = new THREE.Vector3(dirX, 0, 0).dot(right) > 0;
-  }
-    if (charMode === 'webm' && isSideRun(her) && !dragging && !placeHold) {
+    // 游泳：原画头朝左，按游动方向的屏幕左右镜像
+    if (her.kind === 'swim' && her.swim && !dragging && !placeHold) {
+      const leg = Math.max(1200, Number(her.swim.oneWayMs) || 5000);
+      const phase = ((Date.now() - her.swim.startedAt) / leg) % 2;
+      const dirX = phase < 1 ? 1 : -1;
       camera.updateMatrixWorld();
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-      const move = new THREE.Vector3(Math.sin(facing), 0, -Math.cos(facing));
-      const dot = move.dot(right);
-      // 带滞回：只有横向分量足够明确才翻面，避免正对/背对镜头时来回抖
-      if (dot > 0.22) flipState = true;
-      else if (dot < -0.22) flipState = false;
-      flip = flipState;
+      flip = new THREE.Vector3(dirX, 0, 0).dot(right) > 0;
     }
   // 游泳：在泳池水面沿泳道来回游，位置由服务端给的 swim 描述插值
   function swimHer(h) {
@@ -3773,6 +3830,9 @@ function frame(now) {
             clip: actorWebm.current,
             footFrac: actorWebm.layers[actorWebm.active]?.footFrac || null,
             layers: actorWebm.layers.map((l) => ({ o: Number((l.material?.opacity || 0).toFixed(2)), t: l.target, v: l.mesh?.visible === true })),
+            sector: walkSector,
+            vel: [Number(walkScreenVel.x.toFixed(4)), Number(walkScreenVel.z.toFixed(4))],
+            flip: flipState,
             footY: actorWebm.layers[actorWebm.active]?.mesh?.position?.y || null,
             room: her.room, spot: her.spot, pose: her.pose, kind: her.kind,
             elev: her.elev, walking: her.walking === true,
