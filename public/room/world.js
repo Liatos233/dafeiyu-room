@@ -2627,7 +2627,7 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   if (world.sand?.material) world.sand.material.opacity = 0.3 + inten * 0.45;
 
   // 地面湿滑（雨天）与积雪（雪天），随强度缩放
-  const wetKind = ['rain', 'storm', 'sleet', 'hail'].includes(wx);
+  const wetKind = ['rain', 'storm', 'sleet', 'hail', 'typhoon'].includes(wx);
   const snowKind = ['snow', 'blizzard', 'sleet'].includes(wx);
   const wet = wetKind ? 0.35 + inten * 0.65 : 0;
   const snowCover = snowKind ? (wx === 'blizzard' ? 1 : 0.45 + inten * 0.5) : 0;
