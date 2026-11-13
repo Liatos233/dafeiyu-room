@@ -1169,6 +1169,7 @@ let walkSectorSince = 0;
 let flipLockUntil = 0;
 let walkWasMoving = false;
 let motionWalking = false;   // 真正在移动（按画面位移判断，不依赖轮询状态）
+let lastMotionWalking = false;
 let walkPrevPos = null;
 let stillMs = 0;
 let sleepPhase = 'none';
@@ -3663,7 +3664,10 @@ function frame(now) {
     const derivedWalk = !dragging && !placeHold
       && (movingNow || (stillMs < 120 && (her.route?.length || 0) > 0));
     if (derivedWalk !== motionWalking) {
-      motionWalking = derivedWalk;
+      const wasWalking = lastMotionWalking;
+    motionWalking = derivedWalk;
+    lastMotionWalking = motionWalking;
+    if (wasWalking !== motionWalking && !charDrag?.active && !placeHold) syncCharacter();
       syncCharacter();
     }
     if (window.__ANIMDBG) {
