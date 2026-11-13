@@ -4551,7 +4551,7 @@ async function main() {
         // ── 天气同步：页面把当前天气/强度报给服务端（菜园与对话都用它） ──
         if (req.method === 'POST' && url.pathname === '/api/home/weather') {
           try {
-            const body = JSON.parse(await readBody());
+            const body = await readBody();
             const snap = setWeather(body?.key, body?.intensity);
             sendJson({ ok: true, weather: snap, label: WEATHER_LABEL[snap.key] || '' });
           } catch (e) {
