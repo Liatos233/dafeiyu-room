@@ -183,6 +183,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       pivot.position.set(pt.x, pt.y, pt.z);
       pivot.rotation.y = pt.ry || 0;
       releasePivot(pivot, members);
+      applyHotspots(pt);
     }
     for (const arr of clusters.values()) {
       if (seen.has(arr)) continue;
@@ -197,6 +198,22 @@ export function createDevEditor({ world, camera, canvas, view }) {
       pivot.position.set(pt.x, pt.y, pt.z);
       pivot.rotation.y = pt.ry || 0;
       releasePivot(pivot, members);
+      applyHotspots(pt);
+    }
+  }
+
+  // 把补丁里记录的热点坐标套回去
+  function applyHotspots(pt) {
+    if (!Array.isArray(pt.hotspots)) return;
+    for (const rec of pt.hotspots) {
+      const h = (world.hotspots || []).find((x) => (x.userData?.hotspot?.title || '') === rec.title);
+      if (!h) continue;
+      h.position.x = rec.x;
+      h.position.z = rec.z;
+      if (h.userData?.hotspot) {
+        h.userData.hotspot.x = rec.x;
+        h.userData.hotspot.z = rec.z;
+      }
     }
   }
 
@@ -218,9 +235,15 @@ export function createDevEditor({ world, camera, canvas, view }) {
     const center = pivot.position;
 
     const base = { x: pivot.position.x, y: pivot.position.y, z: pivot.position.z, ry: 0 };
+    // 附近的交互热点（P 点）：跟着模型一起走，避免人站到旧位置
+    const nearHotspots = [];
+    for (const h of world.hotspots || []) {
+      const d = Math.hypot(h.position.x - pivot.position.x, h.position.z - pivot.position.z);
+      if (d < 1.6) nearHotspots.push({ mesh: h, x0: h.position.x, z0: h.position.z, title: h.userData?.hotspot?.title || '' });
+    }
     const name = label || nearestHotspotName(center) || `组合×${members.length}`;
     const key = named ? `unit:${named.userData.unitName}` : unitKey(members);
-    selected = { pivot, members, label: name, base, idx: -1, key, named };
+    selected = { pivot, members, label: name, base, idx: -1, key, named, nearHotspots };
     helper = new THREE.BoxHelper(pivot, 0xffcc55);
     helper.material.depthTest = false;
     helper.renderOrder = 999;
@@ -250,7 +273,16 @@ export function createDevEditor({ world, camera, canvas, view }) {
       ry: +p.rotation.y.toFixed(4),
       ref: [+ref.x.toFixed(3), +ref.y.toFixed(3), +ref.z.toFixed(3)],
       n: selected.members.length,
-      key
+      key,
+      delta: [
+        +(p.position.x - selected.base.x).toFixed(3),
+        +(p.position.z - selected.base.z).toFixed(3)
+      ],
+      hotspots: (selected.nearHotspots || []).map((h) => ({
+        title: h.title,
+        x: +h.mesh.position.x.toFixed(2),
+        z: +h.mesh.position.z.toFixed(2)
+      }))
     };
     savePatches(patches);
   }
