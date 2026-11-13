@@ -336,6 +336,15 @@ export function createDevEditor({ world, camera, canvas, view }) {
       p.position.x = Math.round((p.position.x + dx) / SNAP) * SNAP;
       p.position.y = Math.round((p.position.y + dy) / SNAP) * SNAP;
       p.position.z = Math.round((p.position.z + dz) / SNAP) * SNAP;
+      // 附近的 P 点（交互热点）跟着模型走
+      for (const h of selected.nearHotspots || []) {
+        h.mesh.position.x = h.x0 + (p.position.x - selected.base.x);
+        h.mesh.position.z = h.z0 + (p.position.z - selected.base.z);
+        if (h.mesh.userData?.hotspot) {
+          h.mesh.userData.hotspot.x = h.mesh.position.x;
+          h.mesh.userData.hotspot.z = h.mesh.position.z;
+        }
+      }
       if (trace.length < 8) trace.push({ dt: +dt.toFixed(3), dx: +dx.toFixed(3), dy: +dy.toFixed(3), dz: +dz.toFixed(3), keys: [...keys], frames });
       helper?.update();
       setInfo();
