@@ -411,6 +411,7 @@ function skyTexture(hour, weather = 'clear') {
     haze: { top: '#a89a86', mid: '#c9bda9', low: '#e3dccd', sea: ['#a99b86', '#7d7161'], clouds: 8 },
     blizzard: { top: '#7f8fa0', mid: '#aebcc9', low: '#e6edf3', sea: ['#8b9aa8', '#5f6d7a'], clouds: 30 },
     meteor: { top: '#050a14', mid: '#0a1526', low: '#152238', sea: ['#08131f', '#03070d'], clouds: 2, night: true },
+    typhoon: { top: '#1d2730', mid: '#33414c', low: '#5d6d78', sea: ['#223039', '#101a20'], clouds: 32, rain: true, night: true },
     aurora: { top: '#040a14', mid: '#08182a', low: '#0d2438', sea: ['#071827', '#030a12'], clouds: 2, rain: false, stars: 900, sun: 'moon', aurora: true, night: true, mountain: 'rgba(6,14,24,.78)', fog: 0x0a1a2c }
   };
   const spec = W[mode];
@@ -2453,11 +2454,19 @@ function buildRain(world) {
     if (!rain.visible) return;
     const arr = geo.attributes.position.array;
     const fall = (world.rainSpeed || 11) * Math.min(dt, 0.05);
+    const slant = world.rainSlant || 0;
     for (let i = 0; i < COUNT; i++) {
       arr[i * 6 + 1] -= fall;
       arr[i * 6 + 4] -= fall;
+      if (slant) {
+        arr[i * 6] -= slant * fall;
+        arr[i * 6 + 3] -= slant * fall;
+      }
       if (arr[i * 6 + 4] < 0) {
         const top = 6.5 + rnd() * 0.5;
+        const x = -1.2 + rnd() * 15;
+        arr[i * 6] = x;
+        arr[i * 6 + 3] = x - 0.03;
         arr[i * 6 + 1] = top;
         arr[i * 6 + 4] = top - 0.22;
       }
@@ -2552,7 +2561,7 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   const day = !night && !dusk && !dawn;
 
   const wx = rainFlag === true ? 'rain' : (rainFlag === false ? 'clear' : String(weather || 'clear'));
-  const rainy = ['rain', 'storm', 'sleet', 'hail'].includes(wx);
+  const rainy = ['rain', 'storm', 'sleet', 'hail', 'typhoon'].includes(wx);
   const snowy = ['snow', 'sleet', 'blizzard', 'hail'].includes(wx);
   const sandy = wx === 'sand';
   const gloomy = rainy || wx === 'overcast' || wx === 'fog' || wx === 'storm';
@@ -2569,7 +2578,7 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   // 天气对阳光的遮挡
   const weatherDim = ({
     storm: 0.22, rain: 0.38, overcast: 0.5, fog: 0.55, sand: 0.62, snow: 0.7,
-    sleet: 0.45, hail: 0.3, haze: 0.5, blizzard: 0.32, meteor: 1
+    sleet: 0.45, hail: 0.3, haze: 0.5, blizzard: 0.32, meteor: 1, typhoon: 0.2
   })[wx] ?? 1;
   const sunI = isDaytime ? (0.5 + arc * 1.9) * weatherDim : 0;
   const moonI = isDaytime ? 0 : 0.35 * weatherDim;
@@ -2609,11 +2618,12 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
     }
     world.snowSpeedMul = wx === 'hail' ? 2.4 : wx === 'blizzard' ? 1.8 : 1;
   }
-  if (world.sand) world.sand.visible = sandy || wx === 'blizzard';
+  if (world.sand) world.sand.visible = sandy || wx === 'blizzard' || wx === 'typhoon';
 
   // 降水强度：影响不透明度、下落速度、颗粒大小
   if (world.rain?.material) world.rain.material.opacity = 0.22 + inten * 0.5;
-  world.rainSpeed = 7 + inten * 7;
+  world.rainSpeed = (wx === 'typhoon' ? 14 : 7) + inten * 7;
+  world.rainSlant = wx === 'typhoon' ? 0.55 : 0;
   if (world.sand?.material) world.sand.material.opacity = 0.3 + inten * 0.45;
 
   // 地面湿滑（雨天）与积雪（雪天），随强度缩放
@@ -2626,7 +2636,7 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   const fogRange = {
     fog: [10, 42], sand: [16, 58], storm: [22, 64], snow: [22, 66],
     rain: [28, 80], overcast: [30, 86], clear: [38, 100],
-    sleet: [24, 70], hail: [20, 60], haze: [8, 34], blizzard: [12, 44], meteor: [30, 90]
+    sleet: [24, 70], hail: [20, 60], haze: [8, 34], blizzard: [12, 44], meteor: [30, 90], typhoon: [10, 42]
   }[wx] || [38, 100];
   world.fogTargetNear = fogRange[0];
   world.fogTargetFar = fogRange[1];
@@ -2649,7 +2659,7 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   const fogByWeather = {
     overcast: 0x9aa6b1, fog: 0xd3dae0, snow: 0xc3d0da, sand: 0xc9a469,
     rainbow: 0x9fb6c6, storm: 0x39434d, starry: 0x081324, aurora: 0x0a1a2c,
-    sleet: 0x8a97a3, hail: 0x4a5563, haze: 0xc9bda9, blizzard: 0xd7e2ea, meteor: 0x0a1526
+    sleet: 0x8a97a3, hail: 0x4a5563, haze: 0xc9bda9, blizzard: 0xd7e2ea, meteor: 0x0a1526, typhoon: 0x2c3a44
   };
   if (fogByWeather[wx] !== undefined) world.scene.fog.color.set(fogByWeather[wx]);
   if (!world.fogTargetColor) world.fogTargetColor = world.scene.fog.color.clone();

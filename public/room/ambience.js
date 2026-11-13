@@ -303,6 +303,12 @@ function sceneLayers(weather) {
       ];
     case 'haze':
       return [{ sample: 'wind', gain: 0.16, fallback: { type: 'wind', opts: { strength: 0.4, gust: 0.1 } } }];
+    case 'typhoon':
+      return [
+        { sample: 'storm', gain: 0.8, fallback: { type: 'rain', heavy: true } },
+        { sample: 'wind', gain: 0.85 },
+        { proc: 'wind', gain: 0.4, opts: { strength: 1.8, gust: 1.2 } }
+      ];
     case 'blizzard':
       return [
         { sample: 'wind', gain: 0.55, fallback: { type: 'snow' } },

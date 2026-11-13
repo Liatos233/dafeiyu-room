@@ -1322,34 +1322,34 @@ const SKY_PRESETS = {
   day: 12, dusk: 18.2, night: 23, dawn: 6.2,
   rain: 15, overcast: 13, fog: 7.5, snow: 10,
   storm: 18, starry: 23, rainbow: 17, sand: 14, aurora: 23,
-  sleet: 12, hail: 13, haze: 9, blizzard: 10, meteor: 23
+  sleet: 12, hail: 13, haze: 9, blizzard: 10, meteor: 23, typhoon: 16
 };
 // 天气菜单只放「天气」，时段（黎明/白天/黄昏/夜晚）由时间决定，不在这里选
-const SKY_ORDER = ['day', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora', 'sleet', 'hail', 'haze', 'blizzard', 'meteor'];
+const SKY_ORDER = ['day', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora', 'sleet', 'hail', 'haze', 'blizzard', 'meteor', 'typhoon'];
 const SKY_LABEL = {
   day: '晴天', dusk: '黄昏', night: '夜晚', dawn: '黎明',
   rain: '雨天', overcast: '阴天', fog: '雾天', snow: '雪天',
   storm: '雷雨', starry: '星空', rainbow: '彩虹', sand: '沙尘', aurora: '极光',
-  sleet: '雨夹雪', hail: '冰雹', haze: '霾', blizzard: '暴雪', meteor: '流星雨'
+  sleet: '雨夹雪', hail: '冰雹', haze: '霾', blizzard: '暴雪', meteor: '流星雨', typhoon: '台风'
 };
 const SKY_ICON = {
   day: '☀️', dusk: '🌅', night: '🌙', dawn: '🌄',
   rain: '🌧️', overcast: '☁️', fog: '🌫️', snow: '❄️',
   storm: '⛈️', starry: '✨', rainbow: '🌈', sand: '🌪️', aurora: '🌌',
-  sleet: '🌨️', hail: '🧊', haze: '😶‍🌫️', blizzard: '❄️', meteor: '☄️'
+  sleet: '🌨️', hail: '🧊', haze: '😶‍🌫️', blizzard: '❄️', meteor: '☄️', typhoon: '🌀'
 };
 // 每种天气对应的世界渲染模式
 const WEATHER_OF = {
   day: 'clear', dusk: 'clear', night: 'clear', dawn: 'clear',
   rain: 'rain', overcast: 'overcast', fog: 'fog', snow: 'snow',
   storm: 'storm', starry: 'starry', rainbow: 'rainbow', sand: 'sand', aurora: 'aurora',
-  sleet: 'sleet', hail: 'hail', haze: 'haze', blizzard: 'blizzard', meteor: 'meteor'
+  sleet: 'sleet', hail: 'hail', haze: 'haze', blizzard: 'blizzard', meteor: 'meteor', typhoon: 'typhoon'
 };
 // ── 自动天气：按权重轮换，每次持续 AUTO_MIN~AUTO_MAX 分钟
 const AUTO_WEIGHTS = [
   ['day', 30], ['overcast', 14], ['rain', 14], ['snow', 8], ['fog', 5],
   ['storm', 5], ['starry', 6], ['rainbow', 4], ['sand', 3], ['sleet', 4],
-  ['hail', 2], ['haze', 3], ['blizzard', 2], ['meteor', 2]
+  ['hail', 2], ['haze', 3], ['blizzard', 2], ['meteor', 2], ['typhoon', 2]
 ];
 const AUTO_SPAN_MS = [8 * 60_000, 20 * 60_000];
 let autoSkyOn = localStorage.getItem('home-sky-auto') === '1';
