@@ -465,6 +465,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     get enabled() { return enabled; },
     busy: () => false,
     selectObject: (o) => { if (enabled && o) beginSelection(o); },
+    debug: () => ({ keys: [...keys], fwd: fwd.toArray().map((v) => +v.toFixed(2)), right: right.toArray().map((v) => +v.toFixed(2)), az: view?.az, elev: view?.elev }),
     pivotPos: () => selected ? [selected.pivot.position.x, selected.pivot.position.y, selected.pivot.position.z] : null,
     label: () => selected ? selected.label : null,
     blockClick: () => enabled && !!selected,
