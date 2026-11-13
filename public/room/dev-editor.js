@@ -123,17 +123,58 @@ export function createDevEditor({ world, camera, canvas }) {
     return best;
   }
 
-  function beginSelection(mesh) {
-    if (selected) endSelection();
-    const members = clusters.get(mesh) || [mesh];
+  function makePivot(members) {
     const box = new THREE.Box3();
     for (const m of members) box.expandByObject(m);
     const center = box.getCenter(new THREE.Vector3());
-
     const pivot = new THREE.Group();
     pivot.position.copy(center);
     world.root.add(pivot);
     for (const m of members) pivot.attach(m);   // attach 保留世界变换
+    return pivot;
+  }
+
+  function releasePivot(pivot, members) {
+    for (const m of members) world.root.attach(m);
+    world.root.remove(pivot);
+  }
+
+  // 重载后把保存的改动套回去（按“原始中心最近”匹配，避免索引漂移）
+  function applySavedPatches() {
+    const entries = Object.entries(patches);
+    if (!entries.length) return;
+    const seen = new Set();
+    const groups = [];
+    for (const arr of clusters.values()) {
+      if (seen.has(arr)) continue;
+      seen.add(arr);
+      const box = new THREE.Box3();
+      for (const m of arr) box.expandByObject(m);
+      groups.push({ members: arr, center: box.getCenter(new THREE.Vector3()) });
+    }
+    for (const [, pt] of entries) {
+      if (!Array.isArray(pt.ref)) continue;
+      const ref = new THREE.Vector3(pt.ref[0], pt.ref[1], pt.ref[2]);
+      let best = null;
+      let bestD = 1.2;
+      for (const g of groups) {
+        const d = g.center.distanceTo(ref);
+        if (d < bestD) { bestD = d; best = g; }
+      }
+      if (!best) continue;
+      const pivot = makePivot(best.members);
+      pivot.position.set(pt.x, pt.y, pt.z);
+      pivot.rotation.y = pt.ry || 0;
+      releasePivot(pivot, best.members);
+      best.center.set(pt.x, pt.y, pt.z);
+    }
+  }
+
+  function beginSelection(mesh) {
+    if (selected) endSelection();
+    const members = clusters.get(mesh) || [mesh];
+    const pivot = makePivot(members);
+    const center = pivot.position;
 
     const base = { x: pivot.position.x, y: pivot.position.y, z: pivot.position.z, ry: 0 };
     const name = members.length > 3 ? (nearestHotspotName(center) || `组合×${members.length}`) : labelOf(mesh);
@@ -157,11 +198,14 @@ export function createDevEditor({ world, camera, canvas }) {
   function record() {
     if (!selected) return;
     const p = selected.pivot;
+    const ref = selected.base;
     patches[selected.label] = {
       x: +p.position.x.toFixed(3),
       y: +p.position.y.toFixed(3),
       z: +p.position.z.toFixed(3),
-      ry: +p.rotation.y.toFixed(4)
+      ry: +p.rotation.y.toFixed(4),
+      ref: [+ref.x.toFixed(3), +ref.y.toFixed(3), +ref.z.toFixed(3)],
+      n: selected.members.length
     };
     savePatches(patches);
   }
@@ -348,7 +392,7 @@ export function createDevEditor({ world, camera, canvas }) {
     if (next) {
       if (!grid) grid = buildGrid();
       grid.visible = true;
-      if (!clusters.size) buildClusters();
+      if (!clusters.size) { buildClusters(); applySavedPatches(); }
       setInfo();
       rafId = requestAnimationFrame(tick);
     } else {
