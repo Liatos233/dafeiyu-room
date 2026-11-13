@@ -1,5 +1,26 @@
 // 把 agent 的 Markdown 回复转成适合 QQ 发送的纯文本。
-export function mdToPlain(md) {
+const HTML_ENTITY = {
+  '&nbsp;': ' ', '&#160;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>',
+  '&quot;': '"', '&#39;': "'", '&apos;': "'", '&mdash;': '—', '&ndash;': '–',
+  '&hellip;': '…', '&middot;': '·', '&ldquo;': '“', '&rdquo;': '”',
+  '&lsquo;': '‘', '&rsquo;': '’'
+};
+
+// 模型偶尔会把 &nbsp; 之类的转义当成正文吐出来，发到 QQ 前统一还原
+export function decodeEntities(text) {
+  let out = String(text ?? '');
+  if (!out.includes('&')) return out;
+  for (const [k, v] of Object.entries(HTML_ENTITY)) out = out.split(k).join(v);
+  out = out.replace(/&#x([0-9a-fA-F]{1,6});/g, (_, h) => {
+    try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ''; }
+  });
+  out = out.replace(/&#([0-9]{1,7});/g, (_, d) => {
+    try { return String.fromCodePoint(Number(d)); } catch { return ''; }
+  });
+  return out;
+}
+
+function mdToPlainRaw(md) {
   let s = String(md ?? '');
   // 代码块：保留内容，去掉围栏（内容尾部换行去掉，围栏后的换行自然保留一个分隔）
   s = s.replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g, (_, body) => body.replace(/\n+$/, ''));
@@ -37,6 +58,10 @@ export function mdToPlain(md) {
 }
 
 /** 按 QQ 单条消息长度上限切分（群消息一般 ≤ 4500 字，留余量）。 */
+export function mdToPlain(md) {
+  return decodeEntities(mdToPlainRaw(md));
+}
+
 export function splitForQQ(text, max = 4000) {
   const safeMax = Number.isFinite(max) && max >= 1 ? Math.floor(max) : 4000;
   const parts = [];
