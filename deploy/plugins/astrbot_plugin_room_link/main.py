@@ -313,10 +313,36 @@ class RoomLinkPlugin(Star):
                 or her.get("room") != before.get("room")
                 or her.get("kind") != before.get("kind")
             )
+            # 用她自己的口吻说，而不是系统播报
+            room_name = str(her.get("roomName") or "").strip()
+            spot_label = str(her.get("spotLabel") or "").strip()
+            place = spot_label or room_name or "那边"
+            act = str(her.get("activity") or "").strip()
+            for prefix in ("到了", "正在", "刚刚"):
+                if act.startswith(prefix):
+                    act = act[len(prefix):]
+                    break
+            act = act.lstrip("，, ")
+            now_place = f"{room_name}·{spot_label}" if room_name and spot_label else (room_name or "原地")
+            # 动作描述里已经包含地点时就不再重复
+            if act and (place in act or now_place in act):
+                act = ""
+            same_place = (
+                her.get("room") == before.get("room") and her.get("spot") == before.get("spot")
+            )
             if arrived:
-                text = f"（房间里）{label}到位了，{line}"
+                text = f"到{place}了"
+                if act:
+                    text += f"，{act}"
+            elif same_place:
+                text = f"我还在{now_place}"
+                if act:
+                    text += f"，{act}"
             else:
-                text = f"（房间里）{label}还没到位，现在：{line}"
+                text = f"还没到{place}呢，我还在{now_place}"
+                if act:
+                    text += f"，{act}"
+            text = text.strip()
             logger.info(f"[room_link] 补发 → {umo}：{text[:80]}")
             await self.context.send_message(umo, MessageChain().message(text))
         except Exception as exc:  # noqa: BLE001
