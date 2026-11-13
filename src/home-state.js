@@ -67,14 +67,14 @@ export const HOME_LAYOUT = Object.freeze({
       dining: { pos: [2.1, 6.3], pose: 'stand', facing: 0, label: '餐桌边', access: 'dining_s', support: 'dining_seat' }
     },
     living: {
-      sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', support: 'sofa_seat' },
+      sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', support: 'sofa_seat', mount: [6.3, 4.55] },
       water: { pos: [1.52, 3.26], pose: 'stand', facing: -90, label: '饮水机旁', access: 'living_wm' },
       shelf: { pos: [7.85, 1.75], pose: 'stand', facing: 90, label: '书架前', access: 'living_n' },
       rug: { pos: [5.4, 2.7], pose: 'sit', facing: 180, label: '地毯上', access: 'living_rug', support: 'rug' },
       tv: { pos: [6.3, 3.2], pose: 'sit', facing: 0, label: '电视前', access: 'living_tvfront', elev: 0.02 }
     },
     her_room: {
-      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top' },
+      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top', mount: [11.4, 2.05] },
       bedside: { pos: [10.1, 1.55], pose: 'stand', facing: 90, label: '床边', access: 'beside' },
       desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk', support: 'desk_seat' },
       wardrobe: { pos: [12.1, 3.45], pose: 'stand', facing: 0, label: '衣柜前', access: 'wardrobe' },
@@ -92,10 +92,10 @@ export const HOME_LAYOUT = Object.freeze({
       washer: { pos: [9.7, 6.5], pose: 'stand', facing: 90, label: '洗衣机前', access: 'laundry' }
     },
     balcony: {
-        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair' },
+        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.0, 7.85] },
       },
     pool: {
-      lounger: { pos: [12.42, 10.58], pose: 'sit', facing: 180, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger' },
+      lounger: { pos: [12.42, 10.58], pose: 'sit', facing: 180, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [12.42, 10.05] },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
       deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' }
     },
@@ -1148,15 +1148,21 @@ function setActivity(state, kind, activity, pose, elev, facing) {
 function beginRoute(state, target, now, env = {}) {
   const prevRoom = state.room;
   const speed = target.urgent ? 1.45 : 1.05;
-  const fromPos = currentPosition(state, now);
-  const fromSpotDef = state.route ? null : (spotOf(state.room, state.spot) || (state.spot === 'free' ? { access: nearestNodeInRoom(fromPos, state.room).id, pos: fromPos } : null));
-  const route = buildRoute(fromPos, fromSpotDef, target, now, speed);
-  // 目标是有座面的家具（沙发/床/躺椅）：路线终点退到家具前沿，
-  // 最后一小段由客户端「坐上去」的缓动补完，避免走进家具内部再升起导致穿模。
-  if (route && Array.isArray(route.points) && route.points.length >= 2) {
-    const destSpot = spotOf(target.room, target.spot);
-    const seatY = Number(SURFACES[destSpot?.support || 'floor'] || 0);
-    if (seatY > 0.05) {
+  const rawFrom = currentPosition(state, now);
+  const fromSpotDef = state.route ? null : (spotOf(state.room, state.spot) || (state.spot === 'free' ? { access: nearestNodeInRoom(rawFrom, state.room).id, pos: rawFrom } : null));
+  const destSpotDef = spotOf(target.room, target.spot);
+  const destSeatY = Number(SURFACES[destSpotDef?.support || 'floor'] || 0);
+  const mountTo = destSeatY > 0.05 && Array.isArray(destSpotDef?.mount) ? destSpotDef.mount : null;
+  const curSeatY = fromSpotDef ? Number(SURFACES[fromSpotDef.support || 'floor'] || 0) : 0;
+  const mountFrom = curSeatY > 0.05 && Array.isArray(fromSpotDef?.mount) ? fromSpotDef.mount : null;
+  // 从坐具起身：先从固定座点下到地面，再走；上座：路线终点就是固定座点
+  const fromPos = mountFrom ? mountFrom.slice() : rawFrom;
+  const routeTarget = mountTo ? { ...target, pos: mountTo.slice() } : target;
+  const route = buildRoute(fromPos, fromSpotDef, routeTarget, now, speed);
+  if (route) route.target = target;
+  // 没有显式 mount 的坐具（旧数据）：退回「沿最后一段退 0.5m」的近似做法
+  if (!mountTo && route && Array.isArray(route.points) && route.points.length >= 2) {
+    if (destSeatY > 0.05) {
       const pts = route.points;
       const last = pts[pts.length - 1];
       const prev = pts[pts.length - 2];
