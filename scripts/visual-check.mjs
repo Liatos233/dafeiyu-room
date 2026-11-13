@@ -87,14 +87,12 @@ async function clickAction(label) {
   })()`);
 }
 
-const plan = ['待机', '跳舞', '游泳', '走路', '待机'];
+const plan = [];
 let idx = 0;
-for (const label of plan) {
-  const r = await clickAction(label);
-  console.log(`${label}: ${r}`);
+for (let round = 0; round < 12; round += 1) {
   for (let i = 0; i < 10; i += 1) {
-    await shot(`${String(idx).padStart(2, '0')}-${i}`);
-    await sleep(120);
+    await shot(`r${String(round).padStart(2, '0')}-${i}`);
+    await sleep(110);
   }
   idx += 1;
 }

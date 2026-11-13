@@ -3385,6 +3385,38 @@ let fpsN = 0;
 let lastAdapt = 0;
 let ratio = renderer.getPixelRatio();
 
+// 动画层异常检测：重影（两层可见）/ 空白（全透明）都会立刻上报
+let ghostWatch = { ghostSince: 0, blankSince: 0, lastReport: 0 };
+function watchLayers(now) {
+  const layers = actorWebm?.layers || [];
+  if (!layers.length) return;
+  const vis = layers.filter((l) => (l.material?.opacity || 0) > 0.5).length;
+  const allHidden = layers.every((l) => (l.material?.opacity || 0) < 0.1);
+  const report = (type, extra) => {
+    if (now - ghostWatch.lastReport < 1500) return;
+    ghostWatch.lastReport = now;
+    try {
+      fetch('/api/debug/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          type, clip: actorWebm.current, ...extra,
+          layers: layers.map((l) => ({ o: Number((l.material?.opacity || 0).toFixed(2)), t: l.target, v: l.mesh?.visible === true }))
+        })
+      }).catch(() => {});
+    } catch { /* 忽略 */ }
+  };
+  if (vis >= 2) {
+    if (!ghostWatch.ghostSince) ghostWatch.ghostSince = now;
+    if (now - ghostWatch.ghostSince > 150) { report('ghost', { vis }); ghostWatch.ghostSince = 0; }
+  } else ghostWatch.ghostSince = 0;
+  if (allHidden) {
+    if (!ghostWatch.blankSince) ghostWatch.blankSince = now;
+    if (now - ghostWatch.blankSince > 250) { report('blank'); ghostWatch.blankSince = 0; }
+  } else ghostWatch.blankSince = 0;
+}
+
 // 调试：?clipdebug=1 时每 1.1 秒强切一个动作，用来抓切换瞬间的帧
 if (new URLSearchParams(location.search).has('clipdebug')) {
   const cycle = ['待机', '跳舞', '走路', '吃午餐', '游泳', '开心小跑'];
@@ -3416,6 +3448,7 @@ function frame(now) {
   updateOpenView(dt);
   updateCamera(dt);
   updateCompass();
+  watchLayers(now);
 
   const her = state?.her;
   if (her) {
