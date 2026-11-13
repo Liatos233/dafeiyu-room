@@ -74,7 +74,7 @@ export const HOME_LAYOUT = Object.freeze({
       tv: { pos: [6.3, 3.2], pose: 'sit', facing: 0, label: '电视前', access: 'living_tvfront', elev: 0.02 }
     },
     her_room: {
-      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top', mount: [11.4, 2.05] },
+      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top', mount: [10.78, 1.5] },
       bedside: { pos: [10.1, 1.55], pose: 'stand', facing: 90, label: '床边', access: 'beside' },
       desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk', support: 'desk_seat' },
       wardrobe: { pos: [12.1, 3.45], pose: 'stand', facing: 0, label: '衣柜前', access: 'wardrobe' },
