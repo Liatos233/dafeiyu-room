@@ -22,7 +22,7 @@ const chrome = spawn(CHROME, [
   '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`,
   '--autoplay-policy=no-user-gesture-required', '--window-size=900,700',
   '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--mute-audio',
-  URL_TARGET
+  'about:blank'
 ], { stdio: 'ignore' });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +51,23 @@ const send = (method, params = {}) => new Promise((resolve) => {
   ws.send(JSON.stringify({ id: i, method, params }));
 });
 await send('Runtime.enable');
+await send('Page.enable');
+await send('Page.navigate', { url: URL_TARGET });
+ws.addEventListener('message', (ev) => {
+  const m = JSON.parse(ev.data);
+  if (m.method === 'Runtime.exceptionThrown') {
+    const d = m.params.exceptionDetails;
+    console.log('EXCEPTION:', d.text, d.exception?.description?.split('\n')[0] || '');
+  }
+});
+await sleep(200);
 await sleep(7000);
+for (let i = 0; i < 8; i += 1) {
+  const st = await send('Runtime.evaluate', { expression: 'JSON.stringify({ready:document.readyState, r:typeof window.__renderer, a:typeof window.__ambience, err:(window.__homeErrors||[]).length})', returnByValue: true });
+  console.log('t+' + (7 + i * 5) + 's', st.result?.result?.value);
+  if (st.result?.result?.value?.includes('"r":"object"')) break;
+  await sleep(5000);
+}
 const r = await send('Runtime.evaluate', { expression: EXPR, returnByValue: true, awaitPromise: true });
 if (r.result?.exceptionDetails) console.log('ERROR:', r.result.exceptionDetails.text);
 else console.log(JSON.stringify(r.result?.result?.value, null, 2));
