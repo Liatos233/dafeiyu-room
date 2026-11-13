@@ -1861,20 +1861,6 @@ function buildBalcony(world, M) {
   // 植物
   plant(world, 0.75, 8.25, 1.3);
   plant(world, 1.45, 8.8, 0.95);
-  // 串灯
-  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffdca8 });
-  for (let i = 0; i < 20; i++) {
-    const x = 0.35 + i * 0.39;
-    const y = 2.2 - Math.sin((i / 19) * Math.PI) * 0.18 - 0.12;
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), bulbMat);
-    b.position.set(x, y, 8.93);
-    p.add(b);
-  }
-  // 晒衣绳
-  const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 4.0, 4), M.steel);
-  line.rotation.z = Math.PI / 2;
-  line.position.set(4.2, 2.0, 8.85);
-  p.add(line);
   addHotspot(world, 3.0, 8.45, 0.5, { title: '阳台栏杆', sub: '风从海那边过来，栏杆上有一点盐霜', room: 'balcony', spot: 'chair', label: '栏杆边' });
   addHotspot(world, 2.67, 8.22, 0.5, { title: '躺椅', sub: '搭着一条蓝毯子，扶手上放着半杯柠檬水', room: 'balcony', spot: 'chair', label: '躺椅上' });
   addHotspot(world, 1.2, 8.2, 0.45, { title: '花盆', sub: '薄荷长得有点疯，叶子上还挂着水', room: 'balcony', spot: 'plant', label: '花盆边' });

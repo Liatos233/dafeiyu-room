@@ -9,7 +9,6 @@ const URL_TARGET = process.argv[2];
 const OUT = process.argv[3];
 const CAM = process.argv[4] || '10.2,2.35,9.2';
 const LOOK = process.argv[5] || '12.5,1.55,11.3';
-const EXTRA_JS = process.argv[6] || '';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PORT = 9488;
 const PROFILE = join(tmpdir(), 'chrome-render-view');
@@ -60,7 +59,6 @@ const expr = `(() => {
   cam.position.set(${CAM.split(',').map(Number).join(',')});
   cam.lookAt(${LOOK.split(',').map(Number).join(',')});
   cam.updateMatrixWorld(true);
-  if (EXTRA_JS) { ${EXTRA_JS} }
   w.scene.add(fill);
   r.render(w.scene, cam);
   w.scene.remove(fill);
