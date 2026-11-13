@@ -1398,12 +1398,18 @@ function hourToSky(h) {
   if (h >= 16.8) return 'dusk';
   return 'day';
 }
+// 当前「天气」key（纯粹天气；黎明/黄昏/夜晚由时间决定，不再混进来）
 function currentSkyKey() {
-  if (skyRealTime) return hourToSky(new Date().getHours() + new Date().getMinutes() / 60);
-  return skyMode;
+  return SKY_PRESETS[skyMode] ? skyMode : 'day';
+}
+// 当前「时段」（只用于音效氛围与调试展示）
+function currentTimeOfDay() {
+  const h = Number.isFinite(displayHour) ? displayHour
+    : (new Date().getHours() + new Date().getMinutes() / 60);
+  return hourToSky(h);
 }
 function skyLabelText() {
-  const k = currentSkyKey();
+  const k = skyMode;
   return `${SKY_ICON[k] || ''} ${SKY_LABEL[k] || ''}`.trim();
 }
 
@@ -1485,10 +1491,8 @@ function skyOptions(hourOverride) {
   const h = hourOverride != null
     ? hourOverride
     : (Number.isFinite(displayHour) ? displayHour : null);
-  // 天气跟按钮保持一致：开真实时间后按钮显示的是「按小时推断的时段」，
-  // 场景也必须用同一把 key 推天气，否则会出现「按钮变晴天、画面还在下雨」。
-  const key = skyRealTime ? currentSkyKey() : skyMode;
-  const weather = WEATHER_OF[key] || 'clear';
+  // 天气只来自选中的天气；黎明/黄昏/夜晚完全由 hour 决定，两者不再混用
+  const weather = WEATHER_OF[skyMode] || 'clear';
   if (h != null) {
     return { hour: h, realTime: false, weather };
   }
@@ -1668,7 +1672,9 @@ function applyState(next) {
   state = next;
   // 环境音跟随天气与所在房间
   try {
-    ambience.setScene({ weather: currentSkyKey(), room: next.her?.room });
+    const wxKey = currentSkyKey();
+    const ambWeather = wxKey === 'day' ? currentTimeOfDay() : wxKey;
+    ambience.setScene({ weather: ambWeather, room: next.her?.room });
     const speech = next.her?.speech || '';
     if (speech && speech !== window.__ambSpeech) {
       window.__ambSpeech = speech;
@@ -3372,10 +3378,9 @@ if (params.get('skymenu') === '1') setTimeout(openSkyMenu, 1500);
 $('skyTimeChip')?.addEventListener('click', () => {
   skyRealTime = !skyRealTime;
   localStorage.setItem('home-sky-time', skyRealTime ? '1' : '0');
-  if (!skyRealTime) skyMode = currentSkyKey() === 'rain' ? 'night' : currentSkyKey();
   applySkyPref();
   refreshSky();
-  toast(skyRealTime ? '天空跟随电脑时间' : '天空固定为你选的时段');
+  toast(skyRealTime ? '光照跟随电脑时间（天气不变）' : '光照固定在你拖的时间');
 });
 
 $('bubbleChip')?.addEventListener('click', () => {
@@ -3623,7 +3628,10 @@ function frame(now) {
   }
   if (now - (window.__ambSyncAt || 0) > 1000) {
     window.__ambSyncAt = now;
-    try { ambience.setScene({ weather: currentSkyKey(), room: state?.her?.room }); } catch { /* 忽略 */ }
+    try {
+      const wxk = currentSkyKey();
+      ambience.setScene({ weather: wxk === 'day' ? currentTimeOfDay() : wxk, room: state?.her?.room });
+    } catch { /* 忽略 */ }
   }
 
   const her = state?.her;
