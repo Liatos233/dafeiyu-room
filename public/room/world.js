@@ -1201,11 +1201,11 @@ function buildKitchen(world, M) {
   }
   for (let i = 0; i < 3; i++) box(p, 0.032, 0.002, 0.009, M.steel, 2.82 + i * 0.075, 0.953, 0.77);
   // Hood now has its own opening between the upper cabinets, not through them.
-  rbox(p, 0.82, 0.12, 0.48, 0.02, M.steel, 2.9, 1.72, 0.4);
-  rbox(p, 0.27, 0.86, 0.25, 0.012, M.steel, 2.9, 2.19, 0.4);
-  box(p, 0.73, 0.012, 0.35, M.dark, 2.9, 1.654, 0.42);
-  box(p, 0.53, 0.008, 0.22, M.steel, 2.9, 1.646, 0.4);
-  for (const x of [2.59, 3.21]) cyl(p, 0.028, 0.028, 0.008, M.bulbWarm, x, 1.646, 0.56);
+  rbox(p, 0.82, 0.12, 0.48, 0.02, M.steel, 2.8, 1.739, 0.4);
+  rbox(p, 0.27, 0.86, 0.25, 0.012, M.steel, 2.8, 2.209, 0.4);
+  box(p, 0.73, 0.012, 0.35, M.dark, 2.8, 1.673, 0.42);
+  box(p, 0.53, 0.008, 0.22, M.steel, 2.8, 1.665, 0.4);
+  for (const x of [2.49, 3.11]) cyl(p, 0.028, 0.028, 0.008, M.bulbWarm, x, 1.646, 0.56);
   // 吊柜缩短到窗左侧，别把北墙的窗整个挡住
   box(p, 0.62, 0.72, 0.34, M.cream, 0.39, 1.94, 0.25);
   panel(p, 0.674, 0.674, 0.39, 1.94, 0.44);
@@ -1443,14 +1443,14 @@ function buildLiving(world, M, textures) {
   }
   // 搭毯已移除
   // 落地灯
-  const lampBase = cyl(p, 0.16, 0.18, 0.03, M.dark, 4.55, 0.015, 5.12);
-  cyl(p, 0.015, 0.02, 1.55, M.brass, 4.55, 0.78, 5.12);
+  const lampBase = cyl(p, 0.16, 0.18, 0.03, M.dark, 4.95, 0.0, 5.20);
+  cyl(p, 0.015, 0.02, 1.55, M.brass, 4.95, 0.765, 5.20);
   const shade2 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.26, 24, 1, true), M.fabricCream);
-  shade2.position.set(4.55, 1.6, 5.12);
+  shade2.position.set(4.95, 1.585, 5.20);
   shade2.material.side = THREE.DoubleSide;
   p.add(shade2);
   const bulb2 = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), M.bulb);
-  bulb2.position.set(4.55, 1.56, 5.12);
+  bulb2.position.set(4.95, 1.545, 5.20);
   p.add(bulb2);
   world.lampMaterials.push(bulb2.material);
 
@@ -1507,11 +1507,11 @@ function buildLiving(world, M, textures) {
   cyl(p, 0.045, 0.075, 0.18, M.ceramic, bx - 0.02, 1.90, bz + 0.43, 24);
   cyl(p, 0.035, 0.035, 0.025, M.ceramic, bx - 0.02, 2.0, bz + 0.43, 24);
   // 饮水机（挪到餐厅西北角，靠墙）
-  box(p, 0.4, 0.95, 0.4, M.white, 0.66, 0.48, 3.26);
-  box(p, 0.34, 0.06, 0.34, M.steel, 0.66, 0.98, 3.26);
-  cyl(p, 0.12, 0.14, 0.3, M.blue, 0.66, 1.15, 3.26);
-  cyl(p, 0.04, 0.04, 0.06, M.ceramic, 0.84, 0.9, 3.26);
-  for (let i = 0; i < 2; i++) cyl(p, 0.035, 0.035, 0.09, M.ceramic, 0.66 + (i ? 0.1 : -0.1), 0.85, 3.38);
+  box(p, 0.4, 0.95, 0.4, M.white, 0.506, 0.48, 3.205);
+  box(p, 0.34, 0.06, 0.34, M.steel, 0.506, 0.98, 3.205);
+  cyl(p, 0.12, 0.14, 0.3, M.blue, 0.506, 1.15, 3.205);
+  cyl(p, 0.04, 0.04, 0.06, M.ceramic, 0.686, 0.9, 3.205);
+  for (let i = 0; i < 2; i++) cyl(p, 0.035, 0.035, 0.09, M.ceramic, 0.506 + (i ? 0.1 : -0.1), 0.85, 3.325);
   // 大绿植
   plant(world, 7.9, 0.52, 0.95);   // 电视柜右侧
   plant(world, 4.62, 0.52, 0.95);   // 电视柜左侧
@@ -1524,7 +1524,7 @@ function buildLiving(world, M, textures) {
   box(p, 0.04, 0.8, 1.05, M.walnut, 8.39, 1.65, 3.35);
 
   addHotspot(world, 6.3, 5.12, 0.55, { title: '沙发', sub: '靠垫陷下去一小块，毯子卷在扶手上', room: 'living', spot: 'sofa', label: '沙发上' });
-  addHotspot(world, 0.66, 3.26, 0.4, { title: '饮水机', sub: '温水按键有点松，杯架上只剩一只杯子', room: 'living', spot: 'water', label: '饮水机旁' });
+  addHotspot(world, 0.506, 3.205, 0.4, { title: '饮水机', sub: '温水按键有点松，杯架上只剩一只杯子', room: 'living', spot: 'water', label: '饮水机旁' });
   addHotspot(world, 7.85, 1.75, 0.45, { title: '书架', sub: '第三层夹着一张手写的便签', room: 'living', spot: 'shelf', label: '书架前' });
   addHotspot(world, 6.3, 3.0, 0.5, { title: '电视', sub: '屏幕里在放海，声音开得很小', room: 'living', spot: 'tv', label: '电视前' });
   addHotspot(world, 6.3, 3.8, 0.4, { title: '茶几', sub: '杯子剩半杯，书翻到一半扣着', room: 'living', spot: 'sofa', label: '茶几旁' });
@@ -2232,7 +2232,7 @@ function buildPoolDeck(world, M) {
   // 南侧绿植 + 救生圈（台阶已去掉：泳池从扶梯下水）
   // 救生圈 + 木支架：立柱插在露台上，圈挂在立柱正面
   {
-    const BX = 12.85, BZ = 9.18;
+    const BX = 12.95, BZ = 8.72;
     // 立柱
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.5, 0.07), M.oak);
     post.position.set(BX, DECK_TOP + 0.75, BZ);
