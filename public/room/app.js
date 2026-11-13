@@ -2918,7 +2918,12 @@ function buildDevQuickMenu() {
 
   // 默认全开（编辑模式除外）
   setTimeout(() => {
+    // 开发模式下默认全开（编辑模式按钮除外）
     if (typeof setRoomLabels === 'function' && !roomLabelsOn) setRoomLabels(true);
+    if (!devMode) setDevMode(true);          // 动画状态 + 3D 导航层
+    if (!navMapEl) showNavMap();             // 小地图
+    const els = Object.values(cardEls());
+    for (const e3 of els) showEl(e3, true);
     mark('labels', true);
     mark('her', true);
     mark('events', true);
