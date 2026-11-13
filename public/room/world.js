@@ -2231,6 +2231,9 @@ function buildPoolDeck(world, M) {
       drop.rotation.x = Math.PI;
       g.add(drop);
     }
+
+    // 伞是主角道具：跳过静态合批（合批后钢件会丢失/错位，柱子看不见）
+    g.traverse((o) => { if (o.isMesh) o.userData.dynamic = true; });
   }
 
   // 南侧绿植 + 救生圈（台阶已去掉：泳池从扶梯下水）

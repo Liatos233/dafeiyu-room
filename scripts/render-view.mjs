@@ -9,6 +9,7 @@ const URL_TARGET = process.argv[2];
 const OUT = process.argv[3];
 const CAM = process.argv[4] || '10.2,2.35,9.2';
 const LOOK = process.argv[5] || '12.5,1.55,11.3';
+const EXTRA_JS = process.argv[6] || '';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PORT = 9488;
 const PROFILE = join(tmpdir(), 'chrome-render-view');
@@ -51,11 +52,18 @@ await sleep(28000);
 const expr = `(() => {
   const T = window.__THREE, w = window.__getWorld?.(), r = window.__renderer;
   if (!T || !w || !r) return null;
+  // 为了看清模型：换中性背景 + 补一盏环境光（不改场景本体）
+  w.scene.fog = null;
+  w.scene.background = new T.Color(0x3a4550);
+  const fill = new T.AmbientLight(0xffffff, 1.1);
   const cam = new T.PerspectiveCamera(46, r.domElement.width / r.domElement.height, 0.1, 200);
   cam.position.set(${CAM.split(',').map(Number).join(',')});
   cam.lookAt(${LOOK.split(',').map(Number).join(',')});
   cam.updateMatrixWorld(true);
+  if (EXTRA_JS) { ${EXTRA_JS} }
+  w.scene.add(fill);
   r.render(w.scene, cam);
+  w.scene.remove(fill);
   return r.domElement.toDataURL('image/png');
 })()`;
 const res = await send('Runtime.evaluate', { expression: expr, returnByValue: true });
