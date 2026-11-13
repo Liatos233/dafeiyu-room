@@ -747,7 +747,10 @@ if (EDIT_MODE) {
   }
 }
 
-if (EDIT_MODE) { try { buildDevQuickMenu().style.display = 'block'; } catch { /* 忽略 */ } }
+if (EDIT_MODE) {
+  // 延后一帧：devQuickEl 等变量此时还在 TDZ 里
+  setTimeout(() => { try { buildDevQuickMenu().style.display = 'block'; } catch (e) { console.warn('[dev-menu]', e); } }, 0);
+}
 window.__setMode = setMode;   // 调试/截图用
 window.__camera = camera;
 window.__VIEW = VIEW;
