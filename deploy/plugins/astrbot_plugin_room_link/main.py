@@ -532,6 +532,41 @@ class RoomLinkPlugin(Star):
 
     # ---------------------------------------------------------------- QQ 侧
 
+    # ---------------------------------------------------------------- 指令等待
+
+    async def _snapshot(self) -> dict:
+        ctx = await self._live_context(ttl=0)
+        her = (ctx or {}).get("her") or {}
+        return {"room": her.get("room"), "spot": her.get("spot"), "kind": her.get("kind")}
+
+    async def _wait_command_done(self, cmd_id: str, before: dict, ack_timeout: float = 20.0, arrive_timeout: float = 25.0) -> dict | None:
+        """等指令被 bridge 执行（ack），再等她走到/开始动作，返回最新 context。"""
+        deadline = _now() + ack_timeout
+        acked = False
+        while _now() < deadline:
+            for c in self.state.get("commands", []):
+                if c.get("id") == cmd_id and c.get("status") == "done":
+                    acked = True
+                    break
+            if acked:
+                break
+            await asyncio.sleep(0.5)
+
+        deadline2 = _now() + arrive_timeout
+        last = None
+        while _now() < deadline2:
+            ctx = await self._live_context(ttl=1.0)
+            her = (ctx or {}).get("her") or {}
+            last = ctx
+            if her:
+                moved = her.get("spot") != before.get("spot") or her.get("room") != before.get("room")
+                changed = moved or her.get("kind") != before.get("kind")
+                # 必须真的发生变化，且不在走路中，才算「做到」
+                if changed and not her.get("walking"):
+                    return ctx
+            await asyncio.sleep(1.0)
+        return last
+
     # ---------------------------------------------------------------- LLM 注入
     @filter.on_llm_request(priority=90000)
     async def inject_room_state(self, event: AstrMessageEvent, req):
@@ -600,12 +635,26 @@ class RoomLinkPlugin(Star):
             "status": "pending",
             "created": _now(),
         }
+        before = await self._snapshot()
         async with self._state_lock:
             self.state.setdefault("commands", []).append(cmd)
             del self.state["commands"][:-10]
             self._save_state()
+        ctx = await self._wait_command_done(cmd["id"], before)
+        her = (ctx or {}).get("her") or {}
+        line = str((ctx or {}).get("line") or "").strip()
         suffix = f"·{target}" if target else ""
-        return f"已经让她「{action}{suffix}」，房间那边会去执行。"
+        arrived = bool(her) and (her.get("walking") is False) and (
+            her.get("spot") != before.get("spot")
+            or her.get("room") != before.get("room")
+            or her.get("kind") != before.get("kind")
+        )
+        if arrived:
+            return f"指令「{action}{suffix}」已经生效。现在的真实状态：{line}（回答主人时以此为准，不要凭记忆编）"
+        return (
+            f"指令「{action}{suffix}」已下发给房间，但她现在还没到位。当前真实状态：{line}。"
+            "请如实告诉主人「还在过去/被别的事拦住了」，不要说已经到了。"
+        )
 
     @filter.llm_tool(name="room_play")
     async def room_play(self, event: AstrMessageEvent, clip: str):
@@ -642,11 +691,20 @@ class RoomLinkPlugin(Star):
             "status": "pending",
             "created": _now(),
         }
+        before = await self._snapshot()
         async with self._state_lock:
             self.state.setdefault("commands", []).append(cmd)
             del self.state["commands"][:-10]
             self._save_state()
-        return f"已经让她演「{matched}」，房间那边马上开始。"
+        ctx = await self._wait_command_done(cmd["id"], before)
+        her = (ctx or {}).get("her") or {}
+        line = str((ctx or {}).get("line") or "").strip()
+        if her and her.get("clip") == matched:
+            return f"「{matched}」正在房间里播放。现在的真实状态：{line}（回答主人时以此为准）"
+        return (
+            f"「{matched}」已下发，但现在还没开始播。当前真实状态：{line}。"
+            "请如实说还在准备，不要说到已经在演了。"
+        )
 
     @filter.llm_tool(name="room_say")
     async def room_say(self, event: AstrMessageEvent, text: str):
@@ -669,11 +727,13 @@ class RoomLinkPlugin(Star):
             "status": "pending",
             "created": _now(),
         }
+        before = await self._snapshot()
         async with self._state_lock:
             self.state.setdefault("commands", []).append(cmd)
             del self.state["commands"][:-10]
             self._save_state()
-        return f"已经让她在房间里说：「{words}」"
+        await self._wait_command_done(cmd["id"], before, ack_timeout=8.0, arrive_timeout=3.0)
+        return f"她已经在房间里说出去了：「{words}」"
 
     @filter.command("房间地点")
     async def room_places(self, event: AstrMessageEvent):

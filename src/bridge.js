@@ -3641,6 +3641,22 @@ async function main() {
     ];
     let remotePlaces = {};
     let remoteHomeName = '';
+    // 房间别名：插件里偶尔会写成 dining，房间真实 id 是 kitchen
+    const ROOM_ALIAS = { dining: 'kitchen', bedroom: 'her_room', bath: 'bathroom', washroom: 'bathroom' };
+
+    // 校验 room/spot 是否真实存在；spot 无效时回退到该房间第一个位置
+    function validDest(room, spot) {
+      let r = String(room || '').trim();
+      let sp = String(spot || '').trim();
+      if (ROOM_ALIAS[r]) r = ROOM_ALIAS[r];
+      const spots = HOME_LAYOUT.spots[r];
+      if (!spots || !Object.keys(spots).length) return null;
+      if (sp && spots[sp]) return { room: r, spot: sp };
+      const first = Object.keys(spots)[0];
+      log(`[房间联动] 地点 ${room}/${spot} 不存在，回退到 ${r}/${first}`);
+      return first ? { room: r, spot: first } : null;
+    }
+
     function resolveRoomDest(action, target) {
       const text = `${action || ''} ${target || ''}`;
       // 优先用插件配置的地点表（名字 -> room/spot），名字长的先匹配
@@ -3649,10 +3665,16 @@ async function main() {
         if (!key) continue;
         if (text.includes(key)) {
           const [room, spot] = String(remotePlaces[key]).split('/');
-          if (room && spot) return { room: room.trim(), spot: spot.trim() };
+          const dest = validDest(room, spot);
+          if (dest) return dest;
         }
       }
-      for (const [re, room, spot] of ROOM_DESTS) if (re.test(text)) return { room, spot };
+      for (const [re, room, spot] of ROOM_DESTS) {
+        if (re.test(text)) {
+          const dest = validDest(room, spot);
+          if (dest) return dest;
+        }
+      }
       return null;
     }
     function placeLabel(roomId, spotId) {
