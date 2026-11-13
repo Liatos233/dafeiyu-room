@@ -812,7 +812,10 @@ const NAV_KEEPOUT = Object.freeze([
   { room: 'balcony', rect: [0.45, 7.70, 1.80, 8.55] },    // 西侧花盆
   { room: 'balcony', rect: [2.00, 7.88, 3.34, 8.58], top: 0.40 },    // 躺椅
   // 玄关
-  { room: 'foyer', rect: [0.05, 4.85, 0.50, 5.75] }       // 鞋柜
+  { room: 'foyer', rect: [0.05, 4.85, 0.50, 5.75] },      // 鞋柜
+  // 泳池露台：两张沙滩躺椅（坐下会穿模，走动也不该踩进去）
+  { room: 'pool', rect: [11.55, 10.20, 13.15, 10.96], top: 0.445 },
+  { room: 'pool', rect: [11.55, 11.64, 13.15, 12.40], top: 0.445 }
 ]);
 
 // 角色安全半径（米）：路径与家具保持的间距
@@ -1257,6 +1260,28 @@ function arrive(state, now) {
   // 睡眠只在「已经到床」这一帧生效；路上 sleeping=false，客户端不会播睡眠动画。
   if (t.effect === 'sleep' && t.room === 'her_room' && t.spot === 'bed') {
     state.sleepPending = false;
+    const bedDef = spotOf(t.room, t.spot);
+    const bedY = Number(SURFACES[bedDef?.support || 'floor'] || 0);
+    if (bedY > 0.05 && Array.isArray(bedDef?.mount)) {
+      // 先「爬床」，过渡结束再钻进被窝
+      state.mounting = {
+        from: bedDef.mount.slice(),
+        to: (bedDef.pos || [0, 0]).slice(),
+        seatY: bedY,
+        t0: now,
+        dur: 700,
+        up: true,
+        target: t,
+        sleepAfter: true
+      };
+      state.pose = 'stand';
+      state.elev = 0;
+      state.kind = 'idle';
+      state.activity = '爬上床';
+      state.walking = false;
+      state.dwell = null;
+      return;
+    }
     state.asleep = true;
     state.lamp = false;
     setActivity(state, 'sleep', t.actText || '钻进被窝，闭上眼', 'lie', 0.52, 180);
@@ -1744,11 +1769,20 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     state.elev = seg.elev;
     if (seg.done) {
       const t = state.mounting.target;
+      const sleepAfter = state.mounting.sleepAfter === true;
       state.mounting = null;
       state.elev = seg.elev;
-      setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
-      state.clip = t.clip || null;
-      state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
+      if (sleepAfter) {
+        state.asleep = true;
+        state.lamp = false;
+        setActivity(state, 'sleep', t.actText || '钻进被窝，闭上眼', 'lie', seg.elev, 180);
+        emit(state, 'sleep', '关了灯，钻进被窝', now, { room: 'her_room', spot: 'bed' });
+        state.dwell = null;
+      } else {
+        setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
+        state.clip = t.clip || null;
+        state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
+      }
       changed = true;
     } else {
       changed = true;
