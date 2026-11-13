@@ -3543,6 +3543,7 @@ function frame(now) {
           body: JSON.stringify({
             clip: actorWebm.current,
             footFrac: actorWebm.layers[actorWebm.active]?.footFrac || null,
+            layers: actorWebm.layers.map((l) => ({ o: Number((l.material?.opacity || 0).toFixed(2)), t: l.target, v: l.mesh?.visible === true })),
             footY: actorWebm.layers[actorWebm.active]?.mesh?.position?.y || null,
             room: her.room, spot: her.spot, pose: her.pose, kind: her.kind,
             elev: her.elev, walking: her.walking === true,

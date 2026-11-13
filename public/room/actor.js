@@ -738,8 +738,12 @@ export class SpriteActor {
     }
     this.active = nextIndex;
     this.current = name;
+    // 只清理已经不可见的层；正在显示的那层必须留到下一段真正 ready 再淡出，
+    // 否则「旧层已淡出、新层还在加载」就会空一段（消失一会儿）。
     for (let i = 0; i < this.layers.length; i += 1) {
-      if (i !== nextIndex) this.layers[i].setTarget(0);
+      if (i === nextIndex) continue;
+      const l = this.layers[i];
+      if ((l.fade || 0) < 0.02) l.setTarget(0);
     }
     this._lastSwap = performance.now();
     loaded.then(() => {
