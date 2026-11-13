@@ -3608,6 +3608,19 @@ function frame(now) {
   watchLayers(now);
   maybeLightning(now, skyOptions().weather === 'storm' ? 'storm' : skyOptions().weather);
   // 每秒把天气/房间同步给环境音（切天气不一定伴随房间状态变化）
+  // 每 15 秒把天气同步给服务端（菜园逻辑与她的对话都读它）
+  if (now - (window.__wxPushAt || 0) > 15000) {
+    window.__wxPushAt = now;
+    try {
+      const wx = skyOptions().weather;
+      fetch('/api/home/weather', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ key: wx, intensity: weatherIntensity })
+      }).catch(() => {});
+    } catch { /* 忽略 */ }
+  }
   if (now - (window.__ambSyncAt || 0) > 1000) {
     window.__ambSyncAt = now;
     try { ambience.setScene({ weather: currentSkyKey(), room: state?.her?.room }); } catch { /* 忽略 */ }

@@ -1,6 +1,7 @@
 // Shared by the production bridge and local preview. A job is proposed first,
 // walked to second, worked on third, then committed with its receipt in ONE
 // garden save. The home save is only a presentation/behavior checkpoint.
+import { getWeather, isWetWeather, isSnowWeather, isStormyWeather } from './weather-store.js';
 import { CROPS, GARDEN_RULES, advanceGarden, applyGardenAction, gardenView, normalizeGardenCare } from '../public/room/garden-state.js';
 import { loadGarden, saveGarden } from './garden-store.js';
 import { loadHomeState, saveHomeState, advanceHomeState, beginGardenWork, endGardenWork, homeView } from './home-state.js';
@@ -152,7 +153,35 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
   let lastHomeSave=0;
   function tick(now=Date.now()){
     const env=getEnv(now)||{};
-    let g=advanceGarden(storage.loadGarden(gardenFile,now),now);
+    // ── 天气对菜园的影响 ──────────────────────────────────────
+    const wx = getWeather();
+    let g = storage.loadGarden(gardenFile, now);
+    if (isWetWeather(wx.key)) {
+      // 下雨/下雨夹雪：自动补水（省得她天天浇）
+      let touched = false;
+      for (const plot of g.plots) {
+        if (plot.cropId && plot.progress < 1 && plot.moisture < 0.6) {
+          plot.moisture = Math.min(1, Math.max(plot.moisture, 0.6));
+          touched = true;
+        }
+      }
+      if (touched) g.care.status = `${g.care.status || ''}`.slice(0, 60) || '下雨了，菜地自己喝饱了水';
+    }
+    if (isSnowWeather(wx.key)) {
+      // 雪天/暴雪：作物休眠，不推进生长（也不掉湿度）
+      g.updatedAt = now;
+    }
+    g = advanceGarden(g, now);
+    if (isStormyWeather(wx.key) && Math.random() < 0.015) {
+      // 雷雨/冰雹：偶发打坏一畦
+      const targets = g.plots.filter((p) => p.cropId && p.progress > 0.1 && p.progress < 1);
+      if (targets.length) {
+        const p = targets[Math.floor(Math.random() * targets.length)];
+        p.progress = Math.max(0, p.progress - 0.18);
+        p.moisture = Math.max(0, p.moisture - 0.3);
+        g.care.status = `雷雨把第 ${p.id + 1} 畦的苗打蔫了一点`;
+      }
+    }
     let h=storage.loadHomeState(homeFile,now);
     let careDirty=false;
     const pending=g.care.pendingConflict;
@@ -179,6 +208,8 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
     if(reason && !h.route && !h.dwell)h.nextDecisionAt=0;
     const advanced=advanceHomeState(h,now,{...env,gardenReady:!!mayPlan}); h=advanced.state;
     if(beforeMotion!==JSON.stringify([h.route,h.dwell,h.asleep,h.sleepPending]))homeTransition=true;
+    // 收菜/浇水期间不要让自主动作插进来
+    if(g.care.task || g.care.queue.length) h.freestyleHoldUntil = now + 4000;
     reason = g.care.pendingConflict ? '在等你回答，先不安排菜园' : (Number(g.care.forceUntil) > now ? '' : restReason(h,now,env));
     if(g.care.task && reason){
       const interrupted=g.care.task;h=endGardenWork(h,interrupted,now,reason);

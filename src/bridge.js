@@ -85,6 +85,7 @@ import {
   saveHomeState
 } from './home-state.js';
 import { actGarden } from './garden-store.js';
+import { loadWeather, setWeather, getWeather, WEATHER_LABEL } from './weather-store.js';
 import { createGardenCaretaker } from './garden-autonomy.js';
 import {
   normalizeQzoneConfig,
@@ -111,6 +112,7 @@ const ROOM_FILE = path.join(STATE_DIR, 'room.json');
 // 大平层：事实层（需求/睡眠/病痛/事件）+ 行为层；与旧小屋的 room.json 分开存。
 const HOME_FILE = path.join(STATE_DIR, 'home.json');
 const GARDEN_FILE = path.join(STATE_DIR, 'garden.json');
+const WEATHER_FILE = path.join(STATE_DIR, 'weather.json');
 // 已有的心情数据（dsh-feiyu-mood 插件）只读接进来给房间展示，绝不写回、绝不算第二套情绪。
 const DSH_HOME_DIR = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
 const FEIYU_MOOD_FILE = path.join(DSH_HOME_DIR, 'feiyu-mood', 'state.json');
@@ -3496,9 +3498,11 @@ async function main() {
       const silenceMinutes = lastSpeak ? Math.round((now - lastSpeak) / 60000) : null;
       let gateway = false;
       try { gateway = snowlumaHealthSnapshot().connected === true; } catch { /* 网关状态读不到不影响房间 */ }
-      return { unread, lastSpeakAt: lastSpeak || 0, silenceMinutes, mode, gateway, emotion: readFeiyuMood() };
+      const wx = getWeather();
+      return { unread, lastSpeakAt: lastSpeak || 0, silenceMinutes, mode, gateway, emotion: readFeiyuMood(), weather: wx.key, weatherIntensity: wx.intensity, weatherLabel: WEATHER_LABEL[wx.key] || '' };
     }
     /** 读盘 → 按真实时间推进 → 返回同一份事实源。 */
+    try { loadWeather(WEATHER_FILE); } catch { /* 忽略 */ }
     function homeTick(now = Date.now()) {
       return gardenCaretaker.tick(now);
     }
@@ -4544,6 +4548,17 @@ async function main() {
           sendJson({ ok: true, size: HOME_LAYOUT.size, rooms: HOME_LAYOUT.rooms, nodes: HOME_NODES, edges: HOME_EDGES, keepout: HOME_KEEPOUT, spots });
           return;
         }
+        // ── 天气同步：页面把当前天气/强度报给服务端（菜园与对话都用它） ──
+        if (req.method === 'POST' && url.pathname === '/api/home/weather') {
+          try {
+            const body = JSON.parse(await readBody());
+            const snap = setWeather(body?.key, body?.intensity);
+            sendJson({ ok: true, weather: snap, label: WEATHER_LABEL[snap.key] || '' });
+          } catch (e) {
+            sendJson({ ok: false, error: String(e?.message || e) }, 400);
+          }
+          return;
+        }
         if (req.method === 'GET' && url.pathname === '/api/home/state') {
           const now = Date.now();
           const { state, env } = homeTick(now);
@@ -4551,6 +4566,7 @@ async function main() {
           const roomState = loadRoomState(ROOM_FILE, now);
           sendJson({
             ...homeView(state, now, env),
+            weather: getWeather(),
             room: roomView(roomState, now),
             memory: roomMemorySnapshot()
           });
@@ -4586,6 +4602,7 @@ async function main() {
             `${w.energy || ''}`.trim(),
             `${w.hunger || ''}`.trim(),
             `${w.thirst || ''}`.trim(),
+            env.weatherLabel ? `外面${env.weatherLabel}` : '',
             mood ? `心情${mood.label}（${mood.mood}/100）` : '',
             view.her.asleep ? '现在睡着了' : '',
             view.her.clip ? `正在播「${view.her.clip}」` : ''
@@ -9966,7 +9983,8 @@ async function main() {
     const silenceMinutes = lastSpeak ? Math.round((now - lastSpeak) / 60000) : null;
     let gateway = false;
     try { gateway = snowlumaHealthSnapshot().connected === true; } catch { /* 网关状态读不到不影响房间 */ }
-    return { unread, lastSpeakAt: lastSpeak || 0, silenceMinutes, mode, gateway, emotion: readFeiyuMoodOuter() };
+    const wx = getWeather();
+    return { unread, lastSpeakAt: lastSpeak || 0, silenceMinutes, mode, gateway, emotion: readFeiyuMoodOuter(), weather: wx.key, weatherIntensity: wx.intensity, weatherLabel: WEATHER_LABEL[wx.key] || '' };
   }
 
   // 一代/普通模式的图片/表情元数据存储：key -> Map<messageId/seq, media[]>

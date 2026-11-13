@@ -1557,7 +1557,7 @@ function decideTarget(state, now, env) {
   // 空闲调剂：隔一段时间抽一个自主动作（表演性质，不抢需求）
   {
     const nextAt = Number(state.freestyleNextAt) || 0;
-    if (!state.route && !state.dwell && !state.walking && now >= nextAt) {
+    if (!state.route && !state.dwell && !state.walking && now >= nextAt && now >= (state.freestyleHoldUntil || 0)) {
       const act = pickFreestyle(state, now, env);
       if (act) {
         const [lo, hi] = FREESTYLE_DEFAULTS.intervalMs;
