@@ -48,8 +48,8 @@ export const isSnowWeather = (k = snapshot.key) => SNOWY.has(k);
 export const isStormyWeather = (k = snapshot.key) => k === 'storm' || k === 'hail';
 
 export const WEATHER_LABEL = {
-  clear: '晴', rain: '下雨', storm: '雷雨', overcast: '阴天', fog: '有雾',
+  clear: '晴天', rain: '下雨', storm: '雷雨', overcast: '阴天', fog: '有雾',
   snow: '下雪', sleet: '雨夹雪', hail: '下冰雹', haze: '有霾',
-  blizzard: '暴雪', sand: '沙尘', rainbow: '雨后有彩虹',
+  blizzard: '暴雪', sand: '沙尘', rainbow: '有彩虹',
   starry: '星空', aurora: '极光', meteor: '流星雨'
 };

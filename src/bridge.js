@@ -4138,7 +4138,7 @@ async function main() {
       const isRoomSurface = (
         (req.method === 'GET' && (url.pathname === '/room' || url.pathname === '/room/' || url.pathname.startsWith('/room/')))
         || (req.method === 'GET' && ['/api/home/state', '/api/home/context', '/api/home/clips', '/api/room/state', '/api/room/inspect', '/api/garden/state'].includes(url.pathname))
-        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control'].includes(url.pathname))
+        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/home/weather', '/api/debug/client'].includes(url.pathname))
       );
       const secFetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
       const siteTrusted = !secFetchSite || secFetchSite === 'same-origin' || secFetchSite === 'none';
@@ -4602,7 +4602,7 @@ async function main() {
             `${w.energy || ''}`.trim(),
             `${w.hunger || ''}`.trim(),
             `${w.thirst || ''}`.trim(),
-            env.weatherLabel ? `外面${env.weatherLabel}` : '',
+            env.weatherLabel ? `天气：${env.weatherLabel}` : '',
             mood ? `心情${mood.label}（${mood.mood}/100）` : '',
             view.her.asleep ? '现在睡着了' : '',
             view.her.clip ? `正在播「${view.her.clip}」` : ''
