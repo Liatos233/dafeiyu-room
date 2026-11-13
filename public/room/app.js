@@ -506,6 +506,11 @@ const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.08, 8
 const actorWebm = new SpriteActor(scene, {
   onEnded: () => { /* 由 syncActor 兜底 */ }
 });
+// 进房间就把走/跑两种姿态预取下来：否则首次跑动会在 2Mbps 链路上等首帧，
+// 看起来就像「跑了但前几帧不动」。prefetch 只建隐藏 video 预热 HTTP 缓存，不参与渲染。
+requestIdleCallback
+  ? requestIdleCallback(() => actorWebm.prefetch(['walk', 'run_happy', 'walk_fast']))
+  : setTimeout(() => actorWebm.prefetch(['walk', 'run_happy', 'walk_fast']), 1200);
 // 立绘只有一个来源：视频素材（精灵图那套已全量转成 webm）
 const actor = {
   _visible: true,

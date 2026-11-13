@@ -3979,6 +3979,11 @@ async function main() {
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer'
       };
+      // 静态资源用这组头（Cache-Control 由 staticCacheControl 单独决定）
+      const STATIC_HEADERS = (() => {
+        const { 'Cache-Control': _cc, ...rest } = SECURITY_HEADERS;
+        return rest;
+      })();
       const sendJson = (obj, status = 200) => {
         res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS });
         res.end(JSON.stringify(obj, null, 2));
@@ -4301,11 +4306,20 @@ async function main() {
             data = Buffer.from(data.toString('utf8').split('小蓝鱼的家').join(remoteHomeName), 'utf8');
           }
           const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary' };
-          const headers = { 'content-type': types[ext] || 'application/octet-stream', ...SECURITY_HEADERS, 'cache-control': 'no-store' };
+          const headers = { 'content-type': types[ext] || 'application/octet-stream', ...STATIC_HEADERS, 'cache-control': staticCacheControl(url.pathname) };
           if (ext === '.html' && consoleToken && tokenMatches) {
             headers['Set-Cookie'] = `dsh_room=${encodeURIComponent(consoleToken)}; Path=/room/; HttpOnly; SameSite=Strict; Max-Age=43200`;
           }
-          // 支持 Range：视频/音频要能 seek（裁掉动画前摇依赖它）
+          // 静态资源缓存策略：动画素材允许长缓存，页面/脚本每次校验
+    function staticCacheControl(pathname) {
+      if (/\.(webm|mp4|m4a|mp3|ogg|wav|png|jpe?g|webp|gif|svg|woff2?|ttf|wasm)$/i.test(pathname)) {
+        return 'public, max-age=604800, immutable';
+      }
+      if (/\.(js|mjs|css|json)$/i.test(pathname)) return 'no-cache';
+      return 'no-store';
+    }
+
+    // 支持 Range：视频/音频要能 seek（裁掉动画前摇依赖它）
           const mediaExt = ['.webm', '.mp4', '.wav', '.mp3', '.ogg'];
           if (mediaExt.includes(ext)) headers['accept-ranges'] = 'bytes';
           const rangeHeader = String(req.headers.range || '');
@@ -4347,7 +4361,7 @@ async function main() {
           try { data = fs.readFileSync(file); } catch { sendJson({ ok: false, error: '攻略文件不存在' }, 404); return; }
           const ext = path.extname(file).toLowerCase();
           const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary' };
-          res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream', ...SECURITY_HEADERS, 'cache-control': 'no-store' });
+          res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream', ...STATIC_HEADERS, 'cache-control': staticCacheControl(url.pathname) });
           res.end(data);
           return;
         }
@@ -14779,3 +14793,4 @@ main().catch((error) => {
   console.error('[bridge] 启动失败:', error);
   process.exit(1);
 });
+
