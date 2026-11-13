@@ -1,4 +1,4 @@
-# 一键部署：本地 git archive → scp → 服务器解包重启（不依赖 GitHub）
+﻿# 一键部署：本地 git archive → scp → 服务器解包重启（不依赖 GitHub）
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
 #   ... -AllowDirty        # 有未提交改动也部署（会把工作区改动一起打包）
@@ -42,7 +42,6 @@ Write-Host "==> 打包 $head ($([math]::Round((Get-Item $tar).Length/1MB,1)) MB)
 $applyScript = Join-Path $PSScriptRoot "apply-deploy.sh"
 & $scp -o BatchMode=yes -i $Key $applyScript "${User}@${Server}:/usr/local/bin/apply-deploy.sh"
 & $ssh -o BatchMode=yes -i $Key "${User}@${Server}" 'perl -pi -e "s/\r//g" /usr/local/bin/apply-deploy.sh; chmod +x /usr/local/bin/apply-deploy.sh'
-$//" /usr/local/bin/apply-deploy.sh; chmod +x /usr/local/bin/apply-deploy.sh'
 
 & $scp -o BatchMode=yes -i $Key $tar "${User}@${Server}:/root/deploy-incoming.tar"
 if ($LASTEXITCODE -ne 0) { throw "上传失败" }
