@@ -1,45 +1,17 @@
 #!/usr/bin/env bash
-# 检查云端代码是否与 GitHub main 一致（有没有被手工 scp 改漂移）
-# 用法：bash check-drift.sh [app_dir]
+# 查看云端当前部署的是哪个版本（不联网，不访问 GitHub）
 set -euo pipefail
-
 APP_DIR="${1:-${APP_DIR:-/opt/dafeiyu-room}}"
 cd "$APP_DIR"
 
-if [ ! -d .git ]; then
-  echo "!! $APP_DIR 不是 git 仓库，无法比对" >&2
-  exit 2
+echo "部署版本: $(cat .deployed-commit 2>/dev/null || echo '未知（还没用 deploy.ps1 部署过）')"
+echo "部署时间: $(cat .deployed-at 2>/dev/null || echo '未知')"
+
+if [ -d .git ]; then
+  echo "--- 部署后仍有改动的文件（可能是热修）---"
+  git status --short | head -n 20 || true
 fi
 
-BRANCH="${BRANCH:-main}"
-git fetch --depth=1 origin "$BRANCH" >/dev/null 2>&1 || {
-  echo "!! fetch 失败（网络或权限）" >&2
-  exit 2
-}
-
-LOCAL=$(git rev-parse --short HEAD)
-REMOTE=$(git rev-parse --short "origin/$BRANCH")
-
-echo "本地 HEAD : $LOCAL"
-echo "远端 HEAD : $REMOTE"
-
-DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
-echo "未提交改动: $DIRTY 个文件"
-
-if [ "$LOCAL" != "$REMOTE" ]; then
-  echo "--- 与远端的提交差异 ---"
-  git log --oneline "$LOCAL..$REMOTE" | head -n 10 || true
-fi
-
-if [ "$DIRTY" -gt 0 ]; then
-  echo "--- 有改动的文件（可能是热修未提交）---"
-  git status --short | head -n 20
-fi
-
-if [ "$LOCAL" = "$REMOTE" ] && [ "$DIRTY" -eq 0 ]; then
-  echo "✅ 与远端一致，无漂移"
-  exit 0
-fi
-
-echo "⚠️ 存在漂移：远端已有新提交，或本地有未提交的热修" >&2
-exit 1
+echo "--- 服务 ---"
+systemctl is-active dafeiyu-room || true
+curl -s -m 6 -o /dev/null -w "room: %{http_code}\n" -H "Host: 127.0.0.1:3101" http://127.0.0.1:3101/room/ || true

@@ -44,6 +44,33 @@ function gainNode(ctx, value = 0) {
   return g;
 }
 
+// ── CC0 采样（OpenGameArt，均已转成 96kbps 单声道 OGG） ─────────
+const SAMPLE_URLS = {
+  rain: 'assets/sound/ambience/rain.ogg',
+  storm: 'assets/sound/ambience/storm.ogg',
+  birds: 'assets/sound/ambience/birds.ogg',
+  crickets: 'assets/sound/ambience/crickets.ogg',
+  wind: 'assets/sound/ambience/wind.ogg',
+  drip: 'assets/sound/ambience/drip.ogg'
+};
+const sampleBuf = {};
+let samplesReady = false;
+
+async function loadSamples() {
+  if (samplesReady || !state.ctx) return;
+  try {
+    await Promise.all(Object.entries(SAMPLE_URLS).map(async ([name, url]) => {
+      const res = await fetch(url);
+      const arr = await res.arrayBuffer();
+      sampleBuf[name] = await state.ctx.decodeAudioData(arr);
+    }));
+    samplesReady = true;
+    if (state.enabled) rebuildBeds();
+  } catch (e) {
+    console.warn('[ambience] 采样加载失败，使用程序化兜底', e);
+  }
+}
+
 // ── 各天气底层 ─────────────────────────────────────────────────
 function makeRain(ctx, dest, heavy) {
   const g = gainNode(ctx);
@@ -253,33 +280,101 @@ function sceneKey(weather, room) {
   return `${weather}|${room}`;
 }
 
-function desiredBedConfig(weather) {
+// 每种天气的声场编排：sample 优先，proc 兜底
+// gain 是相对增益（0–1）
+function sceneLayers(weather) {
   switch (weather) {
-    case 'rain': return { type: 'rain', heavy: false };
-    case 'storm': return { type: 'rain', heavy: true };
-    case 'snow': return { type: 'snow' };
-    case 'fog': return { type: 'wind', opts: { strength: 0.5, gust: 0.2 } };
-    case 'overcast': return { type: 'wind', opts: { strength: 0.7, gust: 0.3 } };
-    case 'sand': return { type: 'wind', opts: { strength: 1.4, gust: 1 } };
-    case 'aurora': return { type: 'aurora' };
+    case 'rain':
+      return [{ sample: 'rain', gain: 0.7, fallback: { type: 'rain', heavy: false } }];
+    case 'storm':
+      return [
+        { sample: 'storm', gain: 0.75, fallback: { type: 'rain', heavy: true } },
+        { proc: 'wind', gain: 0.25, opts: { strength: 1.1, gust: 0.8 } }
+      ];
+    case 'snow':
+      return [
+        { sample: 'wind', gain: 0.22, fallback: { type: 'snow' } },
+        { proc: 'snow', gain: 0.5 }
+      ];
+    case 'fog':
+      return [{ sample: 'wind', gain: 0.2, fallback: { type: 'wind', opts: { strength: 0.5, gust: 0.2 } } }];
+    case 'overcast':
+      return [{ sample: 'wind', gain: 0.3, fallback: { type: 'wind', opts: { strength: 0.7, gust: 0.3 } } }];
+    case 'sand':
+      return [{ sample: 'wind', gain: 0.55, fallback: { type: 'wind', opts: { strength: 1.4, gust: 1 } } }];
+    case 'aurora':
+      return [{ proc: 'aurora', gain: 1 }];
     case 'night':
     case 'starry':
-    case 'dusk': return { type: 'wind', opts: { strength: 0.35, gust: 0.15 } };
+    case 'dusk':
+      return [
+        { sample: 'crickets', gain: 0.4, fallback: { proc: 'wind', gain: 0.3 } },
+        { sample: 'wind', gain: 0.12 }
+      ];
     case 'dawn':
     case 'day':
-    case 'rainbow': return { type: 'wind', opts: { strength: 0.6, gust: 0.35 } };
-    default: return { type: 'wind', opts: { strength: 0.5, gust: 0.25 } };
+    case 'rainbow':
+      return [
+        { sample: 'birds', gain: 0.35, fallback: { proc: 'wind', gain: 0.5 } },
+        { sample: 'wind', gain: 0.18, fallback: { type: 'wind', opts: { strength: 0.6, gust: 0.35 } } }
+      ];
+    default:
+      return [{ sample: 'wind', gain: 0.3, fallback: { type: 'wind', opts: { strength: 0.5, gust: 0.25 } } }];
   }
 }
 
-function buildBed(cfg) {
-  const { ctx } = state;
+function makeSampleBed(name, gainValue, dest) {
+  const buf = sampleBuf[name];
+  if (!buf) return null;
+  const g = gainNode(ctxOf(), 0);
+  const src = ctxOf().createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.connect(g);
+  g.connect(dest);
+  src.start();
+  g.gain.linearRampToValueAtTime(gainValue, ctxOf().currentTime + 1.2);
+  return { gain: g, stop: () => { try { src.stop(); } catch { /* 忽略 */ } } };
+}
+
+function ctxOf() { return state.ctx; }
+
+function buildProc(entry, dest) {
+  const ctx = state.ctx;
+  const type = entry.proc || entry.fallback?.type || 'wind';
+  let node = null;
+  if (type === 'rain') node = makeRain(ctx, dest, entry.fallback?.heavy === true);
+  else if (type === 'snow') node = makeSnow(ctx, dest);
+  else if (type === 'aurora') node = makeAurora(ctx, dest);
+  else node = makeWind(ctx, dest, entry.opts || entry.fallback?.opts || {});
+  if (node && entry.gain !== undefined && entry.sample) {
+    try { node.gain.gain.value = entry.gain; } catch { /* 忽略 */ }
+  }
+  return node;
+}
+
+function buildBeds() {
   const dest = state.bedBus;
-  if (!ctx) return null;
-  if (cfg.type === 'rain') return makeRain(ctx, dest, cfg.heavy);
-  if (cfg.type === 'snow') return makeSnow(ctx, dest);
-  if (cfg.type === 'aurora') return makeAurora(ctx, dest);
-  return makeWind(ctx, dest, cfg.opts || {});
+  const layers = sceneLayers(state.weather);
+  const nodes = [];
+  for (const entry of layers) {
+    if (entry.sample && sampleBuf[entry.sample]) {
+      const n = makeSampleBed(entry.sample, entry.gain ?? 0.4, dest);
+      if (n) { nodes.push(n); continue; }
+    }
+    if (entry.proc || entry.fallback) {
+      const n = buildProc(entry, dest);
+      if (n) nodes.push(n);
+    }
+  }
+  return nodes;
+}
+
+function rebuildBeds() {
+  stopBeds();
+  if (!state.ctx) return;
+  state.beds = buildBeds();
+  rebuildRoomLayer();
 }
 
 function stopBeds() {
@@ -367,9 +462,10 @@ export const ambience = {
     state.analyser.fftSize = 1024;
     state.master.connect(state.analyser);
     state.analyser.connect(state.ctx.destination);
-    rebuildBed();
+    rebuildBeds();
     applyLevels();
     scheduleShots();
+    loadSamples();
     return true;
   },
   setEnabled(v) {
@@ -396,7 +492,7 @@ export const ambience = {
     if (room && room !== state.room) { state.room = room; changed = true; }
     if (!changed) return;
     if (!state.ctx) return;
-    if (weather !== undefined) rebuildBed();
+    if (weather !== undefined) rebuildBeds();
     else rebuildRoomLayer();
     applyLevels();
   },
