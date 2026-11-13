@@ -710,7 +710,11 @@ export class SpriteActor {
         step();
         return;
       }
-      try { next.video.currentTime = trimStart; } catch { /* 还没元数据 */ }
+      // 只在需要裁前摇时才 seek。无脑设 currentTime=0 会触发一次 seek，
+      // VP9 要重新解码首帧，表现就是「切过去前几帧不动」。
+      if (trimStart > 0.01) {
+        try { next.video.currentTime = trimStart; } catch { /* 还没元数据 */ }
+      }
       next.play();
       next.setTarget(1);
       if (fade) {
