@@ -500,6 +500,9 @@
   #compass .dial .c-w{ transform:translate(-50%,-50%) translateX(-20px) }
   #compass .dial .c-arrow{ height:21px }
 }
+
+.amb-row{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--text,#dfe9fb);white-space:nowrap}
+.amb-row input[type=range]{width:110px;accent-color:#8fc1ff}
 </style>
 <link rel="stylesheet" href="./garden.css">
 </head>
@@ -522,6 +525,7 @@
       <button class="chip" id="modelQualityChip" type="button" aria-pressed="false" title="3D 模型画质：标准 6.7 MB；高画质加载 58.9 MB 原始模型，首次较慢"><span class="dot"></span><span>画质</span><span id="modelQualityState">标准</span></button>
       <button class="chip" id="bubbleChip" type="button" aria-pressed="true" title="显示/隐藏头顶气泡"><span class="dot"></span><span>气泡</span><span id="bubbleState">开</span></button>
       <button class="chip" id="clickMoveChip" type="button" aria-pressed="false" title="开启后点击地面，让她走过去"><span class="dot"></span><span>点击移动</span><span id="clickMoveState">关</span></button>
+      <button class="chip" id="ambienceChip" type="button" aria-pressed="false" title="环境音：随天气和房间变化的背景声"><span class="dot"></span><span>环境音</span><span id="ambienceState">关</span></button>
       <button class="chip" id="soundChip" type="button" aria-pressed="true" title="开启/关闭点击、抓取和放下的音效"><span class="dot"></span><span>音效</span><span id="soundState">开</span></button>
       <button class="chip" id="viewChip" type="button" aria-pressed="false" title="立绘视角：正面（待机看镜头，走路按真实方向）或自由（待机也随镜头转身）"><span class="dot"></span><span>视角</span><span id="viewState">正面</span></button>
       <span class="chip mode cam-mode" id="camModeChip" role="group" aria-label="视角控制模式" title="视角控制：开放=只用键盘，左键=只用鼠标左键拖拽，组合=键盘和左键都可用">
@@ -556,6 +560,7 @@
       <div class="sky-menu" id="settingsMenu" hidden>
         <button type="button" id="roomLabelBtn" aria-pressed="false" title="在客厅/厨房等地板上显示房间名">房间名：关</button>
   <button type="button" id="devModeBtn" aria-pressed="false">开发模式</button>
+        <label class="amb-row" for="ambienceVol">环境音音量 <input id="ambienceVol" type="range" min="0" max="100" step="1" value="45"><span id="ambienceVolState">45%</span></label>
       </div>
       <button class="chip" id="tvChip" type="button" aria-pressed="false" title="把浏览器里的抖音标签页投到房间电视上：不需要扩展；需要 HTTPS 或 localhost，并允许共享。控制按钮才需要可选扩展"><span class="dot"></span><span>电视</span><span id="tvState">投屏</span></button>
     </div>

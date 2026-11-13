@@ -1,6 +1,7 @@
 // 小蓝鱼的家 —— 页面表现层。
 // 事实/行为在 src/home-state.js；这里只读快照、画房间、处理相机与交互。
 import * as THREE from './vendor/three.module.js';
+import { ambience } from './ambience.js';
 import { createWorld } from './world.js';
 import { SpriteActor, CLIPS } from './actor.js';
 import { ACTION_GROUPS } from './action-manifest.js';
@@ -1195,6 +1196,50 @@ if (params.get('view') === 'front') spriteView = 'front';
 let lastBackView = null;
 let lastViewZone = null;
 let audioCtx = null;
+// ── 环境音：默认关，用户点开才响（浏览器也需要一次手势）
+const ambienceOn = localStorage.getItem('home-ambience') === '1';
+const ambienceVol = Number(localStorage.getItem('home-ambience-vol') || 45) / 100;
+function paintAmbience() {
+  const st = document.getElementById('ambienceState');
+  const chip = document.getElementById('ambienceChip');
+  if (st) st.textContent = ambience.enabled ? '开' : '关';
+  if (chip) chip.setAttribute('aria-pressed', ambience.enabled ? 'true' : 'false');
+  const volState = document.getElementById('ambienceVolState');
+  const vol = document.getElementById('ambienceVol');
+  if (volState) volState.textContent = `${Math.round(ambience.volume * 100)}%`;
+  if (vol) vol.value = String(Math.round(ambience.volume * 100));
+}
+let ambienceBooted = false;
+function bootAmbience() {
+  if (ambienceBooted) return;
+  ambienceBooted = true;
+  ambience.init();
+  ambience.setVolume(ambienceVol);
+  if (ambienceOn) ambience.setEnabled(true);
+  paintAmbience();
+}
+document.addEventListener('pointerdown', bootAmbience, { once: true });
+document.addEventListener('keydown', bootAmbience, { once: true });
+function bindAmbienceUi() {
+  const chip = document.getElementById('ambienceChip');
+  chip?.addEventListener('click', () => {
+    bootAmbience();
+    ambience.toggle();
+    localStorage.setItem('home-ambience', ambience.enabled ? '1' : '0');
+    paintAmbience();
+  });
+  const vol = document.getElementById('ambienceVol');
+  vol?.addEventListener('input', () => {
+    const v = Number(vol.value) / 100;
+    ambience.setVolume(v);
+    localStorage.setItem('home-ambience-vol', String(Math.round(v * 100)));
+    paintAmbience();
+  });
+  paintAmbience();
+}
+// 模块可能在 load 之后才执行，直接绑；没绑上再等 DOMContentLoaded
+bindAmbienceUi();
+
 const clickSfx = new Audio('assets/sound/click-duck.wav');
 clickSfx.preload = 'auto';
 clickSfx.volume = 0.38;
@@ -1578,6 +1623,17 @@ function floorPointAt(e) {
 function applyState(next) {
   if (!next) return;
   state = next;
+  // 环境音跟随天气与所在房间
+  try {
+    ambience.setScene({ weather: currentSkyKey(), room: next.her?.room });
+    const speech = next.her?.speech || '';
+    if (speech && speech !== window.__ambSpeech) {
+      window.__ambSpeech = speech;
+      ambience.setSpeaking(true);
+      clearTimeout(window.__ambSpeechT);
+      window.__ambSpeechT = setTimeout(() => { try { ambience.setSpeaking(false); } catch { /* 忽略 */ } }, 2600);
+    }
+  } catch { /* 环境音失败不影响主流程 */ }
   roomView = next.room || roomView;
   if (next.her) {
     world.updateEnvironment({
@@ -3449,6 +3505,11 @@ function frame(now) {
   updateCamera(dt);
   updateCompass();
   watchLayers(now);
+  // 每秒把天气/房间同步给环境音（切天气不一定伴随房间状态变化）
+  if (now - (window.__ambSyncAt || 0) > 1000) {
+    window.__ambSyncAt = now;
+    try { ambience.setScene({ weather: currentSkyKey(), room: state?.her?.room }); } catch { /* 忽略 */ }
+  }
 
   const her = state?.her;
   if (her) {
