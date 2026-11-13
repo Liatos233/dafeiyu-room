@@ -419,7 +419,7 @@ class Layer {
       this.video.addEventListener('canplay', finish, { once: true });
       this.video.addEventListener('error', finish, { once: true });
       // 素材版本号：改动 webm 后只要改这里，浏览器就不会再用旧缓存
-  const ASSET_VER = '20261112c';
+  const ASSET_VER = '20261113a';
   this.video.src = src + (src.includes('?') ? '&' : '?') + 'v=' + ASSET_VER;
       this.video.load();
       // 离屏 video 不主动 play 时，部分 Chromium 会停在 readyState=0；
@@ -616,6 +616,21 @@ export class SpriteActor {
       v.load();
       this._prefetch.push({ name, el: v });
     }
+  }
+
+  // 选一个「最不该被用户看到」的层给下一段动画用：
+  // 正在淡入的层优先保护，其次是不透明/可见的层。
+  _pickSpare() {
+    let best = -1;
+    let bestScore = Infinity;
+    for (let i = 0; i < this.layers.length; i += 1) {
+      if (i === this.active) continue;
+      const l = this.layers[i];
+      const score = (l.target === 1 ? 100 : 0) + (l.fade || 0) + (l.mesh.visible ? 1 : 0);
+      if (score < bestScore) { bestScore = score; best = i; }
+    }
+    if (best < 0) best = (this.active + 1) % this.layers.length;
+    return best;
   }
 
   async setClip(name, { once = false, fade = true, onEnded = null } = {}) {
