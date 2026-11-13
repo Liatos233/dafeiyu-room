@@ -731,6 +731,10 @@ export function createWorld(renderer, { quality = 'balanced' } = {}) {
  * 只处理「不透明、无贴图、非动态」的网格；玻璃/水面/屏幕/灯具/墙体都跳过。
  */
 function mergeStaticDecor(world) {
+  // 关键：先把整棵树的 matrixWorld 刷新到最新。
+  // 否则子网格（盆栽/伞/带 Group 偏移的家具）会按父级旧矩阵烘焙，合批后位置全错、看起来就是“消失”。
+  world.root.updateMatrixWorld(true);
+
   const DYNAMIC = new Set([
     world.sky, world.poolWater, world.poolBody, world.tvScreen
   ].filter(Boolean));
