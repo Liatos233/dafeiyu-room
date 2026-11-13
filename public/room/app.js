@@ -1323,7 +1323,8 @@ const SKY_PRESETS = {
   rain: 15, overcast: 13, fog: 7.5, snow: 10,
   storm: 18, starry: 23, rainbow: 17, sand: 14, aurora: 23
 };
-const SKY_ORDER = ['day', 'dusk', 'night', 'dawn', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora'];
+// 天气菜单只放「天气」，时段（黎明/白天/黄昏/夜晚）由时间决定，不在这里选
+const SKY_ORDER = ['day', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora'];
 const SKY_LABEL = {
   day: '晴天', dusk: '黄昏', night: '夜晚', dawn: '黎明',
   rain: '雨天', overcast: '阴天', fog: '雾天', snow: '雪天',
@@ -1346,6 +1347,8 @@ let roomLabelsOn = localStorage.getItem('home-labels') === '1';
 
 let skyMode = SKY_FROM_URL || localStorage.getItem('home-sky') || 'day';
 if (skyMode === 'auto' || !SKY_PRESETS[skyMode]) skyMode = 'day';
+// 时段不再作为天气保存：老存档迁成晴天，时段交给时间
+if (['dusk', 'night', 'dawn'].includes(skyMode)) skyMode = 'day';
 let skyRealTime = SKY_FROM_URL ? false : (localStorage.getItem('home-sky-time') !== '0');
 
 // 按小时推断当前时段（跟真实时间同步时用）
