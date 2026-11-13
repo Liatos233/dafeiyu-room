@@ -5,6 +5,7 @@ set -euo pipefail
 
 KEY="${1:?用法: bash set-embedding-siliconflow.sh <硅基流动 API Key> [模型]}"
 MODEL="${2:-BAAI/bge-m3}"
+PROV_ID="bge-m3 (SiliconFlow)"
 DATA=/root/data
 BASE=https://api.siliconflow.cn/v1
 
@@ -35,7 +36,7 @@ p = "/root/data/cmd_config.json"
 c = json.load(open(p, encoding="utf-8-sig"))
 
 SRC_ID = "siliconflow-embedding"
-PROV_ID = f"bge-m3 (SiliconFlow)"
+PROV_ID = "bge-m3 (SiliconFlow)"
 
 sources = c.setdefault("provider_sources", [])
 sources = [s for s in sources if s.get("id") != SRC_ID]
