@@ -678,6 +678,15 @@ export class SpriteActor {
     return best;
   }
 
+  // 可见性只在这里结算：当前层 = 1，其它层 = 0。
+  // 任何一次切换都必须走这里，避免「过期回调提前 return，旧层停在 1」导致重影。
+  _syncVisibility() {
+    for (let i = 0; i < this.layers.length; i += 1) {
+      const l = this.layers[i];
+      l.setTarget(i === this.active ? 1 : 0);
+    }
+  }
+
   async setClip(name, { once = false, fade = true, onEnded = null } = {}) {
     if (!CLIPS[name]) name = 'idle';
     this.clipLog.push({ n: name, p: 'start', cur: this.current, a: this.active });
@@ -747,7 +756,12 @@ export class SpriteActor {
     }
     this._lastSwap = performance.now();
     loaded.then(() => {
-      if (this.current !== name) return;
+      if (this.current !== name) {
+        // 这段加载已经过期：它不能被看见，也不许挡住当前层
+        next.setTarget(0);
+        try { next.video.pause(); } catch { /* 忽略 */ }
+        return;
+      }
       if (trimStart) {
         // 快进冲过前摇：到时（或最多 1.2s）后恢复正常速度并淡入
         next.video.playbackRate = 8;
@@ -756,12 +770,13 @@ export class SpriteActor {
           if (this.current !== name) { next.video.playbackRate = 1; return; }
           next.video.playbackRate = 1;
           next.play();
-          next.setTarget(1);
           if (fade) {
-            prev.setTarget(0);
+            this._syncVisibility();
           } else {
-            prev.fade = 0;
-            prev.material.opacity = 0;
+            next.setTarget(1);
+            next.fade = 1;
+            next.material.opacity = 1;
+            this._syncVisibility();
           }
         };
         const step = () => {
@@ -780,16 +795,16 @@ export class SpriteActor {
         try { next.video.currentTime = trimStart; } catch { /* 还没元数据 */ }
       }
       next.play();
-      next.setTarget(1);
       if (fade) {
-        prev.setTarget(0);
+        this._syncVisibility();
       } else {
-        prev.fade = 0;
-        prev.material.opacity = 0;
-        prev.mesh.visible = false;
+        next.setTarget(1);
         next.fade = 1;
         next.material.opacity = 1;
-        try { prev.video.pause(); } catch { /* 忽略 */ }
+        this._syncVisibility();
+        for (const l of this.layers) {
+          if (l !== next) { l.fade = 0; l.material.opacity = 0; l.mesh.visible = false; l.setTarget(0); }
+        }
       }
     }).catch(() => {});
     return loaded;
@@ -841,6 +856,14 @@ export class SpriteActor {
     this.flip = flip;
     const sx = flip ? -1 : 1;
     for (const l of this.layers) l.mesh.scale.x = sx;
+    // 自愈：当前层已经可见后，任何其它层还想亮着都强制淡出（防重影）
+    const actLayer = this.layers[this.active];
+    if (actLayer && actLayer.fade > 0.15) {
+      for (let i = 0; i < this.layers.length; i += 1) {
+        const l = this.layers[i];
+        if (i !== this.active && l.target !== 0) l.setTarget(0);
+      }
+    }
     for (const l of this.layers) l.tick(dt);
 
     // 阴影

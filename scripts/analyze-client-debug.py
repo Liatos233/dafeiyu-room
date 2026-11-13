@@ -40,3 +40,18 @@ bad2 = [d for d in rows if d.get("walking") and (d.get("displayElev") or 0) > 0.
 for d in bad2[-10:]:
     print(fmt(d))
 print("异常条数:", len(bad2))
+
+
+print("--- 重影：两层以上同时可见（o>0.5）---")
+ghost = 0
+blank = 0
+for d in rows:
+    layers = d.get("layers") or []
+    vis = [l for l in layers if (l.get("o") or 0) > 0.5]
+    if len(vis) >= 2:
+        ghost += 1
+        if ghost <= 5:
+            print(d.get("t"), d.get("clip"), json.dumps(layers))
+    if layers and all((l.get("o") or 0) < 0.1 for l in layers):
+        blank += 1
+print("重影样本:", ghost, "| 空白样本:", blank)
