@@ -3385,6 +3385,17 @@ let fpsN = 0;
 let lastAdapt = 0;
 let ratio = renderer.getPixelRatio();
 
+// 指南针：把「镜头相对目标点的方位」转成罗盘旋转，N 固定指向世界 -Z
+const compassEl = document.getElementById('compassDial');
+function updateCompass() {
+  if (!compassEl) return;
+  const t = VIEW.target;
+  const dx = camera.position.x - t.x;
+  const dz = camera.position.z - t.z;
+  const deg = Math.atan2(dx, dz) * 180 / Math.PI;
+  compassEl.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.06, (now - prevT) / 1000);
@@ -3392,6 +3403,7 @@ function frame(now) {
   gardenController?.tick(now);
   updateOpenView(dt);
   updateCamera(dt);
+  updateCompass();
 
   const her = state?.her;
   if (her) {

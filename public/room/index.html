@@ -452,6 +452,54 @@
     .chat-toggle{right:10px; bottom:76px}
     .room-chat{right:10px; left:10px; bottom:122px; width:auto; height:54vh}
   }
+
+/* ── 指南针 ───────────────────────────────────────────── */
+#compass{
+  position:absolute; left:20px; bottom:104px; width:76px; height:76px;
+  pointer-events:none; z-index:6; user-select:none;
+}
+#compass .dial{
+  position:absolute; inset:0; border-radius:50%;
+  border:1px solid rgba(190,220,255,.22);
+  background:radial-gradient(circle at 50% 32%, rgba(28,44,68,.82), rgba(10,16,26,.86));
+  box-shadow:0 6px 20px rgba(0,0,0,.35), inset 0 0 18px rgba(120,180,255,.08);
+  backdrop-filter:blur(7px);
+  transition:transform .12s linear;
+  will-change:transform;
+}
+#compass .dial span{
+  position:absolute; left:50%; top:50%; font-size:10px; font-weight:700;
+  color:#9fb8d8; letter-spacing:.02em;
+}
+#compass .dial .c-n{ transform:translate(-50%,-50%) translateY(-25px); color:#ff9a9a; }
+#compass .dial .c-s{ transform:translate(-50%,-50%) translateY(25px); }
+#compass .dial .c-e{ transform:translate(-50%,-50%) translateX(25px); }
+#compass .dial .c-w{ transform:translate(-50%,-50%) translateX(-25px); }
+#compass .dial .c-dot{
+  width:5px; height:5px; border-radius:50%; background:#cfe3ff; opacity:.55;
+  transform:translate(-50%,-50%);
+}
+#compass .dial .c-arrow{
+  position:absolute; left:50%; top:50%; width:2px; height:26px;
+  background:linear-gradient(to top, rgba(255,154,154,0), #ff9a9a);
+  transform-origin:50% 100%; transform:translate(-50%,-100%);
+}
+#compass .tick{
+  position:absolute; left:50%; top:-5px; width:2px; height:8px; border-radius:1px;
+  background:rgba(190,220,255,.5); transform:translateX(-50%);
+}
+#compass .lbl{
+  position:absolute; left:50%; bottom:-16px; transform:translateX(-50%);
+  font-size:9px; letter-spacing:.16em; color:var(--muted, #93a6c6); white-space:nowrap;
+}
+@media (max-width:720px){
+  #compass{ left:8px; bottom:96px; width:62px; height:62px }
+  #compass .dial .c-n{ transform:translate(-50%,-50%) translateY(-20px) }
+  #compass .dial .c-s{ transform:translate(-50%,-50%) translateY(20px) }
+  #compass .dial .c-e{ transform:translate(-50%,-50%) translateX(20px) }
+  #compass .dial .c-w{ transform:translate(-50%,-50%) translateX(-20px) }
+  #compass .dial .c-arrow{ height:21px }
+}
 </style>
 <link rel="stylesheet" href="./garden.css">
 </head>
@@ -512,6 +560,17 @@
       <button class="chip" id="tvChip" type="button" aria-pressed="false" title="把浏览器里的抖音标签页投到房间电视上：不需要扩展；需要 HTTPS 或 localhost，并允许共享。控制按钮才需要可选扩展"><span class="dot"></span><span>电视</span><span id="tvState">投屏</span></button>
     </div>
   </header>
+
+  <!-- 指南针：环随镜头转动，N 永远指向世界北（-Z） -->
+  <div id="compass" aria-hidden="true">
+    <i class="tick"></i>
+    <div class="dial" id="compassDial">
+      <span class="c-n">N</span><span class="c-e">E</span>
+      <span class="c-s">S</span><span class="c-w">W</span>
+      <i class="c-arrow"></i><i class="c-dot"></i>
+    </div>
+    <span class="lbl">朝向</span>
+  </div>
 
   <aside class="panel her-panel">
     <div class="panel-head"><span class="room" id="roomName">客厅</span><span class="head-right"><span class="emotion" id="emotionChip"></span><span class="clock" id="clock">--:--</span></span></div>
