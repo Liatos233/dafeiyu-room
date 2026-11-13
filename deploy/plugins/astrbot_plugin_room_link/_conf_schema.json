@@ -124,5 +124,10 @@
     "type": "string",
     "description": "房间桥接的访问令牌；留空则自动读 bridge_dir/state/console-token",
     "default": ""
+  },
+  "fast_reply": {
+    "type": "bool",
+    "description": "先秒回、到位再补一句（关掉则等动作完成才回复，更准但更慢）",
+    "default": true
   }
 }

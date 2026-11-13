@@ -293,6 +293,35 @@ class RoomLinkPlugin(Star):
             )
         return snapshot
 
+    # ---------------------------------------------------------------- 先秒回、后补刀
+
+    _follow_tasks = None
+
+    async def _spawn_follow_up(self, umo: str, cmd_id: str, before: dict, label: str) -> None:
+        """秒回之后，等动作真的落地，再补一条「到了」的消息。"""
+        if not umo:
+            umo = str(self.config.get("owner_session") or "").strip()
+        if not umo:
+            logger.warning("[room_link] 补发消息缺少会话标识，跳过")
+            return
+        try:
+            ctx = await self._wait_command_done(cmd_id, before)
+            her = (ctx or {}).get("her") or {}
+            line = str((ctx or {}).get("line") or "").strip()
+            arrived = bool(her) and her.get("walking") is False and (
+                her.get("spot") != before.get("spot")
+                or her.get("room") != before.get("room")
+                or her.get("kind") != before.get("kind")
+            )
+            if arrived:
+                text = f"（房间里）{label}到位了，{line}"
+            else:
+                text = f"（房间里）{label}还没到位，现在：{line}"
+            logger.info(f"[room_link] 补发 → {umo}：{text[:80]}")
+            await self.context.send_message(umo, MessageChain().message(text))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[room_link] 补发消息失败：{exc}")
+
     async def _notify_owner(self, text: str) -> None:
         umo = str(self.config.get("owner_session") or "").strip()
         if not umo:
@@ -640,10 +669,17 @@ class RoomLinkPlugin(Star):
             self.state.setdefault("commands", []).append(cmd)
             del self.state["commands"][:-10]
             self._save_state()
+        suffix = f"·{target}" if target else ""
+        if self.config.get("fast_reply", True):
+            umo = getattr(event, "unified_msg_origin", "") or ""
+            if umo:
+                asyncio.create_task(
+                    self._spawn_follow_up(umo, cmd["id"], before, f"「{action}{suffix}」")
+                )
+            return f"好，已经让她「{action}{suffix}」了，正过去；到位我再补一句。"
         ctx = await self._wait_command_done(cmd["id"], before)
         her = (ctx or {}).get("her") or {}
         line = str((ctx or {}).get("line") or "").strip()
-        suffix = f"·{target}" if target else ""
         arrived = bool(her) and (her.get("walking") is False) and (
             her.get("spot") != before.get("spot")
             or her.get("room") != before.get("room")
@@ -696,6 +732,13 @@ class RoomLinkPlugin(Star):
             self.state.setdefault("commands", []).append(cmd)
             del self.state["commands"][:-10]
             self._save_state()
+        if self.config.get("fast_reply", True):
+            umo = getattr(event, "unified_msg_origin", "") or ""
+            if umo:
+                asyncio.create_task(
+                    self._spawn_follow_up(umo, cmd["id"], before, f"「{matched}」")
+                )
+            return f"好，让她演「{matched}」，马上开始；演起来我再补一句。"
         ctx = await self._wait_command_done(cmd["id"], before)
         her = (ctx or {}).get("her") or {}
         line = str((ctx or {}).get("line") or "").strip()
