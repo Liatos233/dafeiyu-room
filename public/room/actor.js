@@ -822,7 +822,7 @@ export class SpriteActor {
       this._elev = elev;
       this._lift = lieLift;
     } else {
-      this._elev += (this._targetElev - this._elev) * Math.min(1, dt * 7);
+      this._elev += (this._targetElev - this._elev) * Math.min(1, dt * 4.5);
       this._lift += (lieLift - this._lift) * Math.min(1, dt * 7);
     }
     this._walking = walking;

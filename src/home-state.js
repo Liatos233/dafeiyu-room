@@ -1151,6 +1151,26 @@ function beginRoute(state, target, now, env = {}) {
   const fromPos = currentPosition(state, now);
   const fromSpotDef = state.route ? null : (spotOf(state.room, state.spot) || (state.spot === 'free' ? { access: nearestNodeInRoom(fromPos, state.room).id, pos: fromPos } : null));
   const route = buildRoute(fromPos, fromSpotDef, target, now, speed);
+  // 目标是有座面的家具（沙发/床/躺椅）：路线终点退到家具前沿，
+  // 最后一小段由客户端「坐上去」的缓动补完，避免走进家具内部再升起导致穿模。
+  if (route && Array.isArray(route.points) && route.points.length >= 2) {
+    const destSpot = spotOf(target.room, target.spot);
+    const seatY = Number(SURFACES[destSpot?.support || 'floor'] || 0);
+    if (seatY > 0.05) {
+      const pts = route.points;
+      const last = pts[pts.length - 1];
+      const prev = pts[pts.length - 2];
+      const dx = last[0] - prev[0];
+      const dz = last[1] - prev[1];
+      const len = Math.hypot(dx, dz);
+      const back = 0.5;
+      if (len > back + 0.05) {
+        pts[pts.length - 1] = [last[0] - (dx / len) * back, last[1] - (dz / len) * back];
+        const total = polylineLength(pts);
+        route.arriveAt = route.departAt + Math.max(1, (total / speed) * 1000);
+      }
+    }
+  }
   if (!route) {
     // 同一站位：不造路线，直接摆好，让它进入停留。
     state.room = target.room;
