@@ -1321,26 +1321,62 @@ function fmtAgo(min) {
 const SKY_PRESETS = {
   day: 12, dusk: 18.2, night: 23, dawn: 6.2,
   rain: 15, overcast: 13, fog: 7.5, snow: 10,
-  storm: 18, starry: 23, rainbow: 17, sand: 14, aurora: 23
+  storm: 18, starry: 23, rainbow: 17, sand: 14, aurora: 23,
+  sleet: 12, hail: 13, haze: 9, blizzard: 10, meteor: 23
 };
 // 天气菜单只放「天气」，时段（黎明/白天/黄昏/夜晚）由时间决定，不在这里选
-const SKY_ORDER = ['day', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora'];
+const SKY_ORDER = ['day', 'rain', 'overcast', 'fog', 'snow', 'storm', 'starry', 'rainbow', 'sand', 'aurora', 'sleet', 'hail', 'haze', 'blizzard', 'meteor'];
 const SKY_LABEL = {
   day: '晴天', dusk: '黄昏', night: '夜晚', dawn: '黎明',
   rain: '雨天', overcast: '阴天', fog: '雾天', snow: '雪天',
-  storm: '雷雨', starry: '星空', rainbow: '彩虹', sand: '沙尘', aurora: '极光'
+  storm: '雷雨', starry: '星空', rainbow: '彩虹', sand: '沙尘', aurora: '极光',
+  sleet: '雨夹雪', hail: '冰雹', haze: '霾', blizzard: '暴雪', meteor: '流星雨'
 };
 const SKY_ICON = {
   day: '☀️', dusk: '🌅', night: '🌙', dawn: '🌄',
   rain: '🌧️', overcast: '☁️', fog: '🌫️', snow: '❄️',
-  storm: '⛈️', starry: '✨', rainbow: '🌈', sand: '🌪️', aurora: '🌌'
+  storm: '⛈️', starry: '✨', rainbow: '🌈', sand: '🌪️', aurora: '🌌',
+  sleet: '🌨️', hail: '🧊', haze: '😶‍🌫️', blizzard: '❄️', meteor: '☄️'
 };
 // 每种天气对应的世界渲染模式
 const WEATHER_OF = {
   day: 'clear', dusk: 'clear', night: 'clear', dawn: 'clear',
   rain: 'rain', overcast: 'overcast', fog: 'fog', snow: 'snow',
-  storm: 'storm', starry: 'starry', rainbow: 'rainbow', sand: 'sand', aurora: 'aurora'
+  storm: 'storm', starry: 'starry', rainbow: 'rainbow', sand: 'sand', aurora: 'aurora',
+  sleet: 'sleet', hail: 'hail', haze: 'haze', blizzard: 'blizzard', meteor: 'meteor'
 };
+// ── 自动天气：按权重轮换，每次持续 AUTO_MIN~AUTO_MAX 分钟
+const AUTO_WEIGHTS = [
+  ['day', 30], ['overcast', 14], ['rain', 14], ['snow', 8], ['fog', 5],
+  ['storm', 5], ['starry', 6], ['rainbow', 4], ['sand', 3], ['sleet', 4],
+  ['hail', 2], ['haze', 3], ['blizzard', 2], ['meteor', 2]
+];
+const AUTO_SPAN_MS = [8 * 60_000, 20 * 60_000];
+let autoSkyOn = localStorage.getItem('home-sky-auto') === '1';
+let autoSkyTimer = null;
+function pickAutoWeather(exclude) {
+  const pool = AUTO_WEIGHTS.filter(([k]) => k !== exclude);
+  const total = pool.reduce((a, [, w]) => a + w, 0);
+  let r = Math.random() * total;
+  for (const [k, w] of pool) { r -= w; if (r <= 0) return k; }
+  return 'day';
+}
+function applyAutoWeather() {
+  const next = pickAutoWeather(skyMode);
+  skyMode = next;
+  skyRealTime = false;
+  localStorage.setItem('home-sky', next);
+  localStorage.setItem('home-sky-time', '0');
+  refreshSky?.();
+  toast?.(`天气变成：${SKY_LABEL[next] || next}`);
+  scheduleAutoWeather();
+}
+function scheduleAutoWeather() {
+  clearTimeout(autoSkyTimer);
+  if (!autoSkyOn) return;
+  const [lo, hi] = AUTO_SPAN_MS;
+  autoSkyTimer = setTimeout(applyAutoWeather, lo + Math.random() * (hi - lo));
+}
 const SKY_FROM_URL = params.get('sky');
 // 地板上的房间名：默认关闭，用户可在「设置 → 房间名」打开
 let roomLabelsOn = localStorage.getItem('home-labels') === '1';
@@ -3219,6 +3255,7 @@ function openSkyMenu() {
     b.classList.toggle('on', b.dataset.sky === active);
   });
   skyMenu.hidden = false;
+  updateAutoBtn();
   chip?.classList.add('open');
 }
 $('skyChip')?.addEventListener('click', (e) => {
@@ -3226,12 +3263,39 @@ $('skyChip')?.addEventListener('click', (e) => {
   if (skyMenu?.hidden === false) closeSkyMenu();
   else openSkyMenu();
 });
+function updateAutoBtn() {
+  const b = document.getElementById('autoSkyBtn');
+  if (!b) return;
+  b.setAttribute('aria-pressed', autoSkyOn ? 'true' : 'false');
+  b.classList.toggle('on', autoSkyOn);
+  b.innerHTML = autoSkyOn ? '<b>🎲</b> 自动天气：开' : '<b>🎲</b> 自动天气：关';
+}
+document.getElementById('autoSkyBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  autoSkyOn = !autoSkyOn;
+  localStorage.setItem('home-sky-auto', autoSkyOn ? '1' : '0');
+  updateAutoBtn();
+  if (autoSkyOn) {
+    toast?.('自动天气：开（8–20 分钟换一次）');
+    applyAutoWeather();
+  } else {
+    clearTimeout(autoSkyTimer);
+    toast?.('自动天气：关');
+  }
+});
+
 skyMenu?.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-sky]');
   if (!btn) return;
   e.stopPropagation();
   skyMode = btn.dataset.sky;
   skyRealTime = false;
+  if (autoSkyOn) {
+    autoSkyOn = false;
+    localStorage.setItem('home-sky-auto', '0');
+    clearTimeout(autoSkyTimer);
+    updateAutoBtn();
+  }
   localStorage.setItem('home-sky', skyMode);
   localStorage.setItem('home-sky-time', '0');
   applySkyPref();
@@ -3239,6 +3303,9 @@ skyMenu?.addEventListener('click', (e) => {
   closeSkyMenu();
   toast(`天空：${SKY_LABEL[skyMode]}`);
 });
+updateAutoBtn();
+if (autoSkyOn) scheduleAutoWeather();
+
 document.addEventListener('click', (e) => {
   if (skyMenu?.hidden === false && !e.target.closest('#skyMenu') && !e.target.closest('#skyChip')) closeSkyMenu();
 });

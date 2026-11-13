@@ -291,6 +291,28 @@ function sceneLayers(weather) {
         { sample: 'storm', gain: 0.75, fallback: { type: 'rain', heavy: true } },
         { proc: 'wind', gain: 0.25, opts: { strength: 1.1, gust: 0.8 } }
       ];
+    case 'sleet':
+      return [
+        { sample: 'rain', gain: 0.35, fallback: { type: 'rain', heavy: false } },
+        { sample: 'wind', gain: 0.18 }
+      ];
+    case 'hail':
+      return [
+        { sample: 'storm', gain: 0.55, fallback: { type: 'rain', heavy: true } },
+        { sample: 'wind', gain: 0.25, opts: { strength: 1.2, gust: 0.8 } }
+      ];
+    case 'haze':
+      return [{ sample: 'wind', gain: 0.16, fallback: { type: 'wind', opts: { strength: 0.4, gust: 0.1 } } }];
+    case 'blizzard':
+      return [
+        { sample: 'wind', gain: 0.55, fallback: { type: 'snow' } },
+        { proc: 'snow', gain: 0.6 }
+      ];
+    case 'meteor':
+      return [
+        { sample: 'crickets', gain: 0.3, fallback: { proc: 'wind', gain: 0.2 } },
+        { proc: 'aurora', gain: 0.5 }
+      ];
     case 'snow':
       return [
         { sample: 'wind', gain: 0.22, fallback: { type: 'snow' } },

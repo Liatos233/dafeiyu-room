@@ -406,6 +406,11 @@ function skyTexture(hour, weather = 'clear') {
     sand: { top: '#a9834f', mid: '#c49f6c', low: '#e0c8a1', sea: ['#b08a56', '#7d6037'], clouds: 6, rain: false, stars: 0, sun: 'dusty', mountain: 'rgba(150,116,66,.55)', fog: 0xc9a469 },
     rainbow: { top: '#5b7fa6', mid: '#8fb3cc', low: '#d8e6ee', sea: ['#5b7d94', '#33505f'], clouds: 8, rain: false, stars: 0, sun: 'soft', rainbow: true, mountain: 'rgba(70,96,110,.32)', fog: 0x9fb6c6 },
     starry: { top: '#03060f', mid: '#070f22', low: '#101d33', sea: ['#081525', '#03080f'], clouds: 3, rain: false, stars: 1400, sun: 'moon', night: true, mountain: 'rgba(6,12,22,.8)', fog: 0x081324 },
+    sleet: { top: '#5c6b78', mid: '#8896a2', low: '#c2ccd5', sea: ['#4a5866', '#2c3742'], clouds: 22, rain: true, snow: true },
+    hail: { top: '#39434f', mid: '#5f6b78', low: '#9aa6b2', sea: ['#39434f', '#232c35'], clouds: 26, rain: true },
+    haze: { top: '#a89a86', mid: '#c9bda9', low: '#e3dccd', sea: ['#a99b86', '#7d7161'], clouds: 8 },
+    blizzard: { top: '#7f8fa0', mid: '#aebcc9', low: '#e6edf3', sea: ['#8b9aa8', '#5f6d7a'], clouds: 30 },
+    meteor: { top: '#050a14', mid: '#0a1526', low: '#152238', sea: ['#08131f', '#03070d'], clouds: 2, night: true },
     aurora: { top: '#040a14', mid: '#08182a', low: '#0d2438', sea: ['#071827', '#030a12'], clouds: 2, rain: false, stars: 900, sun: 'moon', aurora: true, night: true, mountain: 'rgba(6,14,24,.78)', fog: 0x0a1a2c }
   };
   const spec = W[mode];
@@ -2420,7 +2425,7 @@ function buildSnow(world) {
     if (!snow.visible) return;
     world._snowT += dt;
     const arr = geo.attributes.position.array;
-    const fall = 0.85 * Math.min(dt, 0.05);
+    const fall = 0.85 * Math.min(dt, 0.05) * (world.snowSpeedMul || 1);
     for (let i = 0; i < COUNT; i++) {
       arr[i * 3 + 1] -= fall * (0.7 + (seed[i] % 1));
       arr[i * 3] += Math.sin(world._snowT * 1.3 + seed[i]) * dt * 0.18;
@@ -2479,8 +2484,8 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   const day = !night && !dusk && !dawn;
 
   const wx = rainFlag === true ? 'rain' : (rainFlag === false ? 'clear' : String(weather || 'clear'));
-  const rainy = wx === 'rain' || wx === 'storm';
-  const snowy = wx === 'snow';
+  const rainy = ['rain', 'storm', 'sleet', 'hail'].includes(wx);
+  const snowy = ['snow', 'sleet', 'blizzard', 'hail'].includes(wx);
   const sandy = wx === 'sand';
   const gloomy = rainy || wx === 'overcast' || wx === 'fog' || wx === 'storm';
   // ── 太阳 / 月亮：按小时走真实弧线，并按天气衰减 ─────────────────
@@ -2494,8 +2499,10 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   const sunY = 3 + arc * 20;                          // 最高约 23
   const sunZ = 4.4 + 6 - arc * 4;                     // 稍微偏南，正午更靠中
   // 天气对阳光的遮挡
-  const weatherDim = wx === 'storm' ? 0.22 : wx === 'rain' ? 0.38 : wx === 'overcast' ? 0.5
-    : wx === 'fog' ? 0.55 : wx === 'sand' ? 0.62 : wx === 'snow' ? 0.7 : 1;
+  const weatherDim = ({
+    storm: 0.22, rain: 0.38, overcast: 0.5, fog: 0.55, sand: 0.62, snow: 0.7,
+    sleet: 0.45, hail: 0.3, haze: 0.5, blizzard: 0.32, meteor: 1
+  })[wx] ?? 1;
   const sunI = isDaytime ? (0.5 + arc * 1.9) * weatherDim : 0;
   const moonI = isDaytime ? 0 : 0.35 * weatherDim;
   // 低角度偏暖
@@ -2527,12 +2534,19 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
     shadowDirty = true;
   }
   if (world.rain) world.rain.visible = rainy;
-  if (world.snow) world.snow.visible = snowy;
-  if (world.sand) world.sand.visible = sandy;
+  if (world.snow) {
+    world.snow.visible = snowy;
+    if (world.snow.material) {
+      world.snow.material.size = wx === 'hail' ? 0.14 : wx === 'blizzard' ? 0.085 : 0.055;
+    }
+    world.snowSpeedMul = wx === 'hail' ? 2.4 : wx === 'blizzard' ? 1.8 : 1;
+  }
+  if (world.sand) world.sand.visible = sandy || wx === 'blizzard';
   // 雾的浓度按天气分档
   const fogRange = {
     fog: [10, 42], sand: [16, 58], storm: [22, 64], snow: [22, 66],
-    rain: [28, 80], overcast: [30, 86], clear: [38, 100]
+    rain: [28, 80], overcast: [30, 86], clear: [38, 100],
+    sleet: [24, 70], hail: [20, 60], haze: [8, 34], blizzard: [12, 44], meteor: [30, 90]
   }[wx] || [38, 100];
   world.scene.fog.near = fogRange[0];
   world.scene.fog.far = fogRange[1];
@@ -2554,7 +2568,8 @@ function updateEnvironment(world, { hour = null, lamp = true, asleep = false, ki
   }
   const fogByWeather = {
     overcast: 0x9aa6b1, fog: 0xd3dae0, snow: 0xc3d0da, sand: 0xc9a469,
-    rainbow: 0x9fb6c6, storm: 0x39434d, starry: 0x081324, aurora: 0x0a1a2c
+    rainbow: 0x9fb6c6, storm: 0x39434d, starry: 0x081324, aurora: 0x0a1a2c,
+    sleet: 0x8a97a3, hail: 0x4a5563, haze: 0xc9bda9, blizzard: 0xd7e2ea, meteor: 0x0a1526
   };
   if (fogByWeather[wx] !== undefined) world.scene.fog.color.set(fogByWeather[wx]);
 
