@@ -601,7 +601,10 @@ export function normalizeHomeState(raw, now = Date.now()) {
     ? { pos: normalizeFreePoint(raw.freeTarget.pos), until: Math.max(0, Number(raw.freeTarget.until) || 0) }
     : null;
   out.pose = ['stand', 'sit', 'lie'].includes(raw.pose) ? raw.pose : sp.pose;
-  out.elev = Number(raw.elev) || sp.elev || 0;
+  // elev 只能来自坐/躺；0 是合法值（贴地），不能用 || 回退到座位高度
+  const rawElev = Number(raw.elev);
+  out.elev = Number.isFinite(rawElev) ? rawElev : (Number(sp.elev) || 0);
+  if (out.pose !== 'sit' && out.pose !== 'lie') out.elev = 0;
   out.facing = Number(raw.facing) || sp.facing || 0;
   out.kind = sanitizeText(raw.kind, 24) || 'idle';
   out.clip = sanitizeText(raw.clip, 40) || null;
@@ -1120,7 +1123,12 @@ function setActivity(state, kind, activity, pose, elev, facing) {
   state.kind = kind || 'idle';
   state.activity = sanitizeText(activity, 80) || '在发呆';
   if (pose) state.pose = pose;
-  if (elev !== undefined) state.elev = Number(elev) || 0;
+  // 只有坐/躺才允许离地；站立与走路一律贴地，避免离开座位后高度残留
+  if (state.pose === 'sit' || state.pose === 'lie') {
+    if (elev !== undefined) state.elev = Number(elev) || 0;
+  } else {
+    state.elev = 0;
+  }
   if (facing !== undefined) state.facing = Number(facing) || 0;
   state.walking = false;
 }

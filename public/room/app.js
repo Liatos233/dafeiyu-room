@@ -3517,6 +3517,8 @@ function frame(now) {
       || PREVIEW || PIN_TEST;
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
     bubbleAnchorElev = displayElevFor(shownHer);
+    // 走路/站立时一律贴地：服务端 elev 偶尔会残留座面高度，导致她悬空
+    if (walkingNow || (her.pose !== 'sit' && her.pose !== 'lie')) bubbleAnchorElev = 0;
     actor.update(dt, camera, {
       pos: seatOverride ? shownHer.pos : displayPos, elev: bubbleAnchorElev, walking: walkingNow, flip,
       drinking: her.kind === 'drink' && !her.asleep

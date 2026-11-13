@@ -557,7 +557,8 @@ export class SpriteActor {
     this.group.name = 'da-feiyu-sprite';
     this.group.scale.setScalar(1.28);
     scene.add(this.group);
-    this.layers = [new Layer(this.group, 0), new Layer(this.group, 1)];
+    // 三层轮换：切换时永远有一层在显示，避免 2 层交替时把可见层淡出导致瞬间消失
+    this.layers = [new Layer(this.group, 0), new Layer(this.group, 1), new Layer(this.group, 2)];
     this.active = 0;
     this.current = '';
     this.onEnded = onEnded;
@@ -622,7 +623,7 @@ export class SpriteActor {
     this.clipLog.push({ n: name, p: 'start', cur: this.current, a: this.active });
     if (this.clipLog.length > 20) this.clipLog.shift();
     if (this.current === name && !once) return;
-    const nextIndex = 1 - this.active;
+    const nextIndex = this._pickSpare();
     const next = this.layers[nextIndex];
     const prev = this.layers[this.active];
     next.mesh.visible = true;
@@ -677,6 +678,9 @@ export class SpriteActor {
     }
     this.active = nextIndex;
     this.current = name;
+    for (let i = 0; i < this.layers.length; i += 1) {
+      if (i !== nextIndex) this.layers[i].setTarget(0);
+    }
     this._lastSwap = performance.now();
     loaded.then(() => {
       if (this.current !== name) return;
