@@ -736,6 +736,9 @@ function setMode(mode, requestedRoom = null) {
     eyesPrev = null;   // 刚切进她的视角：不要拿旧位置算方向
   }
 }
+window.__setMode = setMode;   // 调试/截图用
+window.__setFP = setFP;
+
 function resetView() {
   VIEW.follow = false;
   setMode('overview');
