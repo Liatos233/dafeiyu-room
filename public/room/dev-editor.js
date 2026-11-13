@@ -226,10 +226,16 @@ export function createDevEditor({ world, camera, canvas, view }) {
     if (!dt) return;
 
     const p = selected.pivot;
-    fwd.set(camera.position.x - p.position.x, 0, camera.position.z - p.position.z);
-    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
-    fwd.normalize().multiplyScalar(-1);        // 朝向屏幕里 = 远离相机
-    right.set(-fwd.z, 0, fwd.x);
+    // 屏幕方向 → 地面方向：相机矩阵的 +Y（屏幕向上）与 +X（屏幕向右）投影到 XZ
+    camera.updateMatrixWorld();
+    fwd.setFromMatrixColumn(camera.matrixWorld, 1);   // 屏幕上方
+    fwd.y = 0;
+    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+    fwd.normalize();
+    right.setFromMatrixColumn(camera.matrixWorld, 0);  // 屏幕右方
+    right.y = 0;
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+    right.normalize();
 
     let dx = 0, dz = 0, dy = 0;
     const up = keys.has('KeyW') || keys.has('ArrowUp');
@@ -458,6 +464,9 @@ export function createDevEditor({ world, camera, canvas, view }) {
     setEnabled,
     get enabled() { return enabled; },
     busy: () => false,
+    selectObject: (o) => { if (enabled && o) beginSelection(o); },
+    pivotPos: () => selected ? [selected.pivot.position.x, selected.pivot.position.y, selected.pivot.position.z] : null,
+    label: () => selected ? selected.label : null,
     blockClick: () => enabled && !!selected,
     dragging: () => false,
     patches,
