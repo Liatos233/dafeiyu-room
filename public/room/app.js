@@ -2829,13 +2829,20 @@ function buildDevQuickMenu() {
   ].join(';');
   el.innerHTML = `
     <div style="color:#8fc1ff;font-weight:700;margin:2px 4px 6px">开发菜单</div>
-    <button data-dev="nav" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">地图 <b></b></button>
-    <button data-dev="labels" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">房间标签 <b></b></button>
-    <button data-dev="anim" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">动画状态 <b></b></button>
-    <button data-dev="actions" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">动作面板 <b></b></button>
-    <button data-dev="top" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">俯视视角</button>
-    <button data-dev="edit" style="width:100%;margin:2px 0;padding:5px 8px;text-align:left">进入编辑模式</button>
+    <button data-dev="nav" class="dq">地图 <b></b></button>
+    <button data-dev="labels" class="dq">房间标签 <b></b></button>
+    <button data-dev="anim" class="dq">动画状态 <b></b></button>
+    <button data-dev="actions" class="dq">动作面板 <b></b></button>
+    <button data-dev="top" class="dq">俯视视角</button>
+    <button data-dev="edit" class="dq">进入编辑模式</button>
   `;
+  const st = document.createElement('style');
+  st.textContent = `#devQuickMenu .dq{width:100%;margin:3px 0;padding:6px 9px;text-align:left;
+    background:rgba(143,193,255,.10);border:1px solid rgba(143,193,255,.22);color:#dbe7f5;
+    border-radius:8px;font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer}
+    #devQuickMenu .dq:hover{background:rgba(143,193,255,.20)}
+    #devQuickMenu .dq b{color:#7ee0a8}`;
+  document.head.appendChild(st);
   document.body.appendChild(el);
   const mark = (k, on) => {
     const b = el.querySelector(`[data-dev="${k}"] b`);
