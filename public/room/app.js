@@ -3385,6 +3385,18 @@ let fpsN = 0;
 let lastAdapt = 0;
 let ratio = renderer.getPixelRatio();
 
+// 调试：?clipdebug=1 时每 1.1 秒强切一个动作，用来抓切换瞬间的帧
+if (new URLSearchParams(location.search).has('clipdebug')) {
+  const cycle = ['待机', '跳舞', '走路', '吃午餐', '游泳', '开心小跑'];
+  let ci = 0;
+  setInterval(() => {
+    try {
+      actor.setClip(cycle[ci % cycle.length]);
+      ci += 1;
+    } catch { /* 忽略 */ }
+  }, 1100);
+}
+
 // 指南针：把「镜头相对目标点的方位」转成罗盘旋转，N 固定指向世界 -Z
 const compassEl = document.getElementById('compassDial');
 function updateCompass() {
