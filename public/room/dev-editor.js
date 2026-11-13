@@ -42,7 +42,7 @@ function boxGap(a, b) {
   return Math.hypot(dx, dy, dz);
 }
 
-export function createDevEditor({ world, camera, canvas }) {
+export function createDevEditor({ world, camera, canvas, view }) {
   const patches = loadPatches();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -219,7 +219,8 @@ export function createDevEditor({ world, camera, canvas }) {
 
   function tick(t) {
     rafId = requestAnimationFrame(tick);
-    if (!enabled || !selected) { lastT = t; return; }
+    if (!enabled) { lastT = t; return; }
+    if (!selected) { panCamera(t); lastT = t; return; }
     const dt = Math.min(0.05, (t - (lastT || t)) / 1000);
     lastT = t;
     if (!dt) return;
@@ -256,6 +257,41 @@ export function createDevEditor({ world, camera, canvas }) {
     }
   }
 
+  // 未选中模型时：WASD/方向键平移镜头（贴着地面走）
+  function panCamera(t) {
+    const dt = Math.min(0.05, (t - (lastT || t)) / 1000);
+    if (!dt || !view) return;
+    const up = keys.has('KeyW') || keys.has('ArrowUp');
+    const down = keys.has('KeyS') || keys.has('ArrowDown');
+    const left = keys.has('KeyA') || keys.has('ArrowLeft');
+    const rgt = keys.has('KeyD') || keys.has('ArrowRight');
+    if (!up && !down && !left && !rgt) return;
+    const az = view.az || 0;
+    // 屏幕方向的水平投影
+    const fx = -Math.sin(az), fz = -Math.cos(az);
+    const rx = Math.cos(az), rz = -Math.sin(az);
+    const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 8 : 3.6) * dt;
+    const tgt = view.target;
+    if (up) { tgt.x += fx * speed; tgt.z += fz * speed; }
+    if (down) { tgt.x -= fx * speed; tgt.z -= fz * speed; }
+    if (left) { tgt.x -= rx * speed; tgt.z -= rz * speed; }
+    if (rgt) { tgt.x += rx * speed; tgt.z += rz * speed; }
+    tgt.x = Math.max(-4, Math.min(17, tgt.x));
+    tgt.z = Math.max(-8, Math.min(15, tgt.z));
+    setInfo();
+  }
+
+  function resetView() {
+    if (!view) return;
+    view.mode = 'overview';
+    view.follow = false;
+    view.target.set(6.6, 0.3, 4.8);
+    view.az = 0;
+    view.elev = 1.45;      // 接近正俯视
+    view.radius = 20;
+    setInfo();
+  }
+
   // ── 网格地板 ─────────────────────────────────────────────
   function buildGrid() {
     const g = new THREE.GridHelper(30, 120, 0xffcc55, 0x6f8ea8);
@@ -282,17 +318,20 @@ export function createDevEditor({ world, camera, canvas }) {
     <div style="font-weight:700;color:#ffcc55;margin-bottom:6px">模型编辑模式</div>
     <div id="deInfo" style="min-height:66px;white-space:pre-wrap"></div>
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <button id="deView" style="flex:1;padding:4px 6px">重置视角</button>
       <button id="deCopy" style="flex:1;padding:4px 6px">复制补丁</button>
       <button id="deReset" style="flex:1;padding:4px 6px">复位</button>
       <button id="deClear" style="flex:1;padding:4px 6px">清空全部</button>
     </div>
-    <div style="margin-top:6px;color:#93a4b6">右键点选｜WASD/方向键移动｜Q/E 旋转｜Shift+W/S 升降｜Esc 取消</div>
+    <div style="margin-top:6px;color:#93a4b6">右键点选｜WASD/方向键移动（未选中时平移镜头）｜Q/E 旋转｜Shift+W/S 升降｜Esc 取消</div>
   `;
   document.body.appendChild(ui);
   const info = ui.querySelector('#deInfo');
   function setInfo() {
     if (!selected) {
-      info.textContent = '右键点选模型（相邻零件会整组选中）';
+      const tg = view?.target;
+      const camLine = tg ? `\n镜头中心 ${tg.x.toFixed(1)}, ${tg.z.toFixed(1)}` : '';
+      info.textContent = '右键点选模型（相邻零件会整组选中）' + camLine;
       return;
     }
     const p = selected.pivot.position;
@@ -323,7 +362,10 @@ export function createDevEditor({ world, camera, canvas }) {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || ev.target?.isContentEditable) return;
     if (ev.code === 'Escape') { endSelection(); return; }
     if (ev.code === 'ShiftLeft' || ev.code === 'ShiftRight') { keys.add(ev.code); return; }
-    if (!selected) return;
+    if (!selected) {
+      if (MOVE_KEYS.has(ev.code)) { ev.preventDefault(); keys.add(ev.code); }
+      return;
+    }
     const isRotate = ev.code === 'KeyQ' || ev.code === 'KeyE';
     const isMove = MOVE_KEYS.has(ev.code) || isRotate;
     if (!isMove) return;
@@ -358,6 +400,8 @@ export function createDevEditor({ world, camera, canvas }) {
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', () => keys.clear());
+
+  ui.querySelector('#deView')?.addEventListener('click', () => resetView());
 
   ui.querySelector('#deCopy')?.addEventListener('click', async () => {
     const text = JSON.stringify(patches, null, 2);

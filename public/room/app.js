@@ -740,7 +740,7 @@ function setMode(mode, requestedRoom = null) {
 }
 if (EDIT_MODE) {
   try {
-    const ed = createDevEditor({ world, camera, canvas });
+    const ed = createDevEditor({ world, camera, canvas, view: VIEW });
     ed.setEnabled(true);
   } catch (e) {
     console.warn('[dev-editor] 启动失败', e);
