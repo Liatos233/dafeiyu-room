@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import socket
 import time
 import uuid
@@ -318,6 +319,7 @@ class RoomLinkPlugin(Star):
             spot_label = str(her.get("spotLabel") or "").strip()
             place = spot_label or room_name or "那边"
             act = str(her.get("activity") or "").strip()
+            act = re.sub(r"（[^）]*）\s*$", "", act).strip()
             for prefix in ("到了", "正在", "刚刚"):
                 if act.startswith(prefix):
                     act = act[len(prefix):]
@@ -702,7 +704,11 @@ class RoomLinkPlugin(Star):
                 asyncio.create_task(
                     self._spawn_follow_up(umo, cmd["id"], before, f"「{action}{suffix}」")
                 )
-            return f"好，已经让她「{action}{suffix}」了，正过去；到位我再补一句。"
+            return (
+                f"已经让她「{action}{suffix}」了，她正在过去，还没到。"
+                "请只回一句「这就过去」之类的短话，**不要**说已经到了、也不要描述目的地的情况，"
+                "到没到我会另外告诉你。"
+            )
         ctx = await self._wait_command_done(cmd["id"], before)
         her = (ctx or {}).get("her") or {}
         line = str((ctx or {}).get("line") or "").strip()
@@ -764,7 +770,10 @@ class RoomLinkPlugin(Star):
                 asyncio.create_task(
                     self._spawn_follow_up(umo, cmd["id"], before, f"「{matched}」")
                 )
-            return f"好，让她演「{matched}」，马上开始；演起来我再补一句。"
+            return (
+                f"已经让她演「{matched}」，刚开始，还没播出来。"
+                "请只回一句「马上」之类的短话，**不要**描述动作细节，演起来我会另外告诉你。"
+            )
         ctx = await self._wait_command_done(cmd["id"], before)
         her = (ctx or {}).get("her") or {}
         line = str((ctx or {}).get("line") or "").strip()
