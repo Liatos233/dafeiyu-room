@@ -255,7 +255,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       if (up) { dx += fwd.x * SPEED * dt; dz += fwd.z * SPEED * dt; }
       if (down) { dx -= fwd.x * SPEED * dt; dz -= fwd.z * SPEED * dt; }
       if (left) { dx -= right.x * SPEED * dt; dz -= right.z * SPEED * dt; }
-      if (right) { dx += right.x * SPEED * dt; dz += right.z * SPEED * dt; }
+      if (rgt) { dx += right.x * SPEED * dt; dz += right.z * SPEED * dt; }
     }
     if (dx || dy || dz) {
       p.position.x = Math.round((p.position.x + dx) / SNAP) * SNAP;
