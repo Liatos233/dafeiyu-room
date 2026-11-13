@@ -332,7 +332,8 @@ const POSTER = Object.fromEntries(Object.keys(CLIPS).map((k) => [k, `assets/pet/
 const PLANE_W = 1.422;
 const PLANE_H = 1.6;
 const TARGET_H = 1.78;   // 统一身高（米）：和精灵图动作包对齐
-const FEET_CENTER_Y = 0.667; // 角色脚底在画面 91.7% 高度处，保证脚踩在地面
+const FEET_CENTER_Y = 0.667;
+const CLIP_FOOT = new Map();   // clip src -> mesh.position.y（脚底贴到 y=0 时的高度） // 角色脚底在画面 91.7% 高度处，保证脚踩在地面
 const FADE_MS = 260;
 // 躺/睡片段（画面下缘就在脚底线上）贴在床上时，床垫+被子被面比 spot 的 elev
 // 高出约 0.12：立绘是竖直平面，低于被面的那截会被床品挡住，看起来像下半身被切。
@@ -413,6 +414,7 @@ class Layer {
         done = true;
         this.loadLog.push({ s: src, p: 'finish', rs: this.video.readyState });
         this.measureHead();
+        try { this.alignFeet(); } catch { /* 忽略 */ }
         resolve();
       };
       this.video.addEventListener('loadeddata', finish, { once: true });
@@ -531,6 +533,49 @@ class Layer {
     this.mesh.position.y = (fracFeet - 0.5) * quadH;
     this.mesh.position.x = (0.5 - fracCx) * quadW;
     return true;
+  }
+
+  // 每段动画的构图高度不一样（有的角色画面偏低/偏高），
+  // 用首帧 alpha 包围盒把「脚底」对齐到组原点 y=0，避免同一支撑面上有的悬空有的陷进去。
+  alignFeet() {
+    if (this._footDone) return;
+    const key = this.src;
+    if (!key) return;
+    if (CLIP_FOOT.has(key)) {
+      this.mesh.position.y = CLIP_FOOT.get(key);
+      this._footDone = true;
+      return;
+    }
+    const v = this.video;
+    if (!v.videoWidth || !v.videoHeight) return;
+    let fracFeet = null;
+    try {
+      const sw = 160;
+      const sh = Math.max(1, Math.round((v.videoHeight / v.videoWidth) * sw));
+      const c = document.createElement('canvas');
+      c.width = sw;
+      c.height = sh;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.clearRect(0, 0, sw, sh);
+      ctx.drawImage(v, 0, 0, sw, sh);
+      const data = ctx.getImageData(0, 0, sw, sh).data;
+      let maxY = -1;
+      for (let y = 0; y < sh; y += 1) {
+        const row = y * sw * 4;
+        for (let x = 0; x < sw; x += 1) {
+          if (data[row + x * 4 + 3] > 24) { maxY = y; break; }
+        }
+      }
+      if (maxY > 0) fracFeet = (maxY + 1) / sh;
+    } catch { fracFeet = null; }
+    if (!fracFeet) return;
+    // 脚底 y=0 对应的 mesh.position.y
+    const ideal = (fracFeet - 0.5) * PLANE_H;
+    const clamped = Math.max(FEET_CENTER_Y - 0.18, Math.min(FEET_CENTER_Y + 0.18, ideal));
+    CLIP_FOOT.set(key, clamped);
+    this.mesh.position.y = clamped;
+    this.footFrac = fracFeet;
+    this._footDone = true;
   }
 
   play() {

@@ -3518,10 +3518,8 @@ function frame(now) {
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
     bubbleAnchorElev = displayElevFor(shownHer);
     // 走路/站立时一律贴地：服务端 elev 偶尔会残留座面高度，导致她悬空
-    // 只有「躺」和少数确实坐着播的动画才抬高；其余一律贴地，
-    // 否则坐姿点位 + 站立动画 = 悬空
-    const seatedKind = her.pose === 'lie' || (her.pose === 'sit' && (her.kind === 'tv' || her.kind === 'nap'));
-    if (walkingNow || !seatedKind) bubbleAnchorElev = 0;
+    // 高度完全由服务端（support 面 × 姿态）决定，这里不再二次猜测
+    if (walkingNow) bubbleAnchorElev = 0;
     // ── 调试埋点：每 500ms 上报一次客户端状态（排查悬空/动画问题）
     if (now - (window.__dbgLast || 0) > 500) {
       window.__dbgLast = now;
@@ -3532,6 +3530,8 @@ function frame(now) {
           keepalive: true,
           body: JSON.stringify({
             clip: actorWebm.current,
+            footFrac: actorWebm.layers[actorWebm.active]?.footFrac || null,
+            footY: actorWebm.layers[actorWebm.active]?.mesh?.position?.y || null,
             room: her.room, spot: her.spot, pose: her.pose, kind: her.kind,
             elev: her.elev, walking: her.walking === true,
             serverPos: her.pos,

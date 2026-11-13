@@ -28,6 +28,19 @@ export const HOME_ACTIONS = Object.freeze([
   'clip', 'say'   // QQ 联动：点播动画 / 让她冒句话
 ]);
 
+// ── 支撑面（P0）：角色离地高度只由「点位用哪个面」+「姿态」决定，不再人肉配 elev
+export const SURFACES = Object.freeze({
+  floor: 0,
+  rug: 0.02,
+  sofa_seat: 0.48,
+  bed_top: 0.54,
+  balcony_chair: 0.40,
+  pool_lounger: 0.42,
+  dining_seat: 0,
+  desk_seat: 0,
+  toilet_seat: 0
+});
+
 // 1 世界单位 = 1 米。房间按真实尺寸摆，走道净宽都 ≥ 0.9。
 export const HOME_LAYOUT = Object.freeze({
   size: { w: 13.2, d: 9.0, h: 2.8, wall: 0.16 },
@@ -51,19 +64,19 @@ export const HOME_LAYOUT = Object.freeze({
       fridge: { pos: [1.5, 2.7], pose: 'stand', facing: -90, label: '冰箱前', access: 'k_fridge' },
       sink: { pos: [1.3, 1.45], pose: 'stand', facing: 0, label: '水槽前', access: 'k_sink' },
       stove: { pos: [2.85, 1.45], pose: 'stand', facing: 0, label: '灶台前', access: 'kitchen' },
-      dining: { pos: [2.1, 6.3], pose: 'stand', facing: 0, label: '餐桌边', access: 'dining_s' }
+      dining: { pos: [2.1, 6.3], pose: 'stand', facing: 0, label: '餐桌边', access: 'dining_s', support: 'dining_seat' }
     },
     living: {
-      sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', elev: 0.48 },
+      sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', support: 'sofa_seat' },
       water: { pos: [1.52, 3.26], pose: 'stand', facing: -90, label: '饮水机旁', access: 'living_wm' },
       shelf: { pos: [7.85, 1.75], pose: 'stand', facing: 90, label: '书架前', access: 'living_n' },
-      rug: { pos: [5.4, 2.7], pose: 'sit', facing: 180, label: '地毯上', access: 'living_rug', elev: 0.02 },
+      rug: { pos: [5.4, 2.7], pose: 'sit', facing: 180, label: '地毯上', access: 'living_rug', support: 'rug' },
       tv: { pos: [6.3, 3.2], pose: 'sit', facing: 0, label: '电视前', access: 'living_tvfront', elev: 0.02 }
     },
     her_room: {
-      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', elev: 0.54 },
+      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top' },
       bedside: { pos: [10.1, 1.55], pose: 'stand', facing: 90, label: '床边', access: 'beside' },
-      desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk' },
+      desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk', support: 'desk_seat' },
       wardrobe: { pos: [12.1, 3.45], pose: 'stand', facing: 0, label: '衣柜前', access: 'wardrobe' },
       window: { pos: [12.55, 2.75], pose: 'stand', facing: 90, label: '窗边', access: 'window_n' }
     },
@@ -72,17 +85,17 @@ export const HOME_LAYOUT = Object.freeze({
     },
     bathroom: {
       sink: { pos: [12.0, 6.45], pose: 'stand', facing: 90, label: '洗手台前', access: 'bath_vanity' },
-      toilet: { pos: [11.9, 6.2], pose: 'stand', facing: -90, label: '马桶边', access: 'bath_toilet' },
+      toilet: { pos: [11.9, 6.2], pose: 'stand', facing: -90, label: '马桶边', access: 'bath_toilet', support: 'toilet_seat' },
       shower: { pos: [11.5, 7.1], pose: 'stand', facing: 180, label: '淋浴间', access: 'bath_shower' }
     },
     laundry: {
       washer: { pos: [9.7, 6.5], pose: 'stand', facing: 90, label: '洗衣机前', access: 'laundry' }
     },
     balcony: {
-        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', elev: 0.40 },
+        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair' },
       },
     pool: {
-      lounger: { pos: [12.42, 10.58], pose: 'sit', facing: 180, label: '沙滩躺椅上', access: 'pk_ne', elev: 0.42 },
+      lounger: { pos: [12.42, 10.58], pose: 'sit', facing: 180, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger' },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
       deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' }
     },
@@ -601,16 +614,7 @@ export function normalizeHomeState(raw, now = Date.now()) {
     ? { pos: normalizeFreePoint(raw.freeTarget.pos), until: Math.max(0, Number(raw.freeTarget.until) || 0) }
     : null;
   out.pose = ['stand', 'sit', 'lie'].includes(raw.pose) ? raw.pose : sp.pose;
-  // elev 只能来自坐/躺；0 是合法值（贴地），不能用 || 回退到座位高度
-  const rawElev = Number(raw.elev);
-  out.elev = Number.isFinite(rawElev) ? rawElev : (Number(sp.elev) || 0);
-  // 点位本身没有座面高度（书桌/餐桌/马桶等站立动作点位）：强制贴地 + 站姿，
-  // 否则旧存档里的 elev 会让角色悬空。
-  if (!sp.elev) {
-    out.elev = 0;
-    if (sp.pose && sp.pose !== 'sit' && sp.pose !== 'lie') out.pose = sp.pose;
-  }
-  if (out.pose !== 'sit' && out.pose !== 'lie') out.elev = 0;
+  out.elev = supportY(out);
   out.facing = Number(raw.facing) || sp.facing || 0;
   out.kind = sanitizeText(raw.kind, 24) || 'idle';
   out.clip = sanitizeText(raw.clip, 40) || null;
@@ -1125,16 +1129,18 @@ export function recentEvents(state, now = Date.now(), ttl = EVENT_TTL) {
   return (state.eventLog || []).filter((e) => e.at <= now && now - e.at <= ttl);
 }
 
+// 离地高度唯一推导：支撑面 × 姿态（sit/lie 才离地）
+function supportY(state) {
+  const sp = HOME_LAYOUT.spots[state.room]?.[state.spot];
+  const base = Number(SURFACES[sp?.support || 'floor'] ?? 0) || 0;
+  return (state.pose === 'sit' || state.pose === 'lie') ? base : 0;
+}
+
 function setActivity(state, kind, activity, pose, elev, facing) {
   state.kind = kind || 'idle';
   state.activity = sanitizeText(activity, 80) || '在发呆';
   if (pose) state.pose = pose;
-  // 只有坐/躺才允许离地；站立与走路一律贴地，避免离开座位后高度残留
-  if (state.pose === 'sit' || state.pose === 'lie') {
-    if (elev !== undefined) state.elev = Number(elev) || 0;
-  } else {
-    state.elev = 0;
-  }
+  state.elev = supportY(state);
   if (facing !== undefined) state.facing = Number(facing) || 0;
   state.walking = false;
 }
