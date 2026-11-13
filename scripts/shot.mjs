@@ -46,19 +46,15 @@ await send('Runtime.enable');
 await send('Page.enable');
 await send('Page.navigate', { url: URL_TARGET });
 
-// 等初始化完成（swiftshader 大约 12s）
-for (let i = 0; i < 20; i += 1) {
-  await sleep(1500);
-  const r = await send('Runtime.evaluate', { expression: 'typeof window.__renderer', returnByValue: true });
-  if (r.result?.result?.value === 'object') break;
-}
+// 固定等待世界与素材加载（无头软件渲染较慢）
+await sleep(28000);
 
 if (JS) {
   const r = await send('Runtime.evaluate', { expression: JS, returnByValue: true, awaitPromise: true });
   if (r.result?.exceptionDetails) console.log('JS ERROR:', r.result.exceptionDetails.text);
   else console.log('js ->', JSON.stringify(r.result?.result?.value));
 }
-await sleep(2500);
+await sleep(7000);
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 if (shot.result?.data) {
   mkdirSync(join(OUT, '..'), { recursive: true });

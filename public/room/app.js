@@ -737,6 +737,9 @@ function setMode(mode, requestedRoom = null) {
   }
 }
 window.__setMode = setMode;   // 调试/截图用
+window.__camera = camera;
+window.__VIEW = VIEW;
+window.__THREE = THREE;
 window.__setFP = setFP;
 
 function resetView() {
