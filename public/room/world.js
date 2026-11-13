@@ -104,6 +104,14 @@ function box(parent, w, h, d, material, x, y, z, ry = 0) {
 function rbox(parent, w, h, d, r, material, x, y, z, ry = 0) {
   return addMesh(parent, roundedGeo(w, h, d, r), material, x, y, z, ry);
 }
+// 可编辑单元：带名字的 Group，编辑器会整组选中并整体移动/旋转
+function buildUnit(parent, name) {
+  const g = new THREE.Group();
+  g.userData.unitName = name;
+  parent.add(g);
+  return g;
+}
+
 function cyl(parent, rTop, rBottom, h, material, x, y, z, seg = 16) {
   return addMesh(parent, new THREE.CylinderGeometry(rTop, rBottom, h, seg), material, x, y, z);
 }
@@ -1154,8 +1162,8 @@ function buildKitchen(world, M) {
     rbox(parent, width - 0.085, height - 0.085, 0.008, 0.012, M.white, x, y, z + 0.019);
     box(parent, 0.2, 0.018, 0.025, M.brass, x, y + height * 0.33, z + 0.044);
   };
-  const ring = (radius, tube, material, x, y, z) => {
-    const mesh = addMesh(p, new THREE.TorusGeometry(radius, tube, 6, 24), material, x, y, z);
+  const ring = (radius, tube, material, x, y, z, parent = p) => {
+    const mesh = addMesh(parent, new THREE.TorusGeometry(radius, tube, 6, 24), material, x, y, z);
     mesh.rotation.x = -Math.PI / 2;
     return mesh;
   };
@@ -1194,12 +1202,14 @@ function buildKitchen(world, M) {
   rbox(p, 0.075, 0.018, 0.024, 0.006, M.brass, 1.26, 1.0, 0.31);
 
   // Flush induction top with a narrow brushed trim and readable cooking zones.
-  rbox(p, 0.74, 0.018, 0.51, 0.008, M.steel, 2.9, 0.93, 0.58);
-  box(p, 0.71, 0.012, 0.48, M.black, 2.9, 0.944, 0.58);
+  // 灶面 + 四个灶圈 + 控制条是一个整体单元（移动时一起走）
+  const stoveUnit = buildUnit(p, '灶台');
+  rbox(stoveUnit, 0.74, 0.018, 0.51, 0.008, M.steel, 2.9, 0.93, 0.58);
+  box(stoveUnit, 0.71, 0.012, 0.48, M.black, 2.9, 0.944, 0.58);
   for (let ix = 0; ix < 2; ix++) for (let iz = 0; iz < 2; iz++) {
-    ring(0.075, 0.003, M.stoneDark, 2.74 + ix * 0.3, 0.953, 0.46 + iz * 0.23);
+    ring(0.075, 0.003, M.stoneDark, 2.74 + ix * 0.3, 0.953, 0.46 + iz * 0.23, stoveUnit);
   }
-  for (let i = 0; i < 3; i++) box(p, 0.032, 0.002, 0.009, M.steel, 2.82 + i * 0.075, 0.953, 0.77);
+  for (let i = 0; i < 3; i++) box(stoveUnit, 0.032, 0.002, 0.009, M.steel, 2.82 + i * 0.075, 0.953, 0.77);
   // Hood now has its own opening between the upper cabinets, not through them.
   rbox(p, 0.82, 0.12, 0.48, 0.02, M.steel, 2.8, 1.739, 0.4);
   rbox(p, 0.27, 0.86, 0.25, 0.012, M.steel, 2.8, 2.209, 0.4);
@@ -1234,15 +1244,16 @@ function buildKitchen(world, M) {
   cyl(p, 0.036, 0.032, 0.073, M.ceramic, 0.56, 0.985, 1.45, 20);
   ring(0.034, 0.004, M.ceramic, 0.56, 1.023, 1.45);
   // Open shelf with two discrete brass brackets.
-  rbox(p, 0.18, 0.035, 1.3, 0.008, M.oak, 0.5, 1.52, 1.55);
+  const cupShelf = buildUnit(p, '水杯架');
+  rbox(cupShelf, 0.18, 0.035, 1.3, 0.008, M.oak, 0.5, 1.52, 1.55);
   for (const z of [1.05, 2.05]) {
-    box(p, 0.16, 0.018, 0.025, M.brass, 0.47, 1.49, z);
-    box(p, 0.018, 0.13, 0.025, M.brass, 0.395, 1.43, z);
+    box(cupShelf, 0.16, 0.018, 0.025, M.brass, 0.47, 1.49, z);
+    box(cupShelf, 0.018, 0.13, 0.025, M.brass, 0.395, 1.43, z);
   }
   for (let i = 0; i < 5; i++) {
     const mugMat = i % 2 ? M.ceramic : M.fabricBlue;
-    cyl(p, 0.045, 0.038, 0.09, mugMat, 0.5, 1.585, 1.05 + i * 0.24, 16);
-    cyl(p, 0.035, 0.035, 0.002, M.dark, 0.5, 1.632, 1.05 + i * 0.24, 16);
+    cyl(cupShelf, 0.045, 0.038, 0.09, mugMat, 0.5, 1.585, 1.05 + i * 0.24, 16);
+    cyl(cupShelf, 0.035, 0.035, 0.002, M.dark, 0.5, 1.632, 1.05 + i * 0.24, 16);
   }
   // Refrigerator has a recessed gasket, separate door leaves and two handles.
   rbox(p, 0.72, 1.9, 0.7, 0.035, M.cream, 0.66, 0.95, 2.7);
@@ -1263,13 +1274,15 @@ function buildKitchen(world, M) {
     dot.rotation.z = Math.PI / 2;
   }
   // Everyday countertop objects, deliberately sparse at room scale.
-  cyl(p, 0.1, 0.065, 0.065, M.ceramic, 3.5, 0.96, 0.62, 24);
+  const fruitBowl = buildUnit(p, '水果盘');
+  cyl(fruitBowl, 0.1, 0.065, 0.065, M.ceramic, 3.5, 0.96, 0.62, 24);
   for (let i = 0; i < 4; i++) {
-    addMesh(p, new THREE.SphereGeometry(0.045, 10, 8), i % 2 ? M.terracotta : M.fabricOchre,
+    addMesh(fruitBowl, new THREE.SphereGeometry(0.045, 10, 8), i % 2 ? M.terracotta : M.fabricOchre,
       3.44 + (i % 2) * 0.08, 1.005, 0.58 + Math.floor(i / 2) * 0.07);
   }
   rbox(p, 0.32, 0.022, 0.23, 0.01, M.oak, 2.0, 0.945, 0.62, 0.2);
-  rbox(p, 0.14, 0.25, 0.1, 0.012, M.darkWood, 0.62, 1.055, 2.05);
+  const counterBox = buildUnit(p, '盒子');
+  rbox(counterBox, 0.14, 0.25, 0.1, 0.012, M.darkWood, 0.62, 1.055, 2.05);
   addHotspot(world, 1.5, 2.7, 0.45, { title: '冰箱', sub: '门上贴着一张便利贴：今天也要好好吃饭', room: 'kitchen', spot: 'fridge', label: '冰箱前' });
   addHotspot(world, 1.3, 1.45, 0.4, { title: '水槽', sub: '水龙头有点松，杯子倒扣在沥水架上', room: 'kitchen', spot: 'sink', label: '水槽前' });
   addHotspot(world, 2.85, 1.45, 0.4, { title: '灶台', sub: '锅还热着，台面上有一小撮盐', room: 'kitchen', spot: 'stove', label: '灶台前' });
@@ -1506,12 +1519,15 @@ function buildLiving(world, M, textures) {
   }
   cyl(p, 0.045, 0.075, 0.18, M.ceramic, bx - 0.02, 1.90, bz + 0.43, 24);
   cyl(p, 0.035, 0.035, 0.025, M.ceramic, bx - 0.02, 2.0, bz + 0.43, 24);
-  // 饮水机（挪到餐厅西北角，靠墙）
-  box(p, 0.4, 0.95, 0.4, M.white, 0.506, 0.48, 3.205);
-  box(p, 0.34, 0.06, 0.34, M.steel, 0.506, 0.98, 3.205);
-  cyl(p, 0.12, 0.14, 0.3, M.blue, 0.506, 1.15, 3.205);
-  cyl(p, 0.04, 0.04, 0.06, M.ceramic, 0.686, 0.9, 3.205);
-  for (let i = 0; i < 2; i++) cyl(p, 0.035, 0.035, 0.09, M.ceramic, 0.506 + (i ? 0.1 : -0.1), 0.85, 3.325);
+  // 饮水机（餐厅西北角，靠墙；逆时针转 90° 让接水口朝屋内）
+  const dispenser = buildUnit(p, '直饮水机');
+  dispenser.position.set(0.506, 0, 3.205);
+  dispenser.rotation.y = Math.PI / 2;   // 逆时针 90°
+  box(dispenser, 0.4, 0.95, 0.4, M.white, 0, 0.48, 0);
+  box(dispenser, 0.34, 0.06, 0.34, M.steel, 0, 0.98, 0);
+  cyl(dispenser, 0.12, 0.14, 0.3, M.blue, 0, 1.15, 0);
+  cyl(dispenser, 0.04, 0.04, 0.06, M.ceramic, 0.18, 0.9, 0);
+  for (let i = 0; i < 2; i++) cyl(dispenser, 0.035, 0.035, 0.09, M.ceramic, (i ? 0.1 : -0.1), 0.85, 0.12);
   // 大绿植
   plant(world, 7.9, 0.52, 0.95);   // 电视柜右侧
   plant(world, 4.62, 0.52, 0.95);   // 电视柜左侧
@@ -2147,6 +2163,7 @@ function buildPoolDeck(world, M) {
     const g = new THREE.Group();
     g.position.set(px, DECK_TOP, pz);
     g.scale.set(0.92, 1, 1.52);   // 伞面向南北拉长，罩住两张躺椅
+    g.userData.unitName = '遮阳伞';   // 伞面+伞骨+立杆整体一个单元
     p.add(g);
 
     // 两个点之间的一根圆杆（伞骨/撑杆都用它）

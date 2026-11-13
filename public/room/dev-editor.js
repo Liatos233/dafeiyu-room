@@ -68,6 +68,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     world.root.traverse((o) => {
       if (!o.isMesh || o.isInstancedMesh) return;
       if (ignore.has(o) || o.userData?.ignorePick) return;
+      if (explicitUnit(o)) return;   // 命名单元单独处理
       const mat = o.material;
       if (mat?.transparent && (mat.opacity ?? 1) < 0.5) return;
       if (!Number.isFinite(o.userData.eid)) o.userData.eid = nextEid++;
@@ -117,6 +118,16 @@ export function createDevEditor({ world, camera, canvas, view }) {
   }
 
   // 最近的房间热点名，用来给整组起个中文名
+  // 向上找带 unitName 的祖先（命名单元优先于自动聚类）
+  function explicitUnit(obj) {
+    let n = obj;
+    while (n && n !== world.root) {
+      if (n.userData?.unitName) return n;
+      n = n.parent;
+    }
+    return null;
+  }
+
   function unitKey(members) {
     const eids = members.map((m) => m.userData.eid).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
     if (!eids.length) return 'x';
@@ -156,12 +167,30 @@ export function createDevEditor({ world, camera, canvas, view }) {
     if (!entries.length) return;
     const map = new Map();
     const seen = new Set();
+    // 命名单元：直接按名字找
+    const namedUnits = new Map();
+    world.root.traverse((o) => {
+      if (o.userData?.unitName) namedUnits.set(o.userData.unitName, o);
+    });
+    for (const [k, pt] of entries) {
+      if (!k.startsWith('unit:')) continue;
+      const grp = namedUnits.get(pt.label);
+      if (!grp) continue;
+      const members = [];
+      grp.traverse((o) => { if (o.isMesh) members.push(o); });
+      if (!members.length) continue;
+      const pivot = makePivot(members);
+      pivot.position.set(pt.x, pt.y, pt.z);
+      pivot.rotation.y = pt.ry || 0;
+      releasePivot(pivot, members);
+    }
     for (const arr of clusters.values()) {
       if (seen.has(arr)) continue;
       seen.add(arr);
       map.set(unitKey(arr), arr);
     }
     for (const pt of entries) {
+      if (String(pt.key || '').startsWith('unit:')) continue;
       const members = map.get(pt.key);
       if (!members) continue;
       const pivot = makePivot(members);
@@ -173,13 +202,25 @@ export function createDevEditor({ world, camera, canvas, view }) {
 
   function beginSelection(mesh) {
     if (selected) endSelection();
-    const members = clusters.get(mesh) || [mesh];
+    const named = explicitUnit(mesh);
+    let members;
+    let label;
+    if (named) {
+      members = [];
+      named.traverse((o) => { if (o.isMesh) members.push(o); });
+      label = named.userData.unitName;
+    } else {
+      members = clusters.get(mesh) || [mesh];
+      label = members.length > 3 ? null : labelOf(mesh);
+    }
+    if (!members.length) return;
     const pivot = makePivot(members);
     const center = pivot.position;
 
     const base = { x: pivot.position.x, y: pivot.position.y, z: pivot.position.z, ry: 0 };
-    const name = members.length > 3 ? (nearestHotspotName(center) || `组合×${members.length}`) : labelOf(mesh);
-    selected = { pivot, members, label: name, base, idx: -1 };
+    const name = label || nearestHotspotName(center) || `组合×${members.length}`;
+    const key = named ? `unit:${named.userData.unitName}` : unitKey(members);
+    selected = { pivot, members, label: name, base, idx: -1, key, named };
     helper = new THREE.BoxHelper(pivot, 0xffcc55);
     helper.material.depthTest = false;
     helper.renderOrder = 999;
@@ -200,8 +241,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     if (!selected) return;
     const p = selected.pivot;
     const ref = selected.base;
-    const key = unitKey(selected.members);
-    selected.key = key;
+    const key = selected.key || unitKey(selected.members);
     patches[key] = {
       label: selected.label,
       x: +p.position.x.toFixed(3),
