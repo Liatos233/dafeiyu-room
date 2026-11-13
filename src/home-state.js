@@ -35,7 +35,7 @@ export const SURFACES = Object.freeze({
   sofa_seat: 0.48,
   bed_top: 0.54,
   balcony_chair: 0.40,
-  pool_lounger: 0.42,
+  pool_lounger: 0.445,
   dining_seat: 0,
   desk_seat: 0,
   toilet_seat: 0
@@ -95,7 +95,7 @@ export const HOME_LAYOUT = Object.freeze({
         chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.0, 7.85] },
       },
     pool: {
-      lounger: { pos: [12.42, 10.58], pose: 'sit', facing: 180, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [12.42, 10.05] },
+      lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.72, 10.58] },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
       deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' }
     },
