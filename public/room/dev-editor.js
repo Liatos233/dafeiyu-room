@@ -55,6 +55,8 @@ export function createDevEditor({ world, camera, canvas, view }) {
   const keys = new Set();
   let rafId = 0;
   let lastT = 0;
+  const trace = [];
+  let frames = 0;
 
   // ── 聚类：整组选择 ────────────────────────────────────────
   const clusters = new Map();       // mesh -> cluster 数组
@@ -223,6 +225,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     if (!selected) { panCamera(t); lastT = t; return; }
     const dt = Math.min(0.05, (t - (lastT || t)) / 1000);
     lastT = t;
+    frames += 1;
     if (!dt) return;
 
     const p = selected.pivot;
@@ -258,6 +261,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       p.position.x = Math.round((p.position.x + dx) / SNAP) * SNAP;
       p.position.y = Math.round((p.position.y + dy) / SNAP) * SNAP;
       p.position.z = Math.round((p.position.z + dz) / SNAP) * SNAP;
+      if (trace.length < 8) trace.push({ dt: +dt.toFixed(3), dx: +dx.toFixed(3), dy: +dy.toFixed(3), dz: +dz.toFixed(3), keys: [...keys], frames });
       helper?.update();
       setInfo();
     }
@@ -465,6 +469,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     get enabled() { return enabled; },
     busy: () => false,
     selectObject: (o) => { if (enabled && o) beginSelection(o); },
+    trace: () => ({ frames, trace: trace.slice() }),
     debug: () => ({ keys: [...keys], fwd: fwd.toArray().map((v) => +v.toFixed(2)), right: right.toArray().map((v) => +v.toFixed(2)), az: view?.az, elev: view?.elev }),
     pivotPos: () => selected ? [selected.pivot.position.x, selected.pivot.position.y, selected.pivot.position.z] : null,
     label: () => selected ? selected.label : null,
