@@ -41,7 +41,7 @@ Write-Host "==> 打包 $head ($([math]::Round((Get-Item $tar).Length/1MB,1)) MB)
 # 先确保服务器上有应用脚本（首次或脚本更新时）
 $applyScript = Join-Path $PSScriptRoot "apply-deploy.sh"
 & $scp -o BatchMode=yes -i $Key $applyScript "${User}@${Server}:/usr/local/bin/apply-deploy.sh"
-& $ssh -o BatchMode=yes -i $Key "${User}@${Server}" 'perl -pi -e "s/\r//g" /usr/local/bin/apply-deploy.sh; chmod +x /usr/local/bin/apply-deploy.sh'
+& $ssh -o BatchMode=yes -i $Key "${User}@${Server}" 'chmod +x /usr/local/bin/apply-deploy.sh'
 
 & $scp -o BatchMode=yes -i $Key $tar "${User}@${Server}:/root/deploy-incoming.tar"
 if ($LASTEXITCODE -ne 0) { throw "上传失败" }
