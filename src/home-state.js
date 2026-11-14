@@ -1165,10 +1165,13 @@ export function recentEvents(state, now = Date.now(), ttl = EVENT_TTL) {
 }
 
 // 离地高度唯一推导：支撑面 × 姿态（sit/lie 才离地）
+// 座面留 1.2cm 余量：立绘脚底正好压在家具表面时，透视下会看起来陷进去一点
+const SEAT_EPS = 0.012;
 function supportY(state) {
   const sp = HOME_LAYOUT.spots[state.room]?.[state.spot];
   const base = Number(SURFACES[sp?.support || 'floor'] ?? 0) || 0;
-  return (state.pose === 'sit' || state.pose === 'lie') ? base : 0;
+  const y = (state.pose === 'sit' || state.pose === 'lie') ? base : 0;
+  return y > 0 ? y + SEAT_EPS : y;
 }
 
 function setActivity(state, kind, activity, pose, elev, facing) {
