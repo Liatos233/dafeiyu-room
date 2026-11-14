@@ -4105,7 +4105,7 @@ function frame(now) {
       const seat = world.bestSeatPoint(drawPos[0], drawPos[1], expected, 0.5);
       if (seat) {
         drawPos = [seat[0], seat[1]];
-        if (her.pose !== 'lie') drawElev = Math.max(drawElev, seat[2] + 0.012);
+        drawElev = Math.max(drawElev, seat[2] + 0.012);   // 躺姿也贴合真实床面
       } else {
         // 座面上找不到干净点：退回家具外最近的可站位置
         const foot = (her.elev || 0) + 0.03;
