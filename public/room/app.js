@@ -1987,6 +1987,13 @@ function clipFor(her) {
     if (k === 'garden_till' || k === 'garden_plant' || k === 'garden_harvest') return 'desk_tap';
     return 'idle_look';
   }
+  // 坐在家具上（沙发/躺椅/床沿）时，必须有坐姿动画；
+  // 否则会用站姿站在坐垫里，看起来就是穿模。
+  if ((her.elev || 0) > 0.2) {
+    if (her.pose === 'lie') return her.asleep ? 'sleep_loop' : 'nap';
+    if (her.pose === 'sit') return 'mutter';   // 坐姿循环（原本只给马桶用）
+  }
+
   // 自由视角只在站立/自由落点/行走时用背面；坐着、吃饭、反应等仍保留正面动作。
   if (isBackView() && her.pose === 'stand' && (her.elev || 0) < 0.2 && (k === 'idle' || k === 'free')) return 'back_idle';
   const night = (state?.hour ?? 12) >= 19 || (state?.hour ?? 12) < 7;
