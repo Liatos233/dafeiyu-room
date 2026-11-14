@@ -4118,6 +4118,7 @@ function frame(now) {
       }
     }
 
+    window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
       // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫
