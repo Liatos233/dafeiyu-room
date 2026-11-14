@@ -903,46 +903,51 @@ function mergeStaticDecor(world) {
     return false;
   };
 
-  /** (x,z) 处最高的可站立表面高度 */
+  /** (x,z) 处最高的可站立表面高度：多点采样取最高，避免落在坐垫缝/褶皱里 */
   world.surfaceYAt = (x, z, from = 3.2) => {
-    _geoRay.set(new THREE.Vector3(x, from, z), _geoDown);
-    _geoRay.far = from + 1;
-    const hits = _geoRay.intersectObject(world.root, true);
-    for (const h of hits) {
-      if (_geoSkip(h.object)) continue;
-      return h.point.y;
+    const offsets = [[0, 0], [0.14, 0], [-0.14, 0], [0, 0.14], [0, -0.14]];
+    let best = null;
+    for (const [ox, oz] of offsets) {
+      _geoRay.set(new THREE.Vector3(x + ox, from, z + oz), _geoDown);
+      _geoRay.far = from + 1;
+      const hits = _geoRay.intersectObject(world.root, true);
+      for (const h of hits) {
+        if (_geoSkip(h.object)) continue;
+        if (best === null || h.point.y > best) best = h.point.y;
+        break;
+      }
     }
-    return 0;
+    return best === null ? 0 : best;
   };
 
-  /** 半径 radius 内、身体高度区间里是否有实体挡着 */
-  world.blockedAt = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.5) => {
-    const probe = 0.55;
-    const ys = [y0, (y0 + y1) * 0.5, y1];
-    for (let i = 0; i < 12; i += 1) {
-      const a = (i / 12) * Math.PI * 2;
-      const ox = x + Math.cos(a) * (radius + probe);
-      const oz = z + Math.sin(a) * (radius + probe);
-      for (const y of ys) {
-        _geoRay.set(new THREE.Vector3(ox, y, oz), new THREE.Vector3(-Math.cos(a), 0, -Math.sin(a)));
-        _geoRay.far = probe + radius;
+  /** 身体柱（半径内、脚底到头顶）里是否有实体，立绘平面被穿透就来自这里 */
+  world.blockedAt = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.55) => {
+    const up = new THREE.Vector3(0, 1, 0);
+    const probes = [[0, 0], [radius * 0.6, 0], [-radius * 0.6, 0], [0, radius * 0.6], [0, -radius * 0.6]];
+    const heights = [0.04, 0.3, 0.62, 0.95, 1.3];
+    for (const [ox, oz] of probes) {
+      for (const dy of heights) {
+        const yStart = y0 + dy;
+        if (yStart > y1) continue;
+        _geoRay.set(new THREE.Vector3(x + ox, yStart, z + oz), up);
+        _geoRay.far = y1 - yStart;
         const hits = _geoRay.intersectObject(world.root, true);
         for (const h of hits) {
           if (_geoSkip(h.object)) continue;
-          if (h.distance < probe + radius - 0.03) return true;
+          if (h.distance <= y1 - yStart) return true;
         }
       }
     }
     return false;
   };
 
-  /** 在附近找一个不撞东西的落点（找不到就返回原点） */
-  world.nearestClearSpot = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.5) => {
+  /** 在附近找一个身体柱不撞东西的落点 */
+  world.nearestClearSpot = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.55) => {
     if (!world.blockedAt(x, z, radius, y0, y1)) return [x, z];
-    for (let ring = 1; ring <= 10; ring += 1) {
-      const r = ring * 0.08;
-      for (let i = 0; i < 12; i += 1) {
-        const a = (i / 12) * Math.PI * 2 + ring * 0.26;
+    for (let ring = 1; ring <= 12; ring += 1) {
+      const r = ring * 0.07;
+      for (let i = 0; i < 14; i += 1) {
+        const a = (i / 14) * Math.PI * 2 + ring * 0.31;
         const nx = x + Math.cos(a) * r;
         const nz = z + Math.sin(a) * r;
         if (!world.blockedAt(nx, nz, radius, y0, y1)) return [nx, nz];
