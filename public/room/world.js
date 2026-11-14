@@ -2178,9 +2178,9 @@ function buildPoolDeck(world, M) {
       return m;
     };
 
-    const EDGE_Y = 1.56;
-    const APEX_Y = 2.02;
-    const POLE_TOP = 1.62;     // 伞面以下露出的杆高
+    const EDGE_Y = 1.96;   // 抬高：站在躺椅上时头顶不碰伞面
+    const APEX_Y = 2.44;
+    const POLE_TOP = 2.02;     // 伞面以下露出的杆高
     const R = 1.0;
 
     // 底座：配重盘 + 收颈
