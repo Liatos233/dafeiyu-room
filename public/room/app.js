@@ -4090,10 +4090,30 @@ function frame(now) {
         }).catch(() => {});
       } catch { /* 忽略 */ }
     }
+    // ── 几何修正：站/坐在家具上时，高度取真实表面，位置避开实体 ──────────
+    // 立绘是平面，写死座面高度会在床品/靠垫/伞杆处穿模，这里直接问场景几何。
+    let drawPos = seatOverride ? shownHer.pos : displayPos;
+    let drawElev = bubbleAnchorElev;
+    const onFurniture = !walkingNow && (
+      (bubbleAnchorElev || 0) > 0.05
+      || her.pose === 'sit'
+      || her.transitioning === true
+      || seatOverride
+    );
+    if (onFurniture && !charDrag?.active && !placeHold) {
+      const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28);
+      if (cx !== drawPos[0] || cz !== drawPos[1]) drawPos = [cx, cz];
+      if (her.pose !== 'lie') {
+        const probeFrom = Math.max(0.7, (her.elev || 0) + 0.55);
+        const top = world.surfaceYAt(cx, cz, probeFrom);
+        if (Number.isFinite(top)) drawElev = Math.max(drawElev, top + 0.012);
+      }
+    }
+
     actor.update(dt, camera, {
-      pos: seatOverride ? shownHer.pos : displayPos, elev: bubbleAnchorElev, walking: walkingNow, flip,
+      pos: drawPos, elev: drawElev, walking: walkingNow, flip,
       // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫
-      snap: SHOT || seatOverride || her.transitioning === true,
+      snap: SHOT || seatOverride || her.transitioning === true || onFurniture,
       drinking: her.kind === 'drink' && !her.asleep
     });
     const pose = {

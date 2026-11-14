@@ -889,6 +889,68 @@ function mergeStaticDecor(world) {
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
   if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
+  // ── 几何感知：给她算「脚下真实表面」和「身边有没有实体」 ────────────
+  // 立绘是平面，站/坐高度如果写死常量，遇到床品、靠垫、伞杆就会互相穿插。
+  // 这里直接对场景做射线检测，把高度和可站位置交给几何本身决定。
+  const _geoRay = new THREE.Raycaster();
+  const _geoDown = new THREE.Vector3(0, -1, 0);
+
+  const _geoSkip = (o) => {
+    if (!o || o.visible === false) return true;
+    if (o === world.sky || o === world.poolWater || o === world.tvScreen) return true;
+    const m = o.material;
+    if (m && !Array.isArray(m) && m.opacity === 0) return true;   // 热点用的透明柱
+    return false;
+  };
+
+  /** (x,z) 处最高的可站立表面高度 */
+  world.surfaceYAt = (x, z, from = 3.2) => {
+    _geoRay.set(new THREE.Vector3(x, from, z), _geoDown);
+    _geoRay.far = from + 1;
+    const hits = _geoRay.intersectObject(world.root, true);
+    for (const h of hits) {
+      if (_geoSkip(h.object)) continue;
+      return h.point.y;
+    }
+    return 0;
+  };
+
+  /** 半径 radius 内、身体高度区间里是否有实体挡着 */
+  world.blockedAt = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.5) => {
+    const probe = 0.55;
+    const ys = [y0, (y0 + y1) * 0.5, y1];
+    for (let i = 0; i < 12; i += 1) {
+      const a = (i / 12) * Math.PI * 2;
+      const ox = x + Math.cos(a) * (radius + probe);
+      const oz = z + Math.sin(a) * (radius + probe);
+      for (const y of ys) {
+        _geoRay.set(new THREE.Vector3(ox, y, oz), new THREE.Vector3(-Math.cos(a), 0, -Math.sin(a)));
+        _geoRay.far = probe + radius;
+        const hits = _geoRay.intersectObject(world.root, true);
+        for (const h of hits) {
+          if (_geoSkip(h.object)) continue;
+          if (h.distance < probe + radius - 0.03) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  /** 在附近找一个不撞东西的落点（找不到就返回原点） */
+  world.nearestClearSpot = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.5) => {
+    if (!world.blockedAt(x, z, radius, y0, y1)) return [x, z];
+    for (let ring = 1; ring <= 10; ring += 1) {
+      const r = ring * 0.08;
+      for (let i = 0; i < 12; i += 1) {
+        const a = (i / 12) * Math.PI * 2 + ring * 0.26;
+        const nx = x + Math.cos(a) * r;
+        const nz = z + Math.sin(a) * r;
+        if (!world.blockedAt(nx, nz, radius, y0, y1)) return [nx, nz];
+      }
+    }
+    return [x, z];
+  };
+
   world.updateSun = (dt = 0.016) => {
     if (!world.sun) return;
     const k = Math.min(1, dt * 2.4);
