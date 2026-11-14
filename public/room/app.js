@@ -1318,6 +1318,8 @@ function playDrop() { playTone({ from: 190, to: 105, dur: 0.16, vol: 0.085, type
 function playTap() { playTone({ from: 520, to: 610, dur: 0.065, vol: 0.032, type: 'sine' }); }
 let walkPredict = null;
 let lastDisplayPos = null;
+let seatSolveKey = '';
+let seatSolve = null;   // 家具落点解（缓存）
 
 // 事件文案统一成「你」的视角（也兼容历史数据里的旧文案）
 function toSecondPerson(text) {
@@ -4101,18 +4103,23 @@ function frame(now) {
       || seatOverride
     );
     if (onFurniture && !charDrag?.active && !placeHold) {
-      const expected = Math.max(0.05, her.elev || 0);
-      const seat = world.bestSeatPoint(drawPos[0], drawPos[1], expected, 0.5);
-      if (seat) {
-        drawPos = [seat[0], seat[1]];
-        drawElev = Math.max(drawElev, seat[2] + 0.012);   // 躺姿也贴合真实床面
-      } else {
-        // 座面上找不到干净点：退回家具外最近的可站位置
-        const foot = (her.elev || 0) + 0.03;
-        const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28, foot, foot + 1.35);
-        drawPos = [cx, cz];
+      // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
+      const qx = Math.round(drawPos[0] * 10);
+      const qz = Math.round(drawPos[1] * 10);
+      const qy = Math.round((her.elev || 0) * 100);
+      const cacheKey = `${her.room}:${her.spot}:${qx}:${qz}:${qy}`;
+      if (seatSolveKey !== cacheKey) {
+        seatSolveKey = cacheKey;
+        const expected = Math.max(0.05, her.elev || 0);
+        const seat = world.bestSeatPoint(drawPos[0], drawPos[1], expected, 0.5);
+        seatSolve = seat ? { pos: [seat[0], seat[1]], y: seat[2] } : null;
+      }
+      if (seatSolve) {
+        drawPos = [seatSolve.pos[0], seatSolve.pos[1]];
+        drawElev = Math.max(drawElev, seatSolve.y + 0.012);
       }
     }
+
     // 立绘是平面：站在家具上时，家具近侧的栏杆会挡在她腿前，
     // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
     // 但深度排到了家具前面，视觉上就不会互相穿插。

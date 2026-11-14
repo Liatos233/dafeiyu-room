@@ -889,119 +889,126 @@ function mergeStaticDecor(world) {
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
   if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
-  // ── 几何感知：给她算「脚下真实表面」和「身边有没有实体」 ────────────
-  // 立绘是平面，站/坐高度如果写死常量，遇到床品、靠垫、伞杆就会互相穿插。
-  // 这里直接对场景做射线检测，把高度和可站位置交给几何本身决定。
-  const _geoRay = new THREE.Raycaster();
-  const _geoDown = new THREE.Vector3(0, -1, 0);
+  try { world.buildOccupancy(); } catch (e) { console.warn('[occupancy] 构建失败', e); }
+  // ── 占用网格：一次性栅格化整间屋子，之后所有高度/占位查询都是 O(1) ───────
+  // 逐帧打射线（几十次/帧）是上一版卡顿的根源，这里改成预计算。
+  const GRID = { x0: -1.5, z0: -8.0, cell: 0.1, w: 0, h: 0 };
+  GRID.w = Math.ceil((15.5 - GRID.x0) / GRID.cell);
+  GRID.h = Math.ceil((15.0 - GRID.z0) / GRID.cell);
+  const cellTop = new Float32Array(GRID.w * GRID.h);     // 该格最高实体顶面
+  const cellLow = new Float32Array(GRID.w * GRID.h);     // 该格最低实体底面
+  const cellSolid = new Uint8Array(GRID.w * GRID.h);     // 该格是否有实体
 
-  const _geoSkip = (o) => {
+  const _box = new THREE.Box3();
+  const _occSkip = (o) => {
     if (!o || o.visible === false) return true;
     if (o === world.sky || o === world.poolWater || o === world.tvScreen) return true;
     const m = o.material;
-    if (m && !Array.isArray(m) && m.opacity === 0) return true;   // 热点用的透明柱
+    if (m && !Array.isArray(m) && (m.opacity === 0 || m.transparent && (m.opacity ?? 1) < 0.35)) return true;
     return false;
   };
 
-  /** (x,z) 处最高的可站立表面高度：多点采样取最高，避免落在坐垫缝/褶皱里 */
-  world.surfaceYAt = (x, z, from = 3.2) => {
-    const offsets = [[0, 0], [0.14, 0], [-0.14, 0], [0, 0.14], [0, -0.14]];
+  world.buildOccupancy = () => {
+    cellTop.fill(-1);
+    cellLow.fill(9);
+    cellSolid.fill(0);
+    world.root.updateMatrixWorld(true);
+    world.root.traverse((o) => {
+      if (!o.isMesh || o.isInstancedMesh) return;
+      if (_occSkip(o)) return;
+      _box.setFromObject(o);
+      if (!Number.isFinite(_box.min.x)) return;
+      const i0 = Math.max(0, Math.floor((_box.min.x - GRID.x0) / GRID.cell));
+      const i1 = Math.min(GRID.w - 1, Math.ceil((_box.max.x - GRID.x0) / GRID.cell));
+      const j0 = Math.max(0, Math.floor((_box.min.z - GRID.z0) / GRID.cell));
+      const j1 = Math.min(GRID.h - 1, Math.ceil((_box.max.z - GRID.z0) / GRID.cell));
+      for (let j = j0; j <= j1; j += 1) {
+        for (let i = i0; i <= i1; i += 1) {
+          const k = j * GRID.w + i;
+          cellSolid[k] = 1;
+          if (_box.max.y > cellTop[k]) cellTop[k] = _box.max.y;
+          if (_box.min.y < cellLow[k]) cellLow[k] = _box.min.y;
+        }
+      }
+    });
+    return { cells: GRID.w * GRID.h };
+  };
+
+  const cellIndex = (x, z) => {
+    const i = Math.floor((x - GRID.x0) / GRID.cell);
+    const j = Math.floor((z - GRID.z0) / GRID.cell);
+    if (i < 0 || j < 0 || i >= GRID.w || j >= GRID.h) return -1;
+    return j * GRID.w + i;
+  };
+
+  /** (x,z) 处的可站立表面高度（邻域取最高，避免缝隙/圆角） */
+  world.surfaceYAt = (x, z) => {
+    let best = 0;
+    for (let dz = -1; dz <= 1; dz += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const k = cellIndex(x + dx * GRID.cell, z + dz * GRID.cell);
+        if (k < 0) continue;
+        if (!cellSolid[k]) continue;
+        if (cellTop[k] > best) best = cellTop[k];
+      }
+    }
+    return best > 0 ? best : 0;
+  };
+
+  /** 站/坐在 footY 高度时，身体柱里是否有别的东西挡着 */
+  world.blockedAt = (x, z, radius = 0.24, footY = 0, height = 1.35) => {
+    const r = Math.max(1, Math.round(radius / GRID.cell));
+    const ci = Math.floor((x - GRID.x0) / GRID.cell);
+    const cj = Math.floor((z - GRID.z0) / GRID.cell);
+    const top = footY + height;
+    for (let j = cj - r; j <= cj + r; j += 1) {
+      for (let i = ci - r; i <= ci + r; i += 1) {
+        if (i < 0 || j < 0 || i >= GRID.w || j >= GRID.h) continue;
+        const dx = (GRID.x0 + (i + 0.5) * GRID.cell) - x;
+        const dz = (GRID.z0 + (j + 0.5) * GRID.cell) - z;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const k = j * GRID.w + i;
+        if (!cellSolid[k]) continue;
+        // 有实体在「脚底以上、头顶以下」就是挡路
+        if (cellTop[k] > footY + 0.08 && cellLow[k] < top) return true;
+      }
+    }
+    return false;
+  };
+
+  /** 在座面范围内找最佳站立点：同一表面高度 + 身体柱净空，优先靠近原位 */
+  world.bestSeatPoint = (x, z, expectedY, radius = 0.5) => {
+    const step = GRID.cell;
     let best = null;
-    for (const [ox, oz] of offsets) {
-      _geoRay.set(new THREE.Vector3(x + ox, from, z + oz), _geoDown);
-      _geoRay.far = from + 1;
-      const hits = _geoRay.intersectObject(world.root, true);
-      for (const h of hits) {
-        if (_geoSkip(h.object)) continue;
-        if (best === null || h.point.y > best) best = h.point.y;
-        break;
+    let bestScore = -1;
+    for (let dz = -radius; dz <= radius + 1e-6; dz += step) {
+      for (let dx = -radius; dx <= radius + 1e-6; dx += step) {
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const cx = x + dx;
+        const cz = z + dz;
+        const top = world.surfaceYAt(cx, cz);
+        if (Math.abs(top - expectedY) > 0.22) continue;
+        if (world.blockedAt(cx, cz, 0.24, top, 1.35)) continue;
+        const score = 1 - Math.hypot(dx, dz) / radius;
+        if (score > bestScore) { bestScore = score; best = [cx, cz, top]; }
       }
     }
-    return best === null ? 0 : best;
+    return best;
   };
 
-  /** 身体柱（半径内、脚底到头顶）里是否有实体。
-   *  纵向射线查上下遮挡，横向射线查细杆（躺椅木条、伞杆）——只靠纵向采样会漏掉细杆。 */
-  world.blockedAt = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.55) => {
-    const up = new THREE.Vector3(0, 1, 0);
-    // 1) 纵向：半径内的若干采样点向上打
-    const probes = [[0, 0]];
-    for (let i = 0; i < 8; i += 1) {
-      const a = (i / 8) * Math.PI * 2;
-      probes.push([Math.cos(a) * radius * 0.55, Math.sin(a) * radius * 0.55]);
-      probes.push([Math.cos(a) * radius * 0.9, Math.sin(a) * radius * 0.9]);
-    }
-    const heights = [0.03, 0.25, 0.5, 0.8, 1.1, 1.35];
-    for (const [ox, oz] of probes) {
-      for (const dy of heights) {
-        const yStart = y0 + dy;
-        if (yStart > y1) continue;
-        _geoRay.set(new THREE.Vector3(x + ox, yStart, z + oz), up);
-        _geoRay.far = y1 - yStart;
-        const hits = _geoRay.intersectObject(world.root, true);
-        for (const h of hits) {
-          if (_geoSkip(h.object)) continue;
-          if (h.distance <= y1 - yStart) return true;
-        }
-      }
-    }
-    // 2) 横向：从中心向外打，捕捉细杆/边条
-    const dirs = 16;
-    for (let i = 0; i < dirs; i += 1) {
-      const a = (i / dirs) * Math.PI * 2;
-      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-      for (const dy of [0.08, 0.3, 0.55, 0.85, 1.15]) {
-        const y = y0 + dy;
-        if (y > y1) continue;
-        _geoRay.set(new THREE.Vector3(x, y, z), dir);
-        _geoRay.far = radius + 0.02;
-        const hits = _geoRay.intersectObject(world.root, true);
-        for (const h of hits) {
-          if (_geoSkip(h.object)) continue;
-          if (h.distance <= radius + 0.02) return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  /** 在附近找一个身体柱不撞东西的落点 */
-  world.nearestClearSpot = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.55) => {
-    if (!world.blockedAt(x, z, radius, y0, y1)) return [x, z];
+  /** 附近找一个身体柱不撞东西的地面位置 */
+  world.nearestClearSpot = (x, z, radius = 0.3) => {
+    if (!world.blockedAt(x, z, radius, 0, 1.4)) return [x, z];
     for (let ring = 1; ring <= 12; ring += 1) {
-      const r = ring * 0.07;
+      const r = ring * 0.08;
       for (let i = 0; i < 14; i += 1) {
         const a = (i / 14) * Math.PI * 2 + ring * 0.31;
         const nx = x + Math.cos(a) * r;
         const nz = z + Math.sin(a) * r;
-        if (!world.blockedAt(nx, nz, radius, y0, y1)) return [nx, nz];
+        if (!world.blockedAt(nx, nz, radius, 0, 1.4)) return [nx, nz];
       }
     }
     return [x, z];
-  };
-
-  /** 在座面范围内找一个「身体柱不撞东西、且仍在同一座面」的位置 */
-  world.bestSeatPoint = (x, z, expectedY, radius = 0.5) => {
-    const bodyR = 0.24;
-    let best = null;
-    let bestScore = -1;
-    for (let ring = 0; ring <= 10; ring += 1) {
-      const r = ring * 0.05;
-      const steps = ring === 0 ? 1 : 12 + ring * 4;
-      for (let i = 0; i < steps; i += 1) {
-        const a = (i / steps) * Math.PI * 2;
-        const cx = x + Math.cos(a) * r;
-        const cz = z + Math.sin(a) * r;
-        const top = world.surfaceYAt(cx, cz, expectedY + 0.6);
-        if (Math.abs(top - expectedY) > 0.22) continue;      // 必须还是同一块座面
-        if (world.blockedAt(cx, cz, bodyR, top + 0.03, top + 1.35)) continue;
-        const score = 1 - r / Math.max(0.01, radius);
-        if (score > bestScore) { bestScore = score; best = [cx, cz, top]; }
-        if (ring === 0) break;
-      }
-      if (best && r > 0.06) break;   // 找到第一圈干净点就停（最靠近原位）
-    }
-    return best;
   };
 
   world.updateSun = (dt = 0.016) => {
