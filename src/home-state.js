@@ -1183,6 +1183,16 @@ function setActivity(state, kind, activity, pose, elev, facing) {
   state.walking = false;
 }
 
+// 带顶面的禁走区 = 可站立家具内部：地面高度不能走进去
+function seatZoneAt(pos) {
+  if (!Array.isArray(pos)) return null;
+  for (const item of NAV_KEEPOUT) {
+    if (!(Number(item.top) > 0.05)) continue;
+    if (pointInRect(pos, item.rect, 0.02)) return item;
+  }
+  return null;
+}
+
 function beginRoute(state, target, now, env = {}) {
   // 从坐具上离开：先退到座点并落地，再开始寻路
   {
@@ -1220,6 +1230,24 @@ function beginRoute(state, target, now, env = {}) {
   const mountFrom = curSeatY > 0.05 && Array.isArray(fromSpotDef?.mount) ? fromSpotDef.mount : null;
   // 从坐具起身：先从固定座点下到地面，再走；上座：路线终点就是固定座点
   const fromPos = mountFrom ? mountFrom.slice() : rawFrom;
+  // 目标点如果落在可站立家具内部（地面高度），推到区域外，避免"走进去"
+  if (!mountTo && target.spot === 'free' && Array.isArray(target.pos)) {
+    const zone = seatZoneAt(target.pos);
+    if (zone) {
+      const [x0, z0, x1, z1] = zone.rect;
+      const [px, pz] = target.pos;
+      const d = [px - x0, x1 - px, pz - z0, z1 - pz];
+      const m = Math.min(...d);
+      const out = 0.16;
+      let nx = px;
+      let nz = pz;
+      if (m === d[0]) nx = x0 - out;
+      else if (m === d[1]) nx = x1 + out;
+      else if (m === d[2]) nz = z0 - out;
+      else nz = z1 + out;
+      target = { ...target, pos: [nx, nz] };
+    }
+  }
   const routeTarget = mountTo ? { ...target, pos: mountTo.slice() } : target;
   const route = buildRoute(fromPos, fromSpotDef, routeTarget, now, speed);
   if (route) route.target = target;

@@ -53,10 +53,15 @@ const evalJs = async (expr) => {
 const steps = [
   { name: 'walk-kitchen', action: { action: 'command', room: 'kitchen', spot: 'sink' }, wait: 9000 },
   { name: 'mount-sofa', action: { action: 'command', room: 'living', spot: 'sofa' }, wait: 12000 },
-  { name: 'dismount-kitchen', action: { action: 'command', room: 'kitchen', spot: 'stove' }, wait: 10000 },
+  { name: 'dismount-sofa', action: { action: 'command', room: 'kitchen', spot: 'stove' }, wait: 10000 },
   { name: 'mount-bed', action: { action: 'command', room: 'her_room', spot: 'bed' }, wait: 14000 },
+  { name: 'dismount-bed', action: { action: 'command', room: 'living', spot: 'sofa' }, wait: 13000 },
   { name: 'mount-lounger', action: { action: 'command', room: 'pool', spot: 'lounger' }, wait: 14000 },
-  { name: 'mount-chair', action: { action: 'command', room: 'balcony', spot: 'chair' }, wait: 14000 }
+  { name: 'dismount-lounger', action: { action: 'command', room: 'pool', spot: 'deck_w' }, wait: 9000 },
+  { name: 'mount-chair', action: { action: 'command', room: 'balcony', spot: 'chair' }, wait: 14000 },
+  { name: 'dismount-chair', action: { action: 'command', room: 'living', spot: 'sofa' }, wait: 13000 },
+  // 直接点家具内部的地面（应被推到区域外，而不是走进去）
+  { name: 'floor-inside-sofa', action: { action: 'go', pos: [6.3, 5.1] }, wait: 9000 }
 ];
 
 const frames = [];
