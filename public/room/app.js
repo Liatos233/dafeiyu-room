@@ -4101,12 +4101,20 @@ function frame(now) {
       || seatOverride
     );
     if (onFurniture && !charDrag?.active && !placeHold) {
-      const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28);
-      if (cx !== drawPos[0] || cz !== drawPos[1]) drawPos = [cx, cz];
-      if (her.pose !== 'lie') {
-        const probeFrom = Math.max(0.7, (her.elev || 0) + 0.55);
-        const top = world.surfaceYAt(cx, cz, probeFrom);
-        if (Number.isFinite(top)) drawElev = Math.max(drawElev, top + 0.012);
+      const probeFrom = Math.max(0.7, (her.elev || 0) + 0.55);
+      let top = world.surfaceYAt(drawPos[0], drawPos[1], probeFrom);
+      if (her.pose !== 'lie' && Number.isFinite(top)) {
+        drawElev = Math.max(drawElev, top + 0.012);
+      }
+      // 从脚下表面往上检查身体柱，别从地面开始（否则会把自己脚底判成障碍）
+      const foot = (Number.isFinite(drawElev) ? drawElev : 0) + 0.03;
+      const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28, foot, foot + 1.35);
+      if (cx !== drawPos[0] || cz !== drawPos[1]) {
+        drawPos = [cx, cz];
+        top = world.surfaceYAt(cx, cz, probeFrom);
+        if (her.pose !== 'lie' && Number.isFinite(top)) {
+          drawElev = Math.max(drawElev, top + 0.012);
+        }
       }
     }
 
