@@ -1991,7 +1991,7 @@ function clipFor(her) {
   // 否则会用站姿站在坐垫里，看起来就是穿模。
   if ((her.elev || 0) > 0.2) {
     if (her.pose === 'lie') return her.asleep ? 'sleep_loop' : 'nap';
-    if (her.pose === 'sit') return 'mutter';   // 坐姿循环（原本只给马桶用）
+    if (her.pose === 'sit') return '沙发打瞌睡';   // 唯一的坐姿循环帧
   }
 
   // 自由视角只在站立/自由落点/行走时用背面；坐着、吃饭、反应等仍保留正面动作。
