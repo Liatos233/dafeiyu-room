@@ -920,11 +920,18 @@ function mergeStaticDecor(world) {
     return best === null ? 0 : best;
   };
 
-  /** 身体柱（半径内、脚底到头顶）里是否有实体，立绘平面被穿透就来自这里 */
+  /** 身体柱（半径内、脚底到头顶）里是否有实体。
+   *  纵向射线查上下遮挡，横向射线查细杆（躺椅木条、伞杆）——只靠纵向采样会漏掉细杆。 */
   world.blockedAt = (x, z, radius = 0.3, y0 = 0.12, y1 = 1.55) => {
     const up = new THREE.Vector3(0, 1, 0);
-    const probes = [[0, 0], [radius * 0.6, 0], [-radius * 0.6, 0], [0, radius * 0.6], [0, -radius * 0.6]];
-    const heights = [0.04, 0.3, 0.62, 0.95, 1.3];
+    // 1) 纵向：半径内的若干采样点向上打
+    const probes = [[0, 0]];
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2;
+      probes.push([Math.cos(a) * radius * 0.55, Math.sin(a) * radius * 0.55]);
+      probes.push([Math.cos(a) * radius * 0.9, Math.sin(a) * radius * 0.9]);
+    }
+    const heights = [0.03, 0.25, 0.5, 0.8, 1.1, 1.35];
     for (const [ox, oz] of probes) {
       for (const dy of heights) {
         const yStart = y0 + dy;
@@ -935,6 +942,23 @@ function mergeStaticDecor(world) {
         for (const h of hits) {
           if (_geoSkip(h.object)) continue;
           if (h.distance <= y1 - yStart) return true;
+        }
+      }
+    }
+    // 2) 横向：从中心向外打，捕捉细杆/边条
+    const dirs = 16;
+    for (let i = 0; i < dirs; i += 1) {
+      const a = (i / dirs) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      for (const dy of [0.08, 0.3, 0.55, 0.85, 1.15]) {
+        const y = y0 + dy;
+        if (y > y1) continue;
+        _geoRay.set(new THREE.Vector3(x, y, z), dir);
+        _geoRay.far = radius + 0.02;
+        const hits = _geoRay.intersectObject(world.root, true);
+        for (const h of hits) {
+          if (_geoSkip(h.object)) continue;
+          if (h.distance <= radius + 0.02) return true;
         }
       }
     }
