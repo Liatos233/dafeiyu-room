@@ -74,7 +74,7 @@ export const HOME_LAYOUT = Object.freeze({
       tv: { pos: [6.3, 3.2], pose: 'sit', facing: 0, label: '电视前', access: 'living_tvfront', elev: 0.02 }
     },
     her_room: {
-      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top', mount: [10.78, 1.5] },
+      bed: { pos: [11.4, 1.32], pose: 'lie', facing: 180, label: '床上', access: 'beside', support: 'bed_top', mount: [10.20, 1.5] },
       bedside: { pos: [10.1, 1.55], pose: 'stand', facing: 90, label: '床边', access: 'beside' },
       desk: { pos: [9.5, 3.15], pose: 'stand', facing: -90, label: '书桌前', access: 'desk', support: 'desk_seat' },
       wardrobe: { pos: [12.1, 3.45], pose: 'stand', facing: 0, label: '衣柜前', access: 'wardrobe' },
@@ -92,10 +92,10 @@ export const HOME_LAYOUT = Object.freeze({
       washer: { pos: [9.7, 6.5], pose: 'stand', facing: 90, label: '洗衣机前', access: 'laundry' }
     },
     balcony: {
-        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.0, 7.85] },
+        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.0, 7.70] },
       },
     pool: {
-      lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.72, 10.58] },
+      lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.38, 10.58] },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
       deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' }
     },
