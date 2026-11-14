@@ -2118,6 +2118,60 @@ async function chaisePlay() {
   void act('go', { pos: CHAISE_STAGE });
 }
 
+// ── 通用「上座玩」：走到座点 → 抬到座面 → 跳一会儿 → 落回地面 ──────
+let seatPhase = 'idle';     // idle | walk | up | play | down
+let seatT0 = 0;
+let seatCfg = null;
+
+function seatPlay(cfg) {
+  if (!state?.her) { toast('她还没出来'); return; }
+  if (state.her.asleep) { toast('她睡着了，先叫醒'); return; }
+  seatCfg = cfg;
+  seatPhase = 'walk';
+  seatT0 = Date.now();
+  toast(`${PET_NAME}${cfg.toast || '去玩'}`);
+  void act('go', { pos: cfg.mount });
+}
+
+function seatPlayHer(her) {
+  if (!her || seatPhase === 'idle' || !seatCfg) return her;
+  const now = Date.now();
+  const ease = (t) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
+
+  if (seatPhase === 'walk') {
+    if (now - seatT0 > 20000) { seatPhase = 'idle'; return her; }
+    if (her.walking) return her;
+    const d = Math.hypot((her.pos?.[0] || 0) - seatCfg.mount[0], (her.pos?.[1] || 0) - seatCfg.mount[1]);
+    if (d < 0.8) { seatPhase = 'up'; seatT0 = now; }
+    return her;
+  }
+  if (seatPhase === 'up') {
+    const t = Math.min(1, (now - seatT0) / 520);
+    const e = ease(t);
+    const pos = [
+      seatCfg.mount[0] + (seatCfg.seat[0] - seatCfg.mount[0]) * e,
+      seatCfg.mount[1] + (seatCfg.seat[1] - seatCfg.mount[1]) * e
+    ];
+    if (t >= 1) { seatPhase = 'play'; seatT0 = now; }
+    return { ...her, pos, elev: seatCfg.elev * e, pose: 'sit', walking: false, kind: 'idle' };
+  }
+  if (seatPhase === 'play') {
+    if (now - seatT0 > (seatCfg.holdMs || 15000)) { seatPhase = 'down'; seatT0 = now; }
+    return { ...her, pos: seatCfg.seat.slice(), elev: seatCfg.elev, pose: 'sit', walking: false, kind: 'idle' };
+  }
+  if (seatPhase === 'down') {
+    const t = Math.min(1, (now - seatT0) / 520);
+    const e = ease(t);
+    const pos = [
+      seatCfg.seat[0] + (seatCfg.mount[0] - seatCfg.seat[0]) * e,
+      seatCfg.seat[1] + (seatCfg.mount[1] - seatCfg.seat[1]) * e
+    ];
+    if (t >= 1) { seatPhase = 'idle'; return her; }
+    return { ...her, pos, elev: seatCfg.elev * (1 - e), pose: 'sit', walking: false };
+  }
+  return her;
+}
+
 // 上沙发：只能从两侧（绿框位置）上，坐到红框座面高度
 const SOFA_STAGE_L = [5.12, 4.42];   // 沙发正前方·左角（只能从这里上）
 const SOFA_STAGE_R = [7.48, 4.42];   // 沙发正前方·右角
@@ -2262,6 +2316,15 @@ function syncCharacter() {
   }
   if (PIN_TEST) {
     if (!syncCharacter._pinned) { syncCharacter._pinned = true; void actor.setClip('idle'); }
+    return;
+  }
+  if (seatPhase === 'play' && !her.asleep) {
+    if (actor.current !== 'dance') actor.setClip('dance');
+    setBubble('坐在上面玩', 5000);
+    return;
+  }
+  if (seatPhase === 'up' || seatPhase === 'down') {
+    if (actor.current !== 'mutter') actor.setClip('mutter');
     return;
   }
   if (sofaPhase === 'play' && !her.asleep) {
@@ -2593,8 +2656,11 @@ $('infoGo').addEventListener('click', () => {
   // 其余交给服务端 spot（服务端会按 support/mount 处理，避免穿模）。
   if (room === 'living' && spot === 'sofa') { void sofaPlay(); return; }
   if (room === 'pool' && (spot === 'lounger' || spot === 'deck_e')) {
-    // 沙滩躺椅：走服务端 spot（带 support/mount），不要用阳台躺椅的客户端脚本
-    act('command', { room: 'pool', spot: 'lounger' });
+    seatPlay({ mount: [11.72, 10.58], seat: [12.30, 10.58], elev: 0.445, toast: '去沙滩躺椅上玩' });
+    return;
+  }
+  if (room === 'her_room' && spot === 'bed') {
+    seatPlay({ mount: [10.78, 1.5], seat: [11.4, 1.32], elev: 0.54, toast: '去床上玩' });
     return;
   }
   if (room === 'balcony' && spot === 'chair') { act('command', { room: 'balcony', spot: 'chair' }); return; }
@@ -3986,10 +4052,11 @@ function frame(now) {
     };
   }
 
-    const shownHer = pinHer(chaisePlayHer(sofaPlayHer(swimHer(PREVIEW ? previewHer(her) : her))));
+    const shownHer = pinHer(chaisePlayHer(sofaPlayHer(seatPlayHer(swimHer(PREVIEW ? previewHer(her) : her)))));
     // 有“坐上去/躺上去”的覆盖时，位置也要跟着覆盖走，否则人会站在原地被抬高
     const seatedPhase = ['rise', 'enter', 'play', 'exit', 'lower'];
     const seatOverride = seatedPhase.includes(chaisePhase) || seatedPhase.includes(sofaPhase)
+      || ['up', 'play', 'down'].includes(seatPhase)
       || PREVIEW || PIN_TEST;
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
     bubbleAnchorElev = displayElevFor(shownHer);
