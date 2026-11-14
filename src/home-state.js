@@ -2308,6 +2308,8 @@ export function homeView(state, now = Date.now(), env = {}) {
       facing: Math.round(currentFacing(s, now) * 10) / 10,
       elev: s.elev || 0,
       walking,
+      // 正在上/下座：客户端据此不做位置/高度缓动，避免缓动滞后导致穿过坐垫
+      transitioning: !!(s.mounting || s.dismounting),
       runStyle,
       speed: s.route?.speed || 0,
       route: s.route ? s.route.points : [],

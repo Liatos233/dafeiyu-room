@@ -4092,6 +4092,8 @@ function frame(now) {
     }
     actor.update(dt, camera, {
       pos: seatOverride ? shownHer.pos : displayPos, elev: bubbleAnchorElev, walking: walkingNow, flip,
+      // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫
+      snap: SHOT || seatOverride || her.transitioning === true,
       drinking: her.kind === 'drink' && !her.asleep
     });
     const pose = {
