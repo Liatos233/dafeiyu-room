@@ -67,7 +67,7 @@ export const HOME_LAYOUT = Object.freeze({
       dining: { pos: [2.1, 6.3], pose: 'stand', facing: 0, label: '餐桌边', access: 'dining_s', support: 'dining_seat' }
     },
     living: {
-      sofa: { pos: [6.3, 5.12], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', support: 'sofa_seat', mount: [6.3, 4.55] },
+      sofa: { pos: [6.3, 4.98], pose: 'sit', facing: 0, label: '沙发上', access: 'sofa_front_l', support: 'sofa_seat', mount: [6.3, 4.45] },
       water: { pos: [1.52, 3.26], pose: 'stand', facing: -90, label: '饮水机旁', access: 'living_wm' },
       shelf: { pos: [7.85, 1.75], pose: 'stand', facing: 90, label: '书架前', access: 'living_n' },
       rug: { pos: [5.4, 2.7], pose: 'sit', facing: 180, label: '地毯上', access: 'living_rug', support: 'rug' },
