@@ -4101,23 +4101,18 @@ function frame(now) {
       || seatOverride
     );
     if (onFurniture && !charDrag?.active && !placeHold) {
-      const probeFrom = Math.max(0.7, (her.elev || 0) + 0.55);
-      let top = world.surfaceYAt(drawPos[0], drawPos[1], probeFrom);
-      if (her.pose !== 'lie' && Number.isFinite(top)) {
-        drawElev = Math.max(drawElev, top + 0.012);
-      }
-      // 从脚下表面往上检查身体柱，别从地面开始（否则会把自己脚底判成障碍）
-      const foot = (Number.isFinite(drawElev) ? drawElev : 0) + 0.03;
-      const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28, foot, foot + 1.35);
-      if (cx !== drawPos[0] || cz !== drawPos[1]) {
+      const expected = Math.max(0.05, her.elev || 0);
+      const seat = world.bestSeatPoint(drawPos[0], drawPos[1], expected, 0.5);
+      if (seat) {
+        drawPos = [seat[0], seat[1]];
+        if (her.pose !== 'lie') drawElev = Math.max(drawElev, seat[2] + 0.012);
+      } else {
+        // 座面上找不到干净点：退回家具外最近的可站位置
+        const foot = (her.elev || 0) + 0.03;
+        const [cx, cz] = world.nearestClearSpot(drawPos[0], drawPos[1], 0.28, foot, foot + 1.35);
         drawPos = [cx, cz];
-        top = world.surfaceYAt(cx, cz, probeFrom);
-        if (her.pose !== 'lie' && Number.isFinite(top)) {
-          drawElev = Math.max(drawElev, top + 0.012);
-        }
       }
     }
-
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,

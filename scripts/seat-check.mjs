@@ -45,10 +45,10 @@ await send('Page.navigate', { url: 'http://101.245.76.51:3100/room/?sky=day&hour
 await sleep(26000);
 
 const seats = [
-  { room: 'living', spot: 'sofa', cam: [6.3, 1.3, 3.4], look: [6.3, 0.8, 5.0], name: 'sofa' },
-  { room: 'her_room', spot: 'bed', cam: [11.5, 1.7, 3.5], look: [11.4, 0.85, 1.4], name: 'bed' },
-  { room: 'pool', spot: 'lounger', cam: [11.0, 1.9, 12.9], look: [12.4, 0.75, 10.6], name: 'lounger' },
-  { room: 'balcony', spot: 'chair', cam: [4.4, 1.6, 9.9], look: [2.9, 0.85, 8.3], name: 'chair' }
+  { room: 'living', spot: 'sofa', cam: [6.3, 2.0, 1.9], look: [6.3, 0.7, 5.0], name: 'sofa' },
+  { room: 'her_room', spot: 'bed', cam: [11.5, 2.2, 4.6], look: [11.4, 0.7, 1.5], name: 'bed' },
+  { room: 'pool', spot: 'lounger', cam: [10.4, 2.3, 13.2], look: [12.4, 0.7, 10.6], name: 'lounger' },
+  { room: 'balcony', spot: 'chair', cam: [5.2, 2.0, 10.6], look: [2.9, 0.8, 8.2], name: 'chair' }
 ];
 
 const evalJs = async (expr) => {

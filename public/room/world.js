@@ -956,6 +956,30 @@ function mergeStaticDecor(world) {
     return [x, z];
   };
 
+  /** 在座面范围内找一个「身体柱不撞东西、且仍在同一座面」的位置 */
+  world.bestSeatPoint = (x, z, expectedY, radius = 0.5) => {
+    const bodyR = 0.24;
+    let best = null;
+    let bestScore = -1;
+    for (let ring = 0; ring <= 10; ring += 1) {
+      const r = ring * 0.05;
+      const steps = ring === 0 ? 1 : 12 + ring * 4;
+      for (let i = 0; i < steps; i += 1) {
+        const a = (i / steps) * Math.PI * 2;
+        const cx = x + Math.cos(a) * r;
+        const cz = z + Math.sin(a) * r;
+        const top = world.surfaceYAt(cx, cz, expectedY + 0.6);
+        if (Math.abs(top - expectedY) > 0.22) continue;      // 必须还是同一块座面
+        if (world.blockedAt(cx, cz, bodyR, top + 0.03, top + 1.35)) continue;
+        const score = 1 - r / Math.max(0.01, radius);
+        if (score > bestScore) { bestScore = score; best = [cx, cz, top]; }
+        if (ring === 0) break;
+      }
+      if (best && r > 0.06) break;   // 找到第一圈干净点就停（最靠近原位）
+    }
+    return best;
+  };
+
   world.updateSun = (dt = 0.016) => {
     if (!world.sun) return;
     const k = Math.min(1, dt * 2.4);
