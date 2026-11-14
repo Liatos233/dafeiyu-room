@@ -1081,13 +1081,31 @@ export function positionOnRoute(route, now) {
   return pts.at(-1).slice();
 }
 
-// 上/下座插值：t=0 在地面座点，t=1 在座面上
+// 上/下座插值。分两段走，避免身体斜着穿过坐垫/床沿：
+//   上座：0~0.55 先在座点抬到座面高度，0.55~1 再横移进座位
+//   下座：0~0.55 先横移退到座点，0.55~1 再落回地面
 function seatLerp(seg, now) {
   const t = Math.max(0, Math.min(1, (now - seg.t0) / Math.max(1, seg.dur)));
-  const e = t * t * (3 - 2 * t);
-  const x = seg.from[0] + (seg.to[0] - seg.from[0]) * e;
-  const z = seg.from[1] + (seg.to[1] - seg.from[1]) * e;
-  const y = (seg.seatY || 0) * (seg.up ? e : 1 - e);
+  const smooth = (v) => {
+    const c = Math.max(0, Math.min(1, v));
+    return c * c * (3 - 2 * c);
+  };
+  const seatY = Number(seg.seatY) || 0;
+  const RISE = 0.55;   // 抬升/横移的分界
+
+  let h;   // 横向进度
+  let v;   // 高度进度
+  if (seg.up) {
+    v = smooth(t / RISE);
+    h = smooth((t - RISE) / (1 - RISE));
+  } else {
+    h = smooth(t / RISE);
+    v = smooth((t - RISE) / (1 - RISE));
+  }
+
+  const x = seg.from[0] + (seg.to[0] - seg.from[0]) * h;
+  const z = seg.from[1] + (seg.to[1] - seg.from[1]) * h;
+  const y = seg.up ? seatY * v : seatY * (1 - v);
   return { pos: [x, z], elev: y, done: t >= 1 };
 }
 
