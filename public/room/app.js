@@ -4113,6 +4113,19 @@ function frame(now) {
         drawPos = [cx, cz];
       }
     }
+    // 立绘是平面：站在家具上时，家具近侧的栏杆会挡在她腿前，
+    // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
+    // 但深度排到了家具前面，视觉上就不会互相穿插。
+    if (onFurniture && !walkingNow && !charDrag?.active && !placeHold) {
+      const dx = camera.position.x - drawPos[0];
+      const dz = camera.position.z - drawPos[1];
+      const len = Math.hypot(dx, dz) || 1;
+      drawPos = [
+        drawPos[0] + (dx / len) * 0.22,
+        drawPos[1] + (dz / len) * 0.22
+      ];
+    }
+
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
