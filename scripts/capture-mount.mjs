@@ -63,16 +63,35 @@ await send('Runtime.evaluate', {
 let idx = 0;
 for (let i = 0; i < 120; i += 1) {
   const r = await send('Runtime.evaluate', {
-    expression: `(() => { const h = window.__state?.her || {}; return (h.activity || '') + '|' + (h.walking ? 'walk' : 'still'); })()`,
-    returnByValue: true
+    expression: `(async () => {
+      const res = await fetch('/api/home/state');
+      const d = await res.json();
+      const h = (d && d.her) || {};
+      return (h.activity || '') + '|' + (h.walking ? 'walk' : 'still') + '|' + (h.elev ?? 0);
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
   });
   const txt = String(r.result?.result?.value || '');
   if (txt.includes('坐上去') || txt.includes('到了沙发')) {
-    for (let k = 0; k < 8; k += 1) {
-      const shot = await send('Page.captureScreenshot', { format: 'png' });
-      if (shot.result?.data) writeFileSync(join(OUT_DIR, `f${String(idx).padStart(2, '0')}.png`), Buffer.from(shot.result.data, 'base64'));
+    for (let k = 0; k < 10; k += 1) {
+      const shot = await send('Runtime.evaluate', {
+        expression: `(() => {
+          const T = window.__THREE, w = window.__getWorld?.(), r = window.__renderer;
+          if (!T || !w || !r) return null;
+          const cam = new T.PerspectiveCamera(42, r.domElement.width / r.domElement.height, 0.1, 200);
+          cam.position.set(6.3, 1.25, 3.0);
+          cam.lookAt(6.3, 0.85, 5.2);
+          cam.updateMatrixWorld(true);
+          r.render(w.scene, cam);
+          return r.domElement.toDataURL('image/png');
+        })()`,
+        returnByValue: true
+      });
+      const data = shot.result?.result?.value;
+      if (data) writeFileSync(join(OUT_DIR, `f${String(idx).padStart(2, '0')}.png`), Buffer.from(String(data).split(',')[1], 'base64'));
       idx += 1;
-      await sleep(120);
+      await sleep(80);
     }
     break;
   }
