@@ -165,7 +165,7 @@ app/
 - **角色**：`actor.js` 2D 立绘，三层交叉淡化；`clipFor()` 决定当前片段（走/坐/睡/动作），`app.js` 里做最短保持
 - **天气**：客户端选择或自动轮换，粒子/雾/地面湿滑在 `world.updateEnvironment`；`ambience.js` 按天气+时段出环境音
 - **菜园**：`garden-world.js` 建菜园场景，`garden-ui.js` 面板，`garden-state.js` 与服务端同构的规则
-- **导航调试**：`?nav=1` 画路点/连线/禁区；`?edit=1` 打开模型编辑器
+- **导航调试**：`?nav=1`（或开发模式）打开地图，默认是 300×210 小卡，点一下放大；滚轮缩放地图内容、拖动平移。地图覆盖全域（房间 + 菜园 + 泳池），标记：N=路点、S=站位、**PL=可站立平台（青色，带攀爬点圆点）**、K=障碍（红色）。`?edit=1` 打开模型编辑器
 - **调试钩子**（`window`）：`__getWorld()`、`__camera`、`__VIEW`、`__setMode()`、`__setFP()`、`__devEditor`、`__drawState`（角色实际绘制位置/高度/片段）、`__ambience`、`__homeErrors`
 - **常用 URL 参数**（以代码为准）：`sky`、`hour`、`edit`、`nav`、`animdbg`、`skymenu`、`petgroup`、`preview`、`pintest`、`clickmove`、`sound`、`view`
 
