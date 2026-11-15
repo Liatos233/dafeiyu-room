@@ -899,6 +899,7 @@ function mergeStaticDecor(world) {
   const cellSolid = new Uint8Array(GRID.w * GRID.h);     // 该格是否有实体
 
   const _box = new THREE.Box3();
+  const meshBoxes = [];
   const _isUnderCeiling = (o) => {
     if (!world.ceiling) return false;
     for (let p2 = o; p2; p2 = p2.parent) if (p2 === world.ceiling) return true;
@@ -924,6 +925,7 @@ function mergeStaticDecor(world) {
       if (_occSkip(o)) return;
       _box.setFromObject(o);
       if (!Number.isFinite(_box.min.x)) return;
+      meshBoxes.push({ mesh: o, box: _box.clone() });
       const i0 = Math.max(0, Math.floor((_box.min.x - GRID.x0) / GRID.cell));
       const i1 = Math.min(GRID.w - 1, Math.ceil((_box.max.x - GRID.x0) / GRID.cell));
       const j0 = Math.max(0, Math.floor((_box.min.z - GRID.z0) / GRID.cell));
@@ -983,21 +985,35 @@ function mergeStaticDecor(world) {
     return false;
   };
 
+  /** 收集某点附近（水平半径 r 内）的网格，供快速射线检测 */
+  world.nearMeshes = (x, z, r = 1.2) => {
+    const out = [];
+    for (const e of meshBoxes) {
+      const b = e.box;
+      if (b.min.x - r > x || b.max.x + r < x) continue;
+      if (b.min.z - r > z || b.max.z + r < z) continue;
+      if (b.min.y > 2.0) continue;
+      out.push(e.mesh);
+    }
+    return out;
+  };
+
   /** 轻量遮挡检测：4 个水平方向 × 1 个高度 + 1 条垂直射线（约 10ms），给每帧偏置用 */
-  world.quickBlocked = (x, z, radius = 0.2, footY = 0) => {
+  world.quickBlocked = (x, z, radius = 0.2, footY = 0, meshes = null) => {
     const up = new THREE.Vector3(0, 1, 0);
     const rc = new THREE.Raycaster();
+    const targets = meshes || world.root;
     for (let i = 0; i < 4; i += 1) {
       const a = (i / 4) * Math.PI * 2;
       const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
       rc.set(new THREE.Vector3(x, footY + 0.45, z), dir);
       rc.far = radius + 0.02;
-      const hits = rc.intersectObject(world.root, true);
+      const hits = Array.isArray(targets) ? rc.intersectObjects(targets, true) : rc.intersectObject(targets, true);
       for (const h of hits) if (!_occSkip(h.object) && h.distance <= radius + 0.02) return true;
     }
     rc.set(new THREE.Vector3(x, footY + 0.06, z), up);
     rc.far = 1.1;
-    const hits = rc.intersectObject(world.root, true);
+    const hits = Array.isArray(targets) ? rc.intersectObjects(targets, true) : rc.intersectObject(targets, true);
     for (const h of hits) if (!_occSkip(h.object) && h.distance <= 1.1) return true;
     return false;
   };

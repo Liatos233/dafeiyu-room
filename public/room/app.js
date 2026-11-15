@@ -1320,7 +1320,8 @@ let walkPredict = null;
 let lastDisplayPos = null;
 let seatSolveKey = '';
 let seatSolve = null;
-let biasCache = { key: '', off: [0, 0] };   // 家具落点解（缓存）
+let biasCache = { key: '', off: [0, 0] };
+let nearCache = { key: '', meshes: null };   // 家具落点解（缓存）
 
 // 事件文案统一成「你」的视角（也兼容历史数据里的旧文案）
 function toSecondPerson(text) {
@@ -4251,13 +4252,17 @@ function frame(now) {
       const len = Math.hypot(dx, dz) || 1;
       const az = Math.round(Math.atan2(dx, dz) / (Math.PI / 12));
       const bkey = `${her.room}:${her.spot}:${az}`;
+      const nkey = `${her.room}:${her.spot}`;
+      if (nearCache.key !== nkey) {
+        nearCache = { key: nkey, meshes: world.nearMeshes ? world.nearMeshes(base[0], base[1], 1.3) : null };
+      }
       if (biasCache.key !== bkey) {
         let bias = 0.42;
         let off = [0, 0];
         while (bias > 0.005) {
           const cx = (dx / len) * bias;
           const cz = (dz / len) * bias;
-          if (!world.quickBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev)) { off = [cx, cz]; break; }
+          if (!world.quickBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, nearCache.meshes)) { off = [cx, cz]; break; }
           bias -= 0.12;
         }
         biasCache = { key: bkey, off };
