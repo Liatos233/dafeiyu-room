@@ -3083,6 +3083,8 @@ function setDevMode(on) {
   } else {
     if (navMapEl) { navMapEl.remove(); navMapEl = null; }
     if (nav3dGroup) nav3dGroup.visible = false;
+    // 关开发模式时一并收掉房间名标记（它是开发调试用）
+    if (typeof setRoomLabels === 'function' && roomLabelsOn) setRoomLabels(false);
   }
   const btn = document.getElementById('devModeBtn');
   if (btn) { btn.setAttribute('aria-pressed', String(devMode)); btn.textContent = devMode ? '开发模式：开' : '开发模式'; }
@@ -3130,15 +3132,29 @@ function showNavMap(bigMode = navMapBig) {
   const data = NAV_DATA;
   if (!data) { toast('没有路网数据'); return; }
 
-  const W = navMapBig ? Math.min(innerWidth - 80, 1200) : 620;
-  const H = navMapBig ? Math.min(innerHeight - 120, 820) : 430;
-  const pad = 14;
-  const size = data.size || { w: 13.2, d: 9 };
-  const sc = Math.min((W - pad * 2) / size.w, (H - pad * 2) / size.d);
-  const ox = (W - size.w * sc) / 2;
-  const oz = (H - size.d * sc) / 2;
-  const px = (x) => ox + x * sc;
-  const pz = (z) => oz + z * sc;
+  // 世界范围：房间 + 平台 + 站点 + 禁区，全部并起来（菜园/泳池/小径都在里面）
+  const boxes = [];
+  for (const r of data.rooms || []) if (Array.isArray(r.bounds)) boxes.push(r.bounds);
+  for (const pf of data.platforms || []) if (Array.isArray(pf.rect)) boxes.push(pf.rect);
+  for (const k of data.keepout || []) if (Array.isArray(k.rect)) boxes.push(k.rect);
+  for (const sp of data.spots || []) if (Array.isArray(sp.pos)) boxes.push([sp.pos[0], sp.pos[1], sp.pos[0], sp.pos[1]]);
+  for (const p2 of Object.values(data.nodes || {})) if (Array.isArray(p2)) boxes.push([p2[0], p2[1], p2[0], p2[1]]);
+  const M = 0.5;
+  const bounds = boxes.length
+    ? {
+      x0: Math.min(...boxes.map((b) => b[0])) - M,
+      z0: Math.min(...boxes.map((b) => b[1])) - M,
+      x1: Math.max(...boxes.map((b) => b[2])) + M,
+      z1: Math.max(...boxes.map((b) => b[3])) + M
+    }
+    : { x0: 0, z0: 0, x1: 13.2, z1: 9 };
+  const bw = Math.max(1, bounds.x1 - bounds.x0);
+  const bh = Math.max(1, bounds.z1 - bounds.z0);
+
+  const W = navMapBig ? Math.min(innerWidth - 80, 1200) : 320;
+  const H = navMapBig ? Math.min(innerHeight - 120, 820) : 230;
+  const pad = 12;
+  const view = { zoom: 1, panX: 0, panY: 0 };
 
   const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
   const cv = document.createElement('canvas');
@@ -3147,125 +3163,164 @@ function showNavMap(bigMode = navMapBig) {
   cv.height = Math.round(H * dpr);
   cv.style.width = W + 'px';
   cv.style.height = H + 'px';
-  const base = 'z-index:99999;background:rgba(10,16,26,.94);border:1px solid rgba(150,190,230,.35);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.55);cursor:zoom-in;';
+  const base = 'z-index:99999;background:rgba(10,16,26,.94);border:1px solid rgba(150,190,230,.35);border-radius:10px;';
   cv.style.cssText = navMapBig
-    ? 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);' + base + 'cursor:zoom-out;'
-    : 'position:fixed;left:16px;bottom:16px;' + base;
+    ? `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);${base}cursor:grab;`
+    : `position:fixed;left:16px;bottom:74px;${base}cursor:zoom-in;`;
   const old = document.getElementById('navMap');
   if (old) old.remove();
   document.body.appendChild(cv);
   navMapEl = cv;
-  let navZoom = 1;
+  const ctx = cv.getContext('2d');
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const sc = Math.min((W - pad * 2) / bw, (H - pad * 2) / bh) * view.zoom;
+    const ox = (W - bw * sc) / 2 + view.panX;
+    const oz = (H - bh * sc) / 2 + view.panY;
+    const px = (x) => ox + (x - bounds.x0) * sc;
+    const pz = (z) => oz + (z - bounds.z0) * sc;
+
+    // 房间
+    for (const r of data.rooms || []) {
+      const [x0, z0, x1, z1] = r.bounds;
+      ctx.fillStyle = 'rgba(90,140,190,.10)';
+      ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      ctx.strokeStyle = 'rgba(150,190,230,.4)';
+      ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      ctx.fillStyle = 'rgba(200,220,240,.6)';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(r.name, px(x0) + 4, pz(z0) + 13);
+    }
+
+    // 1m 网格
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120,150,180,.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let gx = Math.ceil(bounds.x0); gx <= bounds.x1; gx += 1) {
+      ctx.moveTo(px(gx), pz(bounds.z0));
+      ctx.lineTo(px(gx), pz(bounds.z1));
+    }
+    for (let gz = Math.ceil(bounds.z0); gz <= bounds.z1; gz += 1) {
+      ctx.moveTo(px(bounds.x0), pz(gz));
+      ctx.lineTo(px(bounds.x1), pz(gz));
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // 可站立平台（青色，独立分区）
+    ctx.font = '8px sans-serif';
+    (data.platforms || []).forEach((pf, i) => {
+      if (!Array.isArray(pf.rect)) return;
+      const [x0, z0, x1, z1] = pf.rect;
+      ctx.fillStyle = 'rgba(53,214,200,.20)';
+      ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      ctx.strokeStyle = 'rgba(53,214,200,.8)';
+      ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      ctx.fillStyle = 'rgba(120,245,232,.95)';
+      ctx.fillText('PL' + (i + 1), px(x0) + 2, pz(z0) + (navMapBig ? 10 : 9));
+      if (Array.isArray(pf.climb)) {
+        ctx.beginPath();
+        ctx.arc(px(pf.climb[0]), pz(pf.climb[1]), 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // K 区（真障碍）
+    ctx.font = '8px sans-serif';
+    (data.keepout || []).forEach((k, i) => {
+      const [x0, z0, x1, z1] = k.rect;
+      ctx.fillStyle = 'rgba(240,90,90,.16)';
+      ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      ctx.strokeStyle = 'rgba(240,90,90,.5)';
+      ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
+      if (navMapBig) {
+        ctx.fillStyle = 'rgba(255,150,140,.9)';
+        ctx.fillText('K' + (i + 1), px(x0) + 2, pz(z0) + 9);
+      }
+    });
+
+    // 可走边
+    ctx.strokeStyle = 'rgba(120,200,255,.5)';
+    ctx.beginPath();
+    for (const [a, b] of data.edges || []) {
+      const na = (data.nodes || {})[a];
+      const nb = (data.nodes || {})[b];
+      if (!na || !nb) continue;
+      ctx.moveTo(px(na[0]), pz(na[1]));
+      ctx.lineTo(px(nb[0]), pz(nb[1]));
+    }
+    ctx.stroke();
+
+    // 站点（绿）与路点（黄）
+    ctx.font = '8px sans-serif';
+    (data.spots || []).forEach((sp, i) => {
+      ctx.fillStyle = 'rgba(120,240,170,.9)';
+      ctx.beginPath();
+      ctx.arc(px(sp.pos[0]), pz(sp.pos[1]), 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      if (navMapBig) {
+        ctx.fillStyle = 'rgba(160,250,195,.9)';
+        ctx.fillText(`S${i + 1}`, px(sp.pos[0]) + 4, pz(sp.pos[1]) + 3);
+      }
+    });
+    Object.keys(data.nodes || {}).forEach((id, i) => {
+      const p2 = data.nodes[id];
+      ctx.fillStyle = '#ffd479';
+      ctx.beginPath();
+      ctx.arc(px(p2[0]), pz(p2[1]), 2, 0, Math.PI * 2);
+      ctx.fill();
+      if (navMapBig && view.zoom > 0.85) {
+        ctx.fillStyle = 'rgba(255,230,180,.8)';
+        ctx.fillText('N' + (i + 1), px(p2[0]) + 3, pz(p2[1]) - 2);
+      }
+    });
+
+    if (navMapBig) {
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = 'rgba(220,235,250,.85)';
+      ctx.fillText('N=路点  S=站位  PL=可站立平台  K=障碍  滚轮缩放 / 拖动平移 / 点击切回小卡', 12, H - 12);
+    }
+  }
+
+  draw();
+
+  // 滚轮：缩放地图内容（不缩放页面）
   cv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    navZoom = Math.min(3, Math.max(0.5, navZoom * (1 - e.deltaY * 0.0015)));
-    cv.style.zoom = navZoom;
+    view.zoom = Math.min(6, Math.max(0.5, view.zoom * (1 - e.deltaY * 0.0015)));
+    draw();
   }, { passive: false });
-  const ctx = cv.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  for (const r of data.rooms || []) {
-    const [x0, z0, x1, z1] = r.bounds;
-    ctx.fillStyle = 'rgba(90,140,190,.10)';
-    ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
-    ctx.strokeStyle = 'rgba(150,190,230,.4)';
-    ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
-    ctx.fillStyle = 'rgba(200,220,240,.6)';
-    ctx.font = '11px sans-serif';
-    ctx.fillText(r.name, px(x0) + 4, pz(z0) + 13);
-  }
-
-  // 1 米网格，方便目测距离
-  ctx.save();
-  ctx.strokeStyle = 'rgba(120,170,220,.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let gx = 0; gx <= size.w + 0.001; gx += 1) {
-    ctx.moveTo(px(gx), pz(0));
-    ctx.lineTo(px(gx), pz(size.d));
-  }
-  for (let gz = 0; gz <= size.d + 0.001; gz += 1) {
-    ctx.moveTo(px(0), pz(gz));
-    ctx.lineTo(px(size.w), pz(gz));
-  }
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.font = '8px sans-serif';
-  (data.keepout || []).forEach((k, i) => {
-    const [x0, z0, x1, z1] = k.rect;
-    ctx.fillStyle = 'rgba(240,90,90,.18)';
-    ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
-    ctx.strokeStyle = 'rgba(240,90,90,.55)';
-    ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
-    ctx.fillStyle = 'rgba(255,150,140,.95)';
-    ctx.fillText('K' + (i + 1), px(x0) + 2, pz(z0) + 9);
+  // 拖动平移
+  let drag = null;
+  cv.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, y: e.clientY, px: view.panX, pz: view.panY, moved: 0 };
+    cv.setPointerCapture?.(e.pointerId);
+    cv.style.cursor = 'grabbing';
   });
-
-  ctx.strokeStyle = 'rgba(120,200,255,.5)';
-  ctx.beginPath();
-  for (const [a, b] of data.edges || []) {
-    const na = (data.nodes || {})[a];
-    const nb = (data.nodes || {})[b];
-    if (!na || !nb) continue;
-    ctx.moveTo(px(na[0]), pz(na[1]));
-    ctx.lineTo(px(nb[0]), pz(nb[1]));
-  }
-  ctx.stroke();
-
-  ctx.font = '8px sans-serif';
-  (data.spots || []).forEach((sp, i) => {
-    ctx.fillStyle = 'rgba(120,240,170,.9)';
-    ctx.beginPath();
-    ctx.arc(px(sp.pos[0]), pz(sp.pos[1]), 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(160,250,195,.9)';
-    ctx.fillText(`S${i + 1}·${sp.label || sp.id}`, px(sp.pos[0]) + 4, pz(sp.pos[1]) + 3);
+  cv.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dz = e.clientY - drag.y;
+    drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dz));
+    view.panX = drag.px + dx;
+    view.panY = drag.pz + dz;
+    draw();
   });
-
-  ctx.font = '8px sans-serif';
-  Object.keys(data.nodes || {}).forEach((id, i) => {
-    const p = data.nodes[id];
-    ctx.fillStyle = '#ffd479';
-    ctx.beginPath();
-    ctx.arc(px(p[0]), pz(p[1]), 2.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,230,180,.85)';
-    ctx.fillText('P' + (i + 1), px(p[0]) + 4, pz(p[1]) - 3);
-  });
-
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = 'rgba(220,235,250,.85)';
-  ctx.fillText('P=路点  S=站位  K=家具禁区  蓝线=可走边', 12, H - 12);
-
-  // 比例尺：自动选 0.5 / 1 / 2 / 5 米里最合适的一档
-  {
-    const choices = [0.5, 1, 2, 5, 10];
-    let meters = choices[0];
-    for (const c of choices) if (c * sc <= 150) meters = c;
-    const barPx = meters * sc;
-    const bx = W - 20 - barPx;
-    const by = H - 26;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(220,235,250,.9)';
-    ctx.fillStyle = 'rgba(220,235,250,.9)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(bx + barPx, by);
-    ctx.moveTo(bx, by - 5);
-    ctx.lineTo(bx, by + 5);
-    ctx.moveTo(bx + barPx, by - 5);
-    ctx.lineTo(bx + barPx, by + 5);
-    ctx.stroke();
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${meters} m`, bx + barPx / 2, by - 9);
-    ctx.textAlign = 'left';
-    ctx.restore();
-  }
-  cv.addEventListener('click', () => { showNavMap(!navMapBig); });
+  const endDrag = () => {
+    if (!drag) return;
+    const moved = drag.moved;
+    drag = null;
+    cv.style.cursor = navMapBig ? 'grab' : 'zoom-in';
+    if (moved < 6) showNavMap(!navMapBig);   // 单击切换大小
+  };
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', () => { drag = null; });
 }
+
 bindTimeBar();
 updateTimeUI();
 applyRoomLabels();
