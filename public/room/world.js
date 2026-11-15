@@ -987,12 +987,12 @@ function mergeStaticDecor(world) {
   world.preciseBlocked = (x, z, radius = 0.22, footY = 0, height = 1.35) => {
     const up = new THREE.Vector3(0, 1, 0);
     const rc = new THREE.Raycaster();
-    const dirs = 12;
+    const dirs = 8;
     // 横向：从中心向外，抓细杆/靠背
     for (let i = 0; i < dirs; i += 1) {
       const a = (i / dirs) * Math.PI * 2;
       const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-      for (const dy of [0.1, 0.35, 0.6, 0.9, 1.15]) {
+      for (const dy of [0.15, 0.6, 1.0]) {
         const y = footY + dy;
         if (y > footY + height) continue;
         rc.set(new THREE.Vector3(x, y, z), dir);
@@ -1016,6 +1016,7 @@ function mergeStaticDecor(world) {
     const step = GRID.cell;
     let best = null;
     let bestScore = -1;
+    const candidates = [];
     for (let dz = -radius; dz <= radius + 1e-6; dz += step) {
       for (let dx = -radius; dx <= radius + 1e-6; dx += step) {
         if (dx * dx + dz * dz > radius * radius) continue;
@@ -1023,10 +1024,17 @@ function mergeStaticDecor(world) {
         const cz = z + dz;
         const top = world.surfaceYAt(cx, cz);
         if (Math.abs(top - expectedY) > 0.22) continue;
-        if (world.preciseBlocked(cx, cz, 0.22, top, 1.3)) continue;
+        // 粗筛用网格（微秒级），精确射线只留给最后的候选
+        if (world.blockedAt(cx, cz, 0.24, top, 1.35)) continue;
         const score = 1 - Math.hypot(dx, dz) / radius;
+        candidates.push({ score, x: cx, z: cz, top });
         if (score > bestScore) { bestScore = score; best = [cx, cz, top]; }
       }
+    }
+    // 精确校验最近的几个候选（最多 4 次射线检测）
+    candidates.sort((a, b) => b.score - a.score);
+    for (const c of candidates.slice(0, 4)) {
+      if (!world.preciseBlocked(c.x, c.z, 0.2, c.top, 1.3)) return [c.x, c.z, c.top];
     }
     return best;
   };

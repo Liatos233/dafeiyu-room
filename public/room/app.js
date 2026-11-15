@@ -1319,7 +1319,8 @@ function playTap() { playTone({ from: 520, to: 610, dur: 0.065, vol: 0.032, type
 let walkPredict = null;
 let lastDisplayPos = null;
 let seatSolveKey = '';
-let seatSolve = null;   // 家具落点解（缓存）
+let seatSolve = null;
+let biasCache = { key: '', off: [0, 0] };   // 家具落点解（缓存）
 
 // 事件文案统一成「你」的视角（也兼容历史数据里的旧文案）
 function toSecondPerson(text) {
@@ -4224,10 +4225,8 @@ function frame(now) {
 
     if (solving && !charDrag?.active && !placeHold) {
       // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
-      const qx = Math.round(drawPos[0] * 10);
-      const qz = Math.round(drawPos[1] * 10);
-      const qy = Math.round((her.elev || 0) * 100);
-      const cacheKey = `${her.room}:${her.spot}:${qx}:${qz}:${qy}`;
+      // 座位点固定：只按「房间:座位」缓存，避免过渡期间每帧重算（重算是百毫秒级）
+      const cacheKey = `${her.room}:${her.spot}`;
       if (seatSolveKey !== cacheKey) {
         seatSolveKey = cacheKey;
         const expected = Math.max(0.05, her.elev || 0);
@@ -4244,19 +4243,26 @@ function frame(now) {
     // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
     // 但深度排到了家具前面，视觉上就不会互相穿插。
     if (onFurniture && !charDrag?.active && !placeHold) {
-      // 朝相机方向轻微前移，缓解"被家具近侧遮挡"的观感；
-      // 但不能被推进家具里：从 0.42 逐档回退，撞到实体就减半，直到 0。
+      // 朝相机方向轻微前移，缓解"被家具近侧遮挡"的观感。
+      // 这个偏移只跟「座位 + 相机方位」有关：按 15° 分桶缓存，不再每帧射线。
       const base = seatSolve ? seatSolve.pos : drawPos;
       const dx = camera.position.x - base[0];
       const dz = camera.position.z - base[1];
       const len = Math.hypot(dx, dz) || 1;
-      let bias = 0.42;
-      while (bias > 0.005) {
-        const cx = base[0] + (dx / len) * bias;
-        const cz = base[1] + (dz / len) * bias;
-        if (!world.preciseBlocked(cx, cz, 0.2, drawElev, 1.25)) { drawPos = [cx, cz]; break; }
-        bias -= 0.12;
+      const az = Math.round(Math.atan2(dx, dz) / (Math.PI / 12));
+      const bkey = `${her.room}:${her.spot}:${az}`;
+      if (biasCache.key !== bkey) {
+        let bias = 0.42;
+        let off = [0, 0];
+        while (bias > 0.005) {
+          const cx = (dx / len) * bias;
+          const cz = (dz / len) * bias;
+          if (!world.preciseBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, 1.25)) { off = [cx, cz]; break; }
+          bias -= 0.12;
+        }
+        biasCache = { key: bkey, off };
       }
+      drawPos = [base[0] + biasCache.off[0], base[1] + biasCache.off[1]];
     }
 
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, clip: actor.current, walking: walkingNow };
