@@ -2801,6 +2801,50 @@ function buildNav3D() {
     }
   }
 
+  // ── 可站立平台（与 K 区区分：青色，带高度柱和攀爬点）──
+  {
+    const gPlat = new THREE.Group();
+    gPlat.name = 'nav3d-platforms';
+    g.add(gPlat);
+    g.userData.gPlatforms = gPlat;
+    let n = 0;
+    for (const pf of NAV_DATA?.platforms || []) {
+      const r = pf.rect;
+      if (!r) continue;
+      n += 1;
+      const w = r[2] - r[0], d = r[3] - r[1];
+      const plane = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, d),
+        new THREE.MeshBasicMaterial({ color: 0x35d6c8, transparent: true, opacity: 0.22, depthWrite: false })
+      );
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.set((r[0] + r[2]) / 2, 0.04, (r[1] + r[3]) / 2);
+      gPlat.add(plane);
+      const top = Number(pf.top) || 0;
+      if (top > 0.05) {
+        const pts = [];
+        for (const [cx, cz] of [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]]) {
+          pts.push(new THREE.Vector3(cx, 0.035, cz), new THREE.Vector3(cx, top, cz));
+        }
+        gPlat.add(new THREE.LineSegments(
+          new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({ color: 0x35d6c8, transparent: true, opacity: 0.5 })
+        ));
+      }
+      const lb = navLabel('P' + n, '#6ff2e6', 0.22);
+      lb.position.set(r[0] + 0.03, 0.1, r[3] - 0.06);
+      gPlat.add(lb);
+      if (Array.isArray(pf.climb)) {
+        const c = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.06, 0.05, 10),
+          new THREE.MeshBasicMaterial({ color: 0x6ff2e6 })
+        );
+        c.position.set(pf.climb[0], 0.06, pf.climb[1]);
+        gPlat.add(c);
+      }
+    }
+  }
+
   const nodes = NAV_DATA?.nodes || {};
   // 黄色路点编号
   {

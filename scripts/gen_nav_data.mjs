@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const mod = await import(pathToFileURL(path.join(root, 'src', 'home-state.js')).href);
-const { HOME_LAYOUT, HOME_NODES, HOME_EDGES, HOME_KEEPOUT } = mod;
+const { HOME_LAYOUT, HOME_NODES, HOME_EDGES, HOME_KEEPOUT, HOME_PLATFORM_LIST } = mod;
 
 const spots = [];
 for (const [room, list] of Object.entries(HOME_LAYOUT.spots)) {
@@ -22,6 +22,7 @@ const data = {
   nodes: HOME_NODES,
   edges: HOME_EDGES,
   keepout: HOME_KEEPOUT,
+  platforms: (HOME_PLATFORM_LIST || []).map((p2) => ({ id: p2.id, room: p2.room, rect: p2.rect, top: p2.top, climb: p2.climb })),
   spots
 };
 

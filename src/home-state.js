@@ -260,7 +260,7 @@ const NODES = Object.freeze({
   laundry: [9.7, 6.5],
   bal_door_in: [7.10, 7.28],
   bal_door_out: [7.10, 7.95],
-  bal_w: [3.0, 8.4],
+  bal_w: [3.0, 7.55],
   bal_e: [7.6, 8.4],
   bal_chair: [3.58, 8.30],
   pool_gate: [9.0, 8.4],
@@ -874,11 +874,37 @@ function segmentCrossesWall(a, b) {
   return false;
 }
 
+// 平台内的合法端点：只有该平台的座位点本身（mounting/dismounting 用），
+// 其它任何落在平台矩形里的端点都视为穿模，不能豁免。
+// 延迟到首次使用时再算（HOME_PLATFORMS 在文件后面才初始化）
+let __platformSeats = null;
+function platformSeats() {
+  if (__platformSeats) return __platformSeats;
+  __platformSeats = HOME_PLATFORMS
+    .filter((p2) => p2.rect)
+    .map((p2) => {
+      const sp = HOME_LAYOUT.spots[p2.room]?.[p2.spot];
+      return { rect: p2.rect, pos: Array.isArray(sp?.pos) ? sp.pos : null, id: p2.id };
+    });
+  return __platformSeats;
+}
+
+function endpointAllowedInRect(pt, rect) {
+  for (const seat of platformSeats()) {
+    if (seat.rect !== rect) continue;
+    if (!seat.pos) return false;
+    return Math.hypot(pt[0] - seat.pos[0], pt[1] - seat.pos[1]) <= 0.12;
+  }
+  return true;   // 不是平台矩形（普通 K 区），保持原豁免
+}
+
 function segmentClearTwoRooms(a, b, roomA, roomB, padScale = 1) {
   for (const item of NAV_BLOCKS) {
     // 注意：直线可能从第三个房间穿过去，所以这里不能按房间过滤
 
     const pad = (item.pad ?? NAV_PAD) * padScale;
+    if (pointInRect(a, item.rect, 0) && !endpointAllowedInRect(a, item.rect)) return false;
+    if (pointInRect(b, item.rect, 0) && !endpointAllowedInRect(b, item.rect)) return false;
     if (pointInRect(a, item.rect, 0) || pointInRect(b, item.rect, 0)) continue;
     if (pointInRect(a, item.rect, pad) || pointInRect(b, item.rect, pad)) {
       if (segmentHitsRect(a, b, item.rect, 0)) return false;
@@ -896,6 +922,8 @@ function segmentClear(a, b, roomId, padScale = 1) {
     // 否则会被自己的站位锁死。这里和外扩半径保持一致，避免“贴墙就被判堵死”。
     const pad = (item.pad ?? NAV_PAD) * padScale;
     // 站/坐在家具上：允许离场（否则会被自己的站位锁死）
+    if (pointInRect(a, item.rect, 0) && !endpointAllowedInRect(a, item.rect)) return false;
+    if (pointInRect(b, item.rect, 0) && !endpointAllowedInRect(b, item.rect)) return false;
     if (pointInRect(a, item.rect, 0) || pointInRect(b, item.rect, 0)) continue;
     // 只是落在家具外扩区里：不能借这个豁免直接穿过家具本体
     if (pointInRect(a, item.rect, pad) || pointInRect(b, item.rect, pad)) {
@@ -959,7 +987,9 @@ export function buildMapRoute(from, target, now, speed = 0.55) {
     for (const item of NAV_BLOCKS) {
       // 同上：过门边也可能擦到第三个房间的家具
       const pad = item.pad ?? NAV_PAD;
-      if (pointInRect(a, item.rect, 0) || pointInRect(b, item.rect, 0)) continue;
+      if (pointInRect(a, item.rect, 0) && !endpointAllowedInRect(a, item.rect)) return false;
+    if (pointInRect(b, item.rect, 0) && !endpointAllowedInRect(b, item.rect)) return false;
+    if (pointInRect(a, item.rect, 0) || pointInRect(b, item.rect, 0)) continue;
       if (pointInRect(a, item.rect, pad) || pointInRect(b, item.rect, pad)) {
         if (segmentHitsRect(a, b, item.rect, 0)) return false;
         continue;
