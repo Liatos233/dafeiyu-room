@@ -4237,13 +4237,19 @@ function frame(now) {
     // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
     // 但深度排到了家具前面，视觉上就不会互相穿插。
     if (onFurniture && !charDrag?.active && !placeHold) {
-      const dx = camera.position.x - drawPos[0];
-      const dz = camera.position.z - drawPos[1];
+      // 朝相机方向轻微前移，缓解"被家具近侧遮挡"的观感；
+      // 但不能被推进家具里：从 0.42 逐档回退，撞到实体就减半，直到 0。
+      const base = seatSolve ? seatSolve.pos : drawPos;
+      const dx = camera.position.x - base[0];
+      const dz = camera.position.z - base[1];
       const len = Math.hypot(dx, dz) || 1;
-      drawPos = [
-        drawPos[0] + (dx / len) * 0.42,
-        drawPos[1] + (dz / len) * 0.42
-      ];
+      let bias = 0.42;
+      while (bias > 0.005) {
+        const cx = base[0] + (dx / len) * bias;
+        const cz = base[1] + (dz / len) * bias;
+        if (!world.preciseBlocked(cx, cz, 0.2, drawElev, 1.25)) { drawPos = [cx, cz]; break; }
+        bias -= 0.12;
+      }
     }
 
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, clip: actor.current, walking: walkingNow };
