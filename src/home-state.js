@@ -1679,7 +1679,8 @@ function decideTarget(state, now, env) {
     const nextAt = Number(state.freestyleNextAt) || 0;
     // 只在她真的"闲着"时插自主动作：正在看电视/写代码/吃饭等主活动时不要打断
     const PRIMARY = new Set(['tv', 'desk', 'eat', 'drink', 'laundry', 'bath', 'phone', 'nap', 'sleep', 'swim', 'garden_till', 'garden_plant', 'garden_harvest']);
-    const idleEnough = !PRIMARY.has(state.kind || 'idle');
+    // 严格：只有真正 idle/free 时才允许自主动作（nap/tv/desk 等主活动一律不插）
+    const idleEnough = !PRIMARY.has(state.kind || 'idle') && (state.kind === 'idle' || state.kind === 'free' || !state.kind);
     if (idleEnough && !state.route && !state.dwell && !state.walking && now >= nextAt && now >= (state.freestyleHoldUntil || 0)) {
       const act = pickFreestyle(state, now, env);
       if (act) {
