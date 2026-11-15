@@ -1,0 +1,29 @@
+{
+  "api_key": {
+    "description": "智谱 BigModel API Key",
+    "type": "string",
+    "hint": "从 https://bigmodel.cn 控制台的 API Keys 获取",
+    "default": ""
+  },
+  "model": {
+    "description": "生图模型",
+    "type": "string",
+    "default": "cogview-4-250304"
+  },
+  "size": {
+    "description": "默认尺寸",
+    "type": "string",
+    "default": "1024x1024",
+    "options": ["1024x1024", "768x1344", "864x1152", "1344x768", "1152x864", "1440x720", "720x1440"]
+  },
+  "owner_qq": {
+    "description": "允许触发的 QQ 号",
+    "type": "string",
+    "default": "630151911"
+  },
+  "daily_limit": {
+    "description": "每人每天最多画几张（0=不限）",
+    "type": "int",
+    "default": 20
+  }
+}

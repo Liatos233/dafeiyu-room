@@ -1,0 +1,7 @@
+name: astrbot_plugin_dafeiyu_draw
+display_name: 大肥鱼画画（智谱 CogView-4）
+desc: 给大肥鱼一个真的画画工具：调用智谱 BigModel 的 CogView-4 出图，画完直接把图片发到当前会话。
+help: 在插件配置里填智谱 API Key（api_key），可选改模型/尺寸/每日上限；然后可以直接 /画 一只蓝色小肥鱼 测试。
+version: v0.1.0
+author: dafeiyu-pack
+repo: ""
