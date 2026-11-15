@@ -120,18 +120,125 @@ clipSwitches 22，quickCuts 2（约 110 秒）
 
 ---
 
-## 5. 部署与排障
+## 5. 服务器部署与运维
+
+### 5.1 拓扑
+
+| 项 | 值 |
+|---|---|
+| 服务器 | `101.245.76.51`（Ubuntu 24.04） |
+| SSH | `ssh -i C:\Users\liato\.ssh\dafeiyu_cloud root@101.245.76.51` |
+| 部署目录 | `/opt/dafeiyu-room` |
+| 房间服务 | `dafeiyu-room.service`（`node src/bridge.js`，监听 **3101**） |
+| 反向代理 | nginx，公网 **3100** → 3101，站点配置 `deploy/cloud/nginx-room.conf` |
+| 其他服务 | AstrBot（QQ/6188）、SnowLuma（QQ 客户端，5099） |
+| 版本标记 | `/opt/dafeiyu-room/.deployed-commit`、`.deployed-at` |
+
+**关键约束：服务器无法访问 GitHub**（`curl github.com` 超时）。所有部署都从本地推送，不要在服务器上 `git pull`。
+
+### 5.2 日常部署（唯一推荐方式）
+
+在**本地**仓库根目录执行：
 
 ```powershell
-# 部署（走 scp，服务器连不上 GitHub）
 powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
 ```
 
-- 健康检查失败会报「服务器端部署失败」
-- **服务启动崩溃排查**：`cd /opt/dafeiyu-room && node src/bridge.js`（直接跑可看到堆栈）
-- 服务日志：`journalctl -u dafeiyu-room -n 40`、`/opt/dafeiyu-room/state/bridge.log`
-- 静态资源头：`curl -s -D - -o /dev/null http://101.245.76.51:3100/room/app.js` → `cache-control: no-cache`（刷新即最新，**不是缓存问题**）
-- 本次踩过：`NAV_BLOCKS` 在 `NAV_KEEPOUT` 初始化过程中被提前引用 → 服务启动即崩，修复为补平台 rect 的循环用 `NAV_KEEPOUT`
+参数：
+
+| 参数 | 作用 |
+|---|---|
+| `-AllowDirty` | 有未提交改动也部署（用 `git stash create` 打包工作区快照） |
+| `-NoRestart` | 只上传 tar，**不解包**、不重启（用于先传大包） |
+| `-Server` / `-User` / `-Key` / `-AppDir` | 覆盖默认连接参数 |
+
+脚本做的事（`deploy.ps1` → `apply-deploy.sh`）：
+
+1. 检查工作区是否干净（默认有改动就拒绝）
+2. `git archive --format=tar HEAD` 打包**只含被 Git 跟踪的文件**（约 380MB，含素材）
+3. `scp` 上传 `apply-deploy.sh` 到 `/usr/local/bin/`、上传 tar 到 `/root/deploy-incoming.tar`
+4. 服务器端 `apply-deploy.sh`：
+   - `systemctl stop dafeiyu-room`
+   - `tar -xf` 解包到 `/opt/dafeiyu-room`（**保留 `state/`、`config/`、`node_modules/`**，因为不在 tar 里）
+   - 比对 `package-lock.json` 的 md5：变了才 `npm ci --omit=dev`，没变跳过
+   - 写 `.deployed-commit` / `.deployed-at`
+   - `systemctl start` + 4 秒后 `systemctl is-active` + 请求 `http://127.0.0.1:3101/room/` 自检
+5. 健康检查非 0 或服务未 active → 本地报「服务器端部署失败」
+
+> 注意：**未被 Git 跟踪的文件不会部署**。新增文件必须先 `git add` + commit。
+
+### 5.3 部署后验证
+
+```powershell
+# 线上版本号（服务器上，不联网）
+ssh -i $env:USERPROFILE\.ssh\dafeiyu_cloud root@101.245.76.51 'bash /opt/dafeiyu-room/deploy/cloud/check-drift.sh'
+
+# 公开访问
+curl -s -o /dev/null -w "%{http_code}\n" http://101.245.76.51:3100/room/
+
+# 静态资源是否最新（no-cache，刷新即生效，排除缓存问题）
+curl -s -D - -o /dev/null http://101.245.76.51:3100/room/app.js | grep -i cache
+```
+
+`check-drift.sh` 会输出：部署版本、部署时间、部署后仍被改过的文件（热修痕迹）、服务状态、`room: 200`。
+
+### 5.4 首次安装 / 灾备重建
+
+```bash
+# 服务器上（root）
+bash deploy/cloud/install.sh                 # 房间 + nginx + 每日备份
+bash deploy/cloud/install.sh --with-astrbot  # 额外装 AstrBot 与插件
+```
+
+install.sh 分 8 步：基础环境（Node 24 / swap / ufw / git）→ 代码就位 → `npm ci` → systemd 单元 `dafeiyu-room` → nginx 反代 3100→3101 → 每日备份定时任务。
+
+先跑 `bash deploy/cloud/install.sh --dry-run` 可只看步骤不落盘。
+
+### 5.5 备份
+
+```bash
+bash deploy/cloud/backup.sh            # 默认：配置里的 Key/token/密码脱敏为 REDACTED
+KEEP_SECRETS=1 bash deploy/cloud/backup.sh   # 保留原始密钥
+FULL=1 bash deploy/cloud/backup.sh     # 含表情包图库（~900MB，默认跳过）
+```
+
+备份内容：`/opt/dafeiyu-room/state/`、AstrBot 的 `cmd_config.json` / `data_v4.db` / `plugins.json` / `config/`、插件数据。产物在 `deploy/cloud` 约定的 `DEST` 目录下（tar.gz）。
+
+### 5.6 回滚
+
+没有专门的 rollback 脚本，回滚 = 用旧 commit 重新部署：
+
+```powershell
+git checkout <旧提交>
+powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1 -AllowDirty
+git checkout main
+```
+
+`state/` 在服务器上不被覆盖，回滚代码不会丢房间数据。
+
+### 5.7 排障速查
+
+| 现象 | 处理 |
+|---|---|
+| 部署报「服务器端部署失败」 | 先看服务是否崩溃：`cd /opt/dafeiyu-room && node src/bridge.js` 直接跑，能看到完整堆栈 |
+| 服务反复重启 | `journalctl -u dafeiyu-room -n 40 --no-pager`；`tail -n 50 /opt/dafeiyu-room/state/bridge.log` |
+| 刷新后代码没变 | 查 `curl -s -D - -o /dev/null .../room/app.js` 的 `cache-control`（应为 `no-cache`）；本机 `Ctrl+F5` |
+| 页面 502 | bridge 没起来：`systemctl status dafeiyu-room`，按上一条看堆栈 |
+| 怀疑线上版本不对 | `cat /opt/dafeiyu-room/.deployed-commit`，与本地 `git rev-parse --short HEAD` 比对 |
+| GitHub 拉取失败 | 正常现象，不要用 `git pull`；用 `deploy.ps1` |
+
+**本次踩过的坑**：`NAV_BLOCKS` 在 `NAV_KEEPOUT` 初始化过程中被提前引用 → 服务启动即崩、部署健康检查失败。修复：给平台回填 rect 的循环必须用 `NAV_KEEPOUT`，不能提前用 `NAV_BLOCKS`。
+
+### 5.8 其他部署脚本
+
+| 脚本 | 用途 |
+|---|---|
+| `apply-deploy.sh` | 服务器端解包/重启/自检（由 deploy.ps1 推送，不单独手动跑） |
+| `check-drift.sh` | 查版本与漂移，不联网 |
+| `update.sh` | **只是说明文件**，提示不要云端 `git pull` |
+| `sync-plugins.sh` | 同步 AstrBot 插件（room_link 等） |
+| `10-bootstrap.sh` / `20-astrbot.sh` | 分步安装脚本 |
+| `set-embedding-siliconflow.sh` | 配置 AstrBot 的 embedding 提供商 |
 
 ---
 
