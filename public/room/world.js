@@ -894,6 +894,7 @@ function mergeStaticDecor(world) {
   GRID.w = Math.ceil((15.5 - GRID.x0) / GRID.cell);
   GRID.h = Math.ceil((15.0 - GRID.z0) / GRID.cell);
   const cellTop = new Float32Array(GRID.w * GRID.h);     // 该格最高实体顶面
+  const cellTopLow = new Float32Array(GRID.w * GRID.h);  // 该格 1.3m 以下的最高顶面（可站立面）
   const cellLow = new Float32Array(GRID.w * GRID.h);     // 该格最低实体底面
   const cellSolid = new Uint8Array(GRID.w * GRID.h);     // 该格是否有实体
 
@@ -914,6 +915,7 @@ function mergeStaticDecor(world) {
 
   world.buildOccupancy = () => {
     cellTop.fill(-1);
+    cellTopLow.fill(-1);
     cellLow.fill(9);
     cellSolid.fill(0);
     world.root.updateMatrixWorld(true);
@@ -931,6 +933,7 @@ function mergeStaticDecor(world) {
           const k = j * GRID.w + i;
           cellSolid[k] = 1;
           if (_box.max.y > cellTop[k]) cellTop[k] = _box.max.y;
+          if (_box.max.y <= 1.3 && _box.max.y > cellTopLow[k]) cellTopLow[k] = _box.max.y;
           if (_box.min.y < cellLow[k]) cellLow[k] = _box.min.y;
         }
       }
@@ -953,7 +956,7 @@ function mergeStaticDecor(world) {
         const k = cellIndex(x + dx * GRID.cell, z + dz * GRID.cell);
         if (k < 0) continue;
         if (!cellSolid[k]) continue;
-        if (cellTop[k] > best) best = cellTop[k];
+        if (cellTopLow[k] > best) best = cellTopLow[k];
       }
     }
     return best > 0 ? best : 0;
