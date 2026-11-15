@@ -983,6 +983,34 @@ function mergeStaticDecor(world) {
     return false;
   };
 
+  /** 精确身体柱检测（射线，慢但对斜放的家具准确）；只在换座位时调用 */
+  world.preciseBlocked = (x, z, radius = 0.22, footY = 0, height = 1.35) => {
+    const up = new THREE.Vector3(0, 1, 0);
+    const rc = new THREE.Raycaster();
+    const dirs = 12;
+    // 横向：从中心向外，抓细杆/靠背
+    for (let i = 0; i < dirs; i += 1) {
+      const a = (i / dirs) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      for (const dy of [0.1, 0.35, 0.6, 0.9, 1.15]) {
+        const y = footY + dy;
+        if (y > footY + height) continue;
+        rc.set(new THREE.Vector3(x, y, z), dir);
+        rc.far = radius + 0.02;
+        const hits = rc.intersectObject(world.root, true);
+        for (const h of hits) if (!_occSkip(h.object) && h.distance <= radius + 0.02) return true;
+      }
+    }
+    // 纵向：脚底往上，抓头顶/坐垫夹层
+    for (const [ox, oz] of [[0, 0], [radius * 0.7, 0], [-radius * 0.7, 0], [0, radius * 0.7], [0, -radius * 0.7]]) {
+      rc.set(new THREE.Vector3(x + ox, footY + 0.06, z + oz), up);
+      rc.far = height;
+      const hits = rc.intersectObject(world.root, true);
+      for (const h of hits) if (!_occSkip(h.object) && h.distance <= height) return true;
+    }
+    return false;
+  };
+
   /** 在座面范围内找最佳站立点：同一表面高度 + 身体柱净空，优先靠近原位 */
   world.bestSeatPoint = (x, z, expectedY, radius = 0.5) => {
     const step = GRID.cell;
@@ -995,7 +1023,7 @@ function mergeStaticDecor(world) {
         const cz = z + dz;
         const top = world.surfaceYAt(cx, cz);
         if (Math.abs(top - expectedY) > 0.22) continue;
-        if (world.blockedAt(cx, cz, 0.24, top, 1.35)) continue;
+        if (world.preciseBlocked(cx, cz, 0.22, top, 1.3)) continue;
         const score = 1 - Math.hypot(dx, dz) / radius;
         if (score > bestScore) { bestScore = score; best = [cx, cz, top]; }
       }
