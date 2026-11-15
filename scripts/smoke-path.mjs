@@ -75,7 +75,7 @@ async function sample(label) {
     if (!w || !d) return null;
     const elev = d.elev || 0;
     const near = w.nearMeshes ? w.nearMeshes(d.pos[0], d.pos[1], 1.4) : null;
-    const hit = w.preciseBlocked ? w.preciseBlocked(d.pos[0], d.pos[1], 0.16, elev, 1.2, near) : w.blockedAt(d.pos[0], d.pos[1], 0.18, elev + 0.06, 1.25);
+    const hit = w.preciseBlocked ? w.preciseBlocked(d.pos[0], d.pos[1], 0.13, elev, 1.2, near) : w.blockedAt(d.pos[0], d.pos[1], 0.18, elev + 0.06, 1.25);
     return { pos: [ +d.pos[0].toFixed(3), +d.pos[1].toFixed(3) ], elev: +elev.toFixed(3), pose: d.pose, spot: d.spot, clip: d.clip, walking: !!d.walking, hit };
   })()`);
   if (r) frames.push({ t: Date.now(), label, ...r });
@@ -139,3 +139,4 @@ const summary = { total: frames.length, byLabel, maxStillJump: +maxJump.toFixed(
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(summary, null, 2));
 console.log(JSON.stringify(summary, null, 2));
 process.exit(0);
+
