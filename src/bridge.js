@@ -24,6 +24,7 @@ import { SENSITIVE_RE } from './sensitive.js';
 import { looksLikeUnfinished } from './v2-wait.js';
 import { compactModelMessage } from './qq-model-view.js';
 import { BREEZE_VOICES, resolveBreezeConfig, synthesizeSpeech } from './breeze-tts.js';
+import { resolveVolcTtsConfig, synthesizeVolcSpeech } from './volc-tts.js';
 import { safeFetchBuffer, looksLikeImageBuffer } from './safe-fetch.js';
 import { AUDIO_EXTS, cleanupTemp, describeAudio, formatBytes, formatDuration, inspectAudio, listAudioFiles, parseTargetKey, processAudioVolume, resolveAudioProcessing, resolveAudioSource, safeJoinLibrary } from './send-voice-lib.js';
 import { discoverSnowLumaConnection, persistSnowLumaEndpoint, persistToken } from './snowluma-conn.js';
@@ -1044,6 +1045,9 @@ function loadConfig() {
     dailyLimit: Math.max(0, Math.round(Number(breezeRaw.dailyLimit) || 0)),
     timeoutMs: Math.max(5000, Math.round(Number(breezeRaw.timeoutMs) || 60000))
   };
+  // 豆包 Seed Audio（火山引擎）：Breeze 没配时的语音合成后端。
+  // 密钥同样只从 config 读，不落日志、不进错误信息。
+  cfg.volcTts = resolveVolcTtsConfig((cfg.volcTts && typeof cfg.volcTts === 'object') ? cfg.volcTts : {}, process.env);
 
   // socialV2.voice：语音发送（把准备好的音频文件当 QQ 语音发出去）。
   // dir 为相对仓库根目录的语音库路径；AI 的 qq_send_voice 默认只能从这个目录取文件，
@@ -2093,15 +2097,32 @@ async function main() {
 
   async function speakToVoice(key, text, opts = {}) {
     const bz = ttsBudget();
-    if (!bz.enabled) throw new Error('Breeze 语音未开启（config.breeze.enabled=false）');
-    if (!bz.apiKey) throw new Error('没有配置 Breeze API Key：请设置环境变量 BREEZE_API_KEY（或 config.json 的 breeze.apiKey）');
-    if (bz.blocked) throw new Error(`今天语音条数已达上限（${bz.dailyLimit} 条），明天再发或调高 breeze.dailyLimit`);
+    const vt = cfg.volcTts || {};
     const clean = String(text ?? '').trim();
     if (!clean) throw new Error('要说的话是空的');
-    if (clean.length > bz.maxChars) throw new Error(`这条太长（${clean.length} 字），语音最多 ${bz.maxChars} 字；长内容请用文字`);
-    const alias = String(opts.voice || '').trim();
-    const voiceId = BREEZE_VOICES[alias] || (/^voc_[A-Za-z0-9]+$/.test(alias) ? alias : bz.voiceId);
-    const audio = await synthesizeSpeech({ text: clean, voiceId, ...bz, ...(opts.instructions ? { instructions: opts.instructions } : {}) });
+
+    // 引擎选择：Breeze 配了就用 Breeze；否则用豆包 Seed Audio。
+    const useBreeze = bz.enabled && bz.apiKey;
+    const useVolc = !useBreeze && vt.configured;
+    if (!useBreeze && !useVolc) {
+      if (bz.enabled && !bz.apiKey) throw new Error('没有配置 Breeze API Key，也没有配置豆包语音（config.volcTts）');
+      throw new Error('语音合成未配置：请设置 breeze.apiKey 或 config.volcTts.appId/accessKey');
+    }
+    if (bz.blocked) throw new Error(`今天语音条数已达上限（${bz.dailyLimit} 条），明天再发或调高 breeze.dailyLimit`);
+
+    const maxChars = useBreeze ? bz.maxChars : vt.maxChars;
+    if (clean.length > maxChars) throw new Error(`这条太长（${clean.length} 字），语音最多 ${maxChars} 字；长内容请用文字`);
+
+    let audio;
+    let voiceId;
+    if (useBreeze) {
+      const alias = String(opts.voice || '').trim();
+      voiceId = BREEZE_VOICES[alias] || (/^voc_[A-Za-z0-9]+$/.test(alias) ? alias : bz.voiceId);
+      audio = await synthesizeSpeech({ text: clean, voiceId, ...bz, ...(opts.instructions ? { instructions: opts.instructions } : {}) });
+    } else {
+      voiceId = 'doubao-seed-audio';
+      audio = await synthesizeVolcSpeech(clean, vt);
+    }
     const dir = voiceCfg().dir;
     fs.mkdirSync(dir, { recursive: true });
     const name = `tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp3`;
@@ -2116,7 +2137,7 @@ async function main() {
         const olds = fs.readdirSync(dir).filter((f) => /^tts-.*\.mp3$/.test(f)).sort();
         for (const old of olds.slice(0, Math.max(0, olds.length - 60))) fs.rmSync(path.join(dir, old), { force: true });
       } catch {}
-      log(`[voice] ${key} Breeze 语音已发送（${clean.length} 字，${bz.voiceAlias}/${voiceId}，今日 ${voiceTtsState.count}/${bz.dailyLimit || '∞'}）`);
+      log(`[voice] ${key} 语音已发送（${clean.length} 字，${useBreeze ? 'breeze' : 'doubao'}/${voiceId}，今日 ${voiceTtsState.count}/${bz.dailyLimit || '∞'}）`);
       return { ...sent, file: name, chars: clean.length, voiceId };
     } catch (error) {
       try { fs.rmSync(abs, { force: true }); } catch {}
@@ -7473,7 +7494,7 @@ async function main() {
           const key = String(body.key ?? '').trim();
           const voice = voiceCfg();
           if (!voice.enabled) { sendJson({ ok: false, error: '语音功能已关闭（socialV2.voice.enabled=false）' }, 403); return; }
-          if (!cfg.breeze?.enabled) { sendJson({ ok: false, error: 'Breeze 语音未开启（config.breeze.enabled=false）' }, 403); return; }
+          if (!cfg.breeze?.enabled && !cfg.volcTts?.configured) { sendJson({ ok: false, error: '语音合成未配置：config.breeze 或 config.volcTts 至少配一个' }, 403); return; }
           if (!key) { sendJson({ ok: false, error: 'key 不能为空（格式 group:群号 或 private:QQ号）' }, 400); return; }
           if (currentMode !== 'reserved2') { sendJson({ ok: false, error: '该接口仅 reserved2 模式可用' }, 403); return; }
           if (!token) { sendJson({ ok: false, error: 'reserved2 模式发送必须携带 agent token' }, 403); return; }
@@ -7499,7 +7520,7 @@ async function main() {
             });
           } catch (error) {
             const message = String(error?.message ?? error);
-            log(`[voice] ${key} Breeze 语音失败：${message}`);
+            log(`[voice] ${key} TTS 失败：${message}`);
             sendJson({ ok: false, error: message, fallback: 'text' }, 502);
           }
           return;
