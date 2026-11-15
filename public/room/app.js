@@ -522,7 +522,14 @@ const actor = {
   get active() { return actorWebm.active; },
   setVisible(v) { actorWebm.setVisible(v); },
   prime(name) { return actorWebm.prime(name); },
-  setClip(name, opts) { return actorWebm.setClip(name, opts); },
+  setClip(name, opts) {   // 调试：记录每次片段切换（window.__clipLog 最近 200 条）
+    try {
+      const log = window.__clipLog || (window.__clipLog = []);
+      if (actorWebm.current !== name) log.push({ t: Date.now(), from: actorWebm.current, to: name });
+      if (log.length > 200) log.splice(0, log.length - 200);
+    } catch { /* 忽略 */ }
+    return actorWebm.setClip(name, opts);
+  },
   update(dt, camera, opts) { actorWebm.update(dt, camera, opts); },
   prepareShot(name, d) { return actorWebm.prepareShot(name, d); },
   prepareShotPoster(name) { return actorWebm.prepareShotPoster ? actorWebm.prepareShotPoster(name) : Promise.resolve(); }
@@ -4222,7 +4229,7 @@ function frame(now) {
       || seatOverride
     );
 
-    window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, clip: actor.current, walking: walkingNow };
+    window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, kind: her.kind, activity: her.activity, clip: actor.current, walking: walkingNow };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
       // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫
