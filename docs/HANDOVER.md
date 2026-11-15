@@ -255,6 +255,7 @@ FULL=1 bash deploy/cloud/backup.sh          # 含表情包图库（~900MB）
 | 刷新没变化 | 查 `cache-control`；`Ctrl+F5` |
 | 版本对不上 | `cat /opt/dafeiyu-room/.deployed-commit` |
 | 云端 `git pull` 失败 | 正常，服务器不通 GitHub |
+| `deploy.ps1` 报「assignment expression is not valid」 | `.ps1` 缺 UTF-8 BOM 时 PowerShell 5.1 会把中文注释解析坏；用 `Get-ChildItem -Recurse *.ps1` 检查并补 BOM（本仓库已统一带 BOM） |
 
 > 本会话踩过：`home-state.js` 里 `NAV_BLOCKS` 在初始化前被引用 → 服务启动即崩；修复是对 `NAV_KEEPOUT` 做回填（`c1b45ac`）。
 
@@ -288,7 +289,7 @@ FULL=1 bash deploy/cloud/backup.sh          # 含表情包图库（~900MB）
 1. **天气双源**：页面决定天气，每 15s `POST /api/home/weather`；服务端 `weather.json` 供菜园与对话使用。黎明/黄昏/夜晚由时间决定，不再是天气选项。
 2. **菜园受天气影响**：下雨自动补水、下雪暂停生长、雷雨偶发损坏。
 3. **主动消息**：固定按句拆分发送；历史里的换行会被压平（防止模型照抄）。
-4. **家具进出**：平台 + 固定攀爬点 + 抬升进出；地面不可直接走进平台区域。
+4. **家具是独立分区（不是 K 区）**：`NAV_KEEPOUT` 只剩墙/水等障碍；沙发/床/躺椅等是 `HOME_PLATFORMS`（每个带 `rect` + `top` + 攀爬点）。平台矩形**照样阻挡路线**（`NAV_BLOCKS` 参与全部寻路段判定），只有「该平台自己的座位点」允许作为端点豁免；地面高度进不去，只能走到攀爬点再抬升进入。调试层里 K 区是红色、平台是青色（带高度柱和攀爬点标记）。
 5. **动画**：片段最短保持 350ms；坐姿兜底只对 idle/free/sit 生效。
 
 ---
@@ -299,7 +300,7 @@ FULL=1 bash deploy/cloud/backup.sh          # 含表情包图库（~900MB）
 |---|---|---|---|
 | 1 | 2D 立绘被家具近侧栏杆遮挡（遮挡≠相交） | 观感像穿模 | 已加 0.22m 朝相机偏置；根治需坐姿素材 |
 | 2 | 窄座椅（阳台/沙滩躺椅）宽度接近立绘宽度 | 站上去边缘悬空 | 改为「站椅子旁」或补坐姿素材 |
-| 3 | 平台数据在服务端与客户端各一份 | 需手工同步 | 抽成共享数据文件 |
+| 3 | 平台数据在服务端与客户端各一份 | 由 `scripts/gen_nav_data.mjs` 从 `home-state.js` 生成 `nav-data.js`，已自动同步；手改 `nav-data.js` 会在下次生成时被覆盖 | 只改 `home-state.js`，然后 `node scripts/gen_nav_data.mjs` |
 | 4 | ~~`public/room/*.bak-*`、`src/bridge.js.bak-nav` 等备份文件~~ | 已于 2026-11-15 清理（15 个文件 / 1.9MB，均未被引用）；调试截图 596 张（342MB）移入 `_trash-2026-11-15/` | 完成 |
 | 5 | 无头测试依赖固定 sleep | 偶发误判 | 改成轮询就绪状态 |
 | 6 | AstrBot 侧多个插件有 `.bak` 配置 | 混淆 | 归档 |
