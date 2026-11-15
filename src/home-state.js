@@ -1202,8 +1202,8 @@ const HOME_PLATFORMS = [];
       });
     }
   }
-  // 用禁走区里带 top 的矩形补齐平台的占地范围
-  for (const item of NAV_BLOCKS) {
+  // 用禁走区里带 top 的矩形补齐平台的占地范围（这里必须用 NAV_KEEPOUT，NAV_BLOCKS 还没初始化）
+  for (const item of NAV_KEEPOUT) {
     if (!(Number(item.top) > 0.05)) continue;
     const target = HOME_PLATFORMS.find((p2) => p2.room === item.room && Math.abs(p2.top - item.top) < 0.06);
     if (target && !target.rect) target.rect = item.rect.slice();
