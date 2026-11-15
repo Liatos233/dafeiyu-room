@@ -123,6 +123,7 @@ for (const f of frames) {
 let maxJump = 0, jumps = [], clipSwitches = 0, lastClip = null;
 for (let i = 1; i < frames.length; i += 1) {
   const a = frames[i - 1], b = frames[i];
+  if (a.label !== b.label) { if (b.clip && lastClip && b.clip !== lastClip) clipSwitches += 1; if (b.clip) lastClip = b.clip; continue; }
   const d = Math.hypot(b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]);
   if (!b.walking && d > maxJump) { maxJump = d; jumps.push({ label: b.label, d: +d.toFixed(2), pos: b.pos, elev: b.elev }); }
   if (b.clip && lastClip && b.clip !== lastClip) clipSwitches += 1;

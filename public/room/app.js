@@ -2290,7 +2290,8 @@ function displayElevFor(her) {
   const transitLift = motionWalking ? furnitureTopAt(her.pos) : 0;
   const base = Math.max(her.elev || 0, transitLift);
   if (base < 0.2) return 0;
-  if (her.spot === 'bed' || her.pose === 'lie') return base + BED_RAISE;
+  // 只有真正躺着时才加床面抬升；起身/过渡过程中不加，否则离开床位会瞬间掉下来
+  if (her.pose === 'lie' && her.transitioning !== true) return base + BED_RAISE;
   if (her.spot === 'chair') return base;   // 躺椅：脚正好踩在座面上
   if (her.pose === 'sit') return base;   // 沙发的坐面高度就是座面（红框）
   return base;
