@@ -1019,9 +1019,11 @@ function mergeStaticDecor(world) {
   };
 
   /** 精确身体柱检测（射线，慢但对斜放的家具准确）；只在换座位时调用 */
-  world.preciseBlocked = (x, z, radius = 0.22, footY = 0, height = 1.35) => {
+  world.preciseBlocked = (x, z, radius = 0.22, footY = 0, height = 1.35, meshes = null) => {
     const up = new THREE.Vector3(0, 1, 0);
     const rc = new THREE.Raycaster();
+    const targets = meshes && meshes.length ? meshes : world.root;
+    const cast = () => (Array.isArray(targets) ? rc.intersectObjects(targets, true) : rc.intersectObject(targets, true));
     const dirs = 8;
     // 横向：从中心向外，抓细杆/靠背
     for (let i = 0; i < dirs; i += 1) {
@@ -1032,7 +1034,7 @@ function mergeStaticDecor(world) {
         if (y > footY + height) continue;
         rc.set(new THREE.Vector3(x, y, z), dir);
         rc.far = radius + 0.02;
-        const hits = rc.intersectObject(world.root, true);
+        const hits = cast();
         for (const h of hits) if (!_occSkip(h.object) && h.distance <= radius + 0.02) return true;
       }
     }
@@ -1040,7 +1042,7 @@ function mergeStaticDecor(world) {
     for (const [ox, oz] of [[0, 0], [radius * 0.7, 0], [-radius * 0.7, 0], [0, radius * 0.7], [0, -radius * 0.7]]) {
       rc.set(new THREE.Vector3(x + ox, footY + 0.06, z + oz), up);
       rc.far = height;
-      const hits = rc.intersectObject(world.root, true);
+      const hits = cast();
       for (const h of hits) if (!_occSkip(h.object) && h.distance <= height) return true;
     }
     return false;
@@ -1068,8 +1070,9 @@ function mergeStaticDecor(world) {
     }
     // 精确校验最近的几个候选（最多 4 次射线检测）
     candidates.sort((a, b) => b.score - a.score);
-    for (const c of candidates.slice(0, 4)) {
-      if (!world.preciseBlocked(c.x, c.z, 0.2, c.top, 1.3)) return [c.x, c.z, c.top];
+    const near = world.nearMeshes(x, z, 1.4);
+    for (const c of candidates.slice(0, 2)) {
+      if (!world.preciseBlocked(c.x, c.z, 0.2, c.top, 1.3, near)) return [c.x, c.z, c.top];
     }
     return best;
   };
