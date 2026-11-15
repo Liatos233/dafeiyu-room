@@ -888,8 +888,10 @@ function mergeStaticDecor(world) {
 
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
-  if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
+  // 占用网格必须在合批之前建：合批后整屋会并成少数大网格，
+  // AABB 覆盖全屋，网格里的表面高度会全部变成天花板顶（2.85m）。
   try { world.buildOccupancy(); } catch (e) { console.warn('[occupancy] 构建失败', e); }
+  if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
   // ── 占用网格：一次性栅格化整间屋子，之后所有高度/占位查询都是 O(1) ───────
   // 逐帧打射线（几十次/帧）是上一版卡顿的根源，这里改成预计算。
   const GRID = { x0: -1.5, z0: -8.0, cell: 0.1, w: 0, h: 0 };
@@ -900,8 +902,14 @@ function mergeStaticDecor(world) {
   const cellSolid = new Uint8Array(GRID.w * GRID.h);     // 该格是否有实体
 
   const _box = new THREE.Box3();
+  const _isUnderCeiling = (o) => {
+    if (!world.ceiling) return false;
+    for (let p2 = o; p2; p2 = p2.parent) if (p2 === world.ceiling) return true;
+    return false;
+  };
   const _occSkip = (o) => {
     if (!o || o.visible === false) return true;
+    if (_isUnderCeiling(o)) return true;
     if (o === world.sky || o === world.poolWater || o === world.tvScreen) return true;
     const m = o.material;
     if (m && !Array.isArray(m) && (m.opacity === 0 || m.transparent && (m.opacity ?? 1) < 0.35)) return true;

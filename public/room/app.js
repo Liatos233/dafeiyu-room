@@ -4236,7 +4236,7 @@ function frame(now) {
     // 立绘是平面：站在家具上时，家具近侧的栏杆会挡在她腿前，
     // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
     // 但深度排到了家具前面，视觉上就不会互相穿插。
-    if (solving && !walkingNow && !charDrag?.active && !placeHold) {
+    if (onFurniture && !charDrag?.active && !placeHold) {
       const dx = camera.position.x - drawPos[0];
       const dz = camera.position.z - drawPos[1];
       const len = Math.hypot(dx, dz) || 1;
