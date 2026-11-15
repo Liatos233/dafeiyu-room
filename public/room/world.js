@@ -2184,22 +2184,25 @@ function buildPoolDeck(world, M) {
   const floorMat = new THREE.MeshStandardMaterial({ map: poolTile, roughness: 0.32 });
   const wallMat = new THREE.MeshStandardMaterial({ map: wallTile, roughness: 0.3 });
 
-  // 阳台东侧这块（原来露出的是室内木地板）铺成和阳台同款地砖
-  {
-    // 和阳台地面完全一致：同样的贴图、重复次数、高度、材质参数
+  // 阳台东侧这块（原来露出的是室内木地板）铺成和阳台同款地砖。
+  // 注意浴室占着 x 10.8–13.2 / z 5.6–8.2，这里要避开它，否则浴室南侧会叠两层。
+  const eastTile = (x0, z0, x1, z1) => {
     const t = world.textures.tileBalcony.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(4.88, 1.4);
+    t.repeat.set((x1 - x0) / 0.82, (z1 - z0) / 0.82);
     t.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(13.2 - 8.2, 9.0 - 7.6),
+      new THREE.PlaneGeometry(x1 - x0, z1 - z0),
       new THREE.MeshStandardMaterial({ map: t, roughness: 0.66, metalness: 0.02, envMapIntensity: 0.3 })
     );
     m.rotation.x = -Math.PI / 2;
-    m.position.set((8.2 + 13.2) / 2, 0.008, (7.6 + 9.0) / 2);
+    m.position.set((x0 + x1) / 2, 0.008, (z0 + z1) / 2);
     m.receiveShadow = true;
     p.add(m);
-  }
+  };
+  eastTile(8.2, 7.6, 10.8, 9.0);    // 浴室西侧
+  eastTile(10.8, 8.2, 13.2, 9.0);   // 浴室南侧（浴室本体到 z=8.2 为止）
+
 
   // ── 露台地面：只铺四块，中间留出泳池开口（不能铺整块，否则就是“盖板”）──
   const deckW = DECK_X1 - DECK_X0, deckD = DECK_Z1 - DECK_Z0;
