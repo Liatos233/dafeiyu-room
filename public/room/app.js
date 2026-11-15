@@ -3166,7 +3166,7 @@ function showNavMap(bigMode = navMapBig) {
   const base = 'z-index:99999;background:rgba(10,16,26,.94);border:1px solid rgba(150,190,230,.35);border-radius:10px;';
   cv.style.cssText = navMapBig
     ? `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);${base}cursor:grab;`
-    : `position:fixed;left:16px;bottom:74px;${base}cursor:zoom-in;`;
+    : `position:fixed;left:324px;bottom:74px;${base}cursor:zoom-in;`;
   const old = document.getElementById('navMap');
   if (old) old.remove();
   document.body.appendChild(cv);
