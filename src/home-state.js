@@ -1677,7 +1677,10 @@ function decideTarget(state, now, env) {
   // 空闲调剂：隔一段时间抽一个自主动作（表演性质，不抢需求）
   {
     const nextAt = Number(state.freestyleNextAt) || 0;
-    if (!state.route && !state.dwell && !state.walking && now >= nextAt && now >= (state.freestyleHoldUntil || 0)) {
+    // 只在她真的"闲着"时插自主动作：正在看电视/写代码/吃饭等主活动时不要打断
+    const PRIMARY = new Set(['tv', 'desk', 'eat', 'drink', 'laundry', 'bath', 'phone', 'nap', 'sleep', 'swim', 'garden_till', 'garden_plant', 'garden_harvest']);
+    const idleEnough = !PRIMARY.has(state.kind || 'idle');
+    if (idleEnough && !state.route && !state.dwell && !state.walking && now >= nextAt && now >= (state.freestyleHoldUntil || 0)) {
       const act = pickFreestyle(state, now, env);
       if (act) {
         const [lo, hi] = FREESTYLE_DEFAULTS.intervalMs;

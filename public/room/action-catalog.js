@@ -275,7 +275,7 @@ export const CATALOG = [
 ];
 
 export const FREESTYLE_DEFAULTS = {
-  intervalMs: [20_000, 45_000],   // 空闲多久抽一次
+  intervalMs: [90_000, 180_000],   // 空闲多久抽一次（原先 20–45s，太频繁）
   travelChance: 0.5,              // 走到匹配点位 vs 就地做
   maxDwellMs: 20_000,
   repeatPenalty: 0.15,            // 最近 5 条内重复的权重

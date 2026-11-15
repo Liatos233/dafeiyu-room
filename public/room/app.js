@@ -2349,10 +2349,23 @@ function syncCharacter() {
   {
     const URGENT = new Set(['run_happy', 'run_hurry', 'walk', 'sleep_in', 'sleep_loop', 'sleep_out']);
     const next = clipFor(her);
+    const poseChanged = syncCharacter._pose !== undefined && syncCharacter._pose !== her.pose;
+    const spotChanged = syncCharacter._spot !== undefined && syncCharacter._spot !== her.spot;
+    syncCharacter._pose = her.pose;
+    syncCharacter._spot = her.spot;
     if (actor.current !== next) {
       const now = performance.now();
-      if (!URGENT.has(next) && now - (syncCharacter._lastAt || 0) < 350) return;
+      const urgent = URGENT.has(next) || poseChanged || spotChanged;
+      // 非紧急片段：至少驻留 1200ms，且新片段要连续 350ms 才切（防抖）
+      if (!urgent) {
+        if (now - (syncCharacter._lastAt || 0) < 1200) return;
+        if (syncCharacter._want !== next) { syncCharacter._want = next; syncCharacter._wantAt = now; return; }
+        if (now - (syncCharacter._wantAt || 0) < 350) return;
+      }
       syncCharacter._lastAt = now;
+      syncCharacter._want = next;
+    } else {
+      syncCharacter._want = next;
     }
   }
   if (sofaPhase === 'play' && !her.asleep) {
