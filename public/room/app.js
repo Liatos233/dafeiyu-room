@@ -4246,7 +4246,8 @@ function frame(now) {
     if (onFurniture && !charDrag?.active && !placeHold) {
       // 朝相机方向轻微前移，缓解"被家具近侧遮挡"的观感。
       // 这个偏移只跟「座位 + 相机方位」有关：按 15° 分桶缓存，不再每帧射线。
-      const base = seatSolve ? seatSolve.pos : drawPos;
+      // 基准必须是「服务端座位点」或「求解结果」，不能用上一帧已偏置的 drawPos（会逐帧累加漂移）
+      const base = seatSolve ? seatSolve.pos : (Array.isArray(her.pos) ? her.pos : drawPos);
       const dx = camera.position.x - base[0];
       const dz = camera.position.z - base[1];
       const len = Math.hypot(dx, dz) || 1;
@@ -4257,7 +4258,7 @@ function frame(now) {
         nearCache = { key: nkey, meshes: world.nearMeshes ? world.nearMeshes(base[0], base[1], 1.3) : null };
       }
       if (biasCache.key !== bkey) {
-        let bias = 0.42;
+        let bias = 0.3;
         let off = [0, 0];
         while (bias > 0.005) {
           const cx = (dx / len) * bias;
