@@ -3,6 +3,7 @@
 > 面向接手的新会话/新模型。本文覆盖**整个系统**。相关专题：
 > - 穿模问题全过程与现方案：[`docs/HANDOVER-clipping.md`](./HANDOVER-clipping.md)
 > - 家具/平台/占用网格速查：[`docs/HANDOVER-room-seats.md`](./HANDOVER-room-seats.md)
+> - 动画播放与切换逻辑：[`docs/ANIMATION.md`](./ANIMATION.md)
 > 只写本会话中**实际核实过**的内容；不确定的会标注「未核实」。
 
 - 本地仓库：`C:\Users\liato\dafeiyu-room\app`（事实源）
