@@ -875,7 +875,7 @@ function segmentCrossesWall(a, b) {
 }
 
 function segmentClearTwoRooms(a, b, roomA, roomB, padScale = 1) {
-  for (const item of NAV_KEEPOUT) {
+  for (const item of NAV_BLOCKS) {
     // 注意：直线可能从第三个房间穿过去，所以这里不能按房间过滤
 
     const pad = (item.pad ?? NAV_PAD) * padScale;
@@ -891,7 +891,7 @@ function segmentClearTwoRooms(a, b, roomA, roomB, padScale = 1) {
 
 function segmentClear(a, b, roomId, padScale = 1) {
   if (!roomId) return false;
-  for (const item of NAV_KEEPOUT) {
+  for (const item of NAV_BLOCKS) {
     // 起点/终点本来就贴着这件家具（沙发、床、洗手台等）时，允许它离场，
     // 否则会被自己的站位锁死。这里和外扩半径保持一致，避免“贴墙就被判堵死”。
     const pad = (item.pad ?? NAV_PAD) * padScale;
@@ -956,7 +956,7 @@ export function buildMapRoute(from, target, now, speed = 0.55) {
   const DOOR_PAD_OK = (a, b) => {
     const ra = roomAtPoint(a)?.id;
     const rb = roomAtPoint(b)?.id;
-    for (const item of NAV_KEEPOUT) {
+    for (const item of NAV_BLOCKS) {
       // 同上：过门边也可能擦到第三个房间的家具
       const pad = item.pad ?? NAV_PAD;
       if (pointInRect(a, item.rect, 0) || pointInRect(b, item.rect, 0)) continue;
@@ -983,7 +983,7 @@ export function buildMapRoute(from, target, now, speed = 0.55) {
     const cornerNodes = (roomId) => {
       const out = [];
       let n = 0;
-      for (const item of NAV_KEEPOUT) {
+      for (const item of NAV_BLOCKS) {
         if (item.room !== roomId) continue;
         const pad = (item.pad ?? NAV_PAD) + 0.04;
         const [x0, z0, x1, z1] = item.rect;
@@ -1183,10 +1183,41 @@ function setActivity(state, kind, activity, pose, elev, facing) {
   state.walking = false;
 }
 
+// ── 可站立平台（沙发/床/躺椅）：不是 K 区（禁走障碍），是「抬升后才能上的平台」──
+// 数据从 spots 里带 support 的位置自动派生，攀爬点用 spot.mount。
+const HOME_PLATFORMS = [];
+{
+  for (const [room, spots] of Object.entries(HOME_LAYOUT.spots)) {
+    for (const [spotId, sp] of Object.entries(spots || {})) {
+      const top = Number(SURFACES[sp?.support || 'floor'] || 0);
+      if (top <= 0.05) continue;
+      const mount = Array.isArray(sp.mount) ? sp.mount.slice() : null;
+      HOME_PLATFORMS.push({
+        id: `${room}.${spotId}`,
+        room,
+        spot: spotId,
+        top,
+        rect: null,                       // 由 NAV_KEEPOUT 里同 room+top 的矩形回填（见下）
+        climb: mount
+      });
+    }
+  }
+  // 用禁走区里带 top 的矩形补齐平台的占地范围
+  for (const item of NAV_BLOCKS) {
+    if (!(Number(item.top) > 0.05)) continue;
+    const target = HOME_PLATFORMS.find((p2) => p2.room === item.room && Math.abs(p2.top - item.top) < 0.06);
+    if (target && !target.rect) target.rect = item.rect.slice();
+  }
+}
+// 路径规划：障碍(K区) + 平台地面投影，地面高度都不可穿过
+const NAV_BLOCKS = NAV_KEEPOUT.concat(
+  HOME_PLATFORMS.filter((p2) => p2.rect).map((p2) => ({ room: p2.room, rect: p2.rect, top: p2.top, platform: p2.id }))
+);
+
 // 带顶面的禁走区 = 可站立家具内部：地面高度不能走进去
 function seatZoneAt(pos) {
   if (!Array.isArray(pos)) return null;
-  for (const item of NAV_KEEPOUT) {
+  for (const item of NAV_BLOCKS) {
     if (!(Number(item.top) > 0.05)) continue;
     if (pointInRect(pos, item.rect, 0.02)) return item;
   }
@@ -2317,7 +2348,8 @@ export function homeView(state, now = Date.now(), env = {}) {
     layout: {
       size: HOME_LAYOUT.size,
       rooms: HOME_LAYOUT.rooms,
-      spots: HOME_LAYOUT.spots
+      spots: HOME_LAYOUT.spots,
+      platforms: HOME_PLATFORMS
     },
     her: {
       room: s.room,
@@ -2434,7 +2466,9 @@ export function listSpots() {
 
 export const HOME_NODES = NODES;
 export const HOME_EDGES = EDGES;
-export const HOME_KEEPOUT = NAV_KEEPOUT;
+// K 区 = 纯障碍（墙/水/柱子）；可站立家具走 HOME_PLATFORM_LIST
+export const HOME_KEEPOUT = NAV_KEEPOUT.filter((i) => !(Number(i.top) > 0.05));
+export const HOME_PLATFORM_LIST = HOME_PLATFORMS;
 
 
 

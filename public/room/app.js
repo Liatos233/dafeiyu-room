@@ -1991,7 +1991,7 @@ function clipFor(her) {
   }
   // 坐在家具上（沙发/躺椅/床沿）时，必须有坐姿动画；
   // 否则会用站姿站在坐垫里，看起来就是穿模。
-  if ((her.elev || 0) > 0.2) {
+  if ((her.elev || 0) > 0.2 && (her.kind === 'idle' || her.kind === 'free' || her.kind === 'sit')) {
     if (her.pose === 'lie') return her.asleep ? 'sleep_loop' : 'nap';
     if (her.pose === 'sit') return 'dance';   // 素材里没有通用坐姿帧，用与上座脚本一致的姿势
   }
@@ -2328,6 +2328,16 @@ function syncCharacter() {
   if (seatPhase === 'up' || seatPhase === 'down') {
     if (actor.current !== 'mutter') actor.setClip('mutter');
     return;
+  }
+  // 片段最短保持：避免刚播一个动作就被下一帧的判断掐断
+  {
+    const URGENT = new Set(['run_happy', 'run_hurry', 'walk', 'sleep_in', 'sleep_loop', 'sleep_out']);
+    const next = clipFor(her);
+    if (actor.current !== next) {
+      const now = performance.now();
+      if (!URGENT.has(next) && now - (syncCharacter._lastAt || 0) < 350) return;
+      syncCharacter._lastAt = now;
+    }
   }
   if (sofaPhase === 'play' && !her.asleep) {
     if (actor.current !== 'dance') actor.setClip('dance');
@@ -4102,7 +4112,8 @@ function frame(now) {
       || her.transitioning === true
       || seatOverride
     );
-    if (onFurniture && !charDrag?.active && !placeHold) {
+    const solving = onFurniture && her.transitioning !== true;
+    if (solving && !charDrag?.active && !placeHold) {
       // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
       const qx = Math.round(drawPos[0] * 10);
       const qz = Math.round(drawPos[1] * 10);
@@ -4123,7 +4134,7 @@ function frame(now) {
     // 立绘是平面：站在家具上时，家具近侧的栏杆会挡在她腿前，
     // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
     // 但深度排到了家具前面，视觉上就不会互相穿插。
-    if (onFurniture && !walkingNow && !charDrag?.active && !placeHold) {
+    if (solving && !walkingNow && !charDrag?.active && !placeHold) {
       const dx = camera.position.x - drawPos[0];
       const dz = camera.position.z - drawPos[1];
       const len = Math.hypot(dx, dz) || 1;
@@ -4133,7 +4144,7 @@ function frame(now) {
       ];
     }
 
-    window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot };
+    window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, clip: actor.current, walking: walkingNow };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
       // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫

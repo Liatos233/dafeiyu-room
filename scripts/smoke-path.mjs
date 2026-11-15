@@ -74,7 +74,7 @@ async function sample(label) {
     if (!w || !d) return null;
     const elev = d.elev || 0;
     const hit = w.blockedAt(d.pos[0], d.pos[1], 0.18, elev + 0.06, 1.25);
-    return { pos: [ +d.pos[0].toFixed(3), +d.pos[1].toFixed(3) ], elev: +elev.toFixed(3), pose: d.pose, spot: d.spot, hit };
+    return { pos: [ +d.pos[0].toFixed(3), +d.pos[1].toFixed(3) ], elev: +elev.toFixed(3), pose: d.pose, spot: d.spot, clip: d.clip, walking: !!d.walking, hit };
   })()`);
   if (r) frames.push({ t: Date.now(), label, ...r });
   return r;
@@ -119,6 +119,16 @@ for (const f of frames) {
     if (b.samples.length < 4) b.samples.push({ pos: f.pos, elev: f.elev, spot: f.spot, pose: f.pose });
   }
 }
-writeFileSync(join(OUT, 'report.json'), JSON.stringify({ byLabel, total: frames.length }, null, 2));
-console.log(JSON.stringify({ byLabel, total: frames.length }, null, 2));
+// 位置跳变 & 动画切换统计
+let maxJump = 0, jumps = [], clipSwitches = 0, lastClip = null;
+for (let i = 1; i < frames.length; i += 1) {
+  const a = frames[i - 1], b = frames[i];
+  const d = Math.hypot(b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]);
+  if (!b.walking && d > maxJump) { maxJump = d; jumps.push({ label: b.label, d: +d.toFixed(2), pos: b.pos, elev: b.elev }); }
+  if (b.clip && lastClip && b.clip !== lastClip) clipSwitches += 1;
+  if (b.clip) lastClip = b.clip;
+}
+const summary = { total: frames.length, byLabel, maxStillJump: +maxJump.toFixed(2), jumps: jumps.slice(-5), clipSwitches };
+writeFileSync(join(OUT, 'report.json'), JSON.stringify(summary, null, 2));
+console.log(JSON.stringify(summary, null, 2));
 process.exit(0);
