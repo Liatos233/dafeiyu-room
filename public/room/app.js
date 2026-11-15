@@ -2295,7 +2295,7 @@ function displayElevFor(her) {
     return her.pos[0] >= r[0] - 0.05 && her.pos[0] <= r[2] + 0.05
       && her.pos[1] >= r[1] - 0.05 && her.pos[1] <= r[3] + 0.05;
   });
-  if (plat && her.transitioning !== true) base = Math.max(base, Number(plat.top) || 0);
+  if (plat) base = Math.max(base, Number(plat.top) || 0);   // 入口点在矩形外，过渡时不会误抬
   if (base < 0.2) return 0;
   // 只有真的躺着休息/睡觉时才加床面抬升；起身、过渡、普通躺姿都不加
   const resting = her.asleep || her.kind === 'sleep' || her.kind === 'nap';
@@ -4711,3 +4711,4 @@ async function boot() {
 }
 
 boot();
+
