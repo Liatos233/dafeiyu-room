@@ -2038,7 +2038,7 @@ function clipFor(her) {
 // 调试预览：?preview=sit 或 ?preview=lie 直接把她的显示位置放在沙发/床上，
 // 用来调坐姿下沉/躺姿高度，不改服务端状态。
 // ── 沙发玩：走到沙发，到了就坐上去玩一会儿 ─────────────────────────────
-const SOFA_POINT = [6.3, 4.98];   // 坐垫中心（与 home-state sofa.pos 保持一致）
+const SOFA_POINT = [5.84, 4.95];   // 坐垫中心（与 home-state sofa.pos 保持一致）
 let sofaPlayUntil = 0;
 // 躺椅玩：先走到躺椅前面 → 平滑“抬脚”坐上躺椅 → 播动作 → 结束再平滑下来
 const CHAISE_POINT = [2.67, 8.22];   // 躺椅中心（坐上去的位置）
@@ -4241,8 +4241,8 @@ function frame(now) {
       const dz = camera.position.z - drawPos[1];
       const len = Math.hypot(dx, dz) || 1;
       drawPos = [
-        drawPos[0] + (dx / len) * 0.22,
-        drawPos[1] + (dz / len) * 0.22
+        drawPos[0] + (dx / len) * 0.42,
+        drawPos[1] + (dz / len) * 0.42
       ];
     }
 
