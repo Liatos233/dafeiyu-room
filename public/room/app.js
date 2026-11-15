@@ -4258,12 +4258,12 @@ function frame(now) {
         nearCache = { key: nkey, meshes: world.nearMeshes ? world.nearMeshes(base[0], base[1], 1.3) : null };
       }
       if (biasCache.key !== bkey) {
-        let bias = 0.3;
+        let bias = 0.42;
         let off = [0, 0];
         while (bias > 0.005) {
           const cx = (dx / len) * bias;
           const cz = (dz / len) * bias;
-          if (!world.quickBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, nearCache.meshes)) { off = [cx, cz]; break; }
+          if (!world.preciseBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, 1.25, nearCache.meshes)) { off = [cx, cz]; break; }
           bias -= 0.12;
         }
         biasCache = { key: bkey, off };
