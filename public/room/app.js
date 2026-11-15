@@ -3151,8 +3151,8 @@ function showNavMap(bigMode = navMapBig) {
   const bw = Math.max(1, bounds.x1 - bounds.x0);
   const bh = Math.max(1, bounds.z1 - bounds.z0);
 
-  const W = navMapBig ? Math.min(innerWidth - 80, 1200) : 320;
-  const H = navMapBig ? Math.min(innerHeight - 120, 820) : 230;
+  const W = navMapBig ? Math.min(innerWidth - 80, 1200) : 300;
+  const H = navMapBig ? Math.min(innerHeight - 120, 820) : 210;
   const pad = 12;
   const view = { zoom: 1, panX: 0, panY: 0 };
 
@@ -3166,7 +3166,7 @@ function showNavMap(bigMode = navMapBig) {
   const base = 'z-index:99999;background:rgba(10,16,26,.94);border:1px solid rgba(150,190,230,.35);border-radius:10px;';
   cv.style.cssText = navMapBig
     ? `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);${base}cursor:grab;`
-    : `position:fixed;left:324px;bottom:74px;${base}cursor:zoom-in;`;
+    : `position:fixed;left:324px;top:378px;${base}cursor:zoom-in;`;
   const old = document.getElementById('navMap');
   if (old) old.remove();
   document.body.appendChild(cv);
