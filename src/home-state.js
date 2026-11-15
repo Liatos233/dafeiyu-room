@@ -2360,6 +2360,11 @@ function speechFor(kind, activity) {
 export function homeView(state, now = Date.now(), env = {}) {
   const s = normalizeHomeState(state, now);
   const pos = currentPosition(s, now);
+  // 过渡期间高度必须和位置来自同一段插值：
+  // 否则 pos 已经在座点上、elev 还是 0，画面上就是"贴着地滑进家具，最后突然弹上去"。
+  let liveElev = s.elev || 0;
+  if (s.mounting) liveElev = seatLerp(s.mounting, now).elev;
+  else if (s.dismounting) liveElev = seatLerp(s.dismounting, now).elev;
   const hour = localHour(now);
   const night = hour >= 22 || hour < 7;
   const asleep = s.asleep === true;
