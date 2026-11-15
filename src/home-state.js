@@ -1305,6 +1305,15 @@ function beginRoute(state, target, now, env = {}) {
       else if (m === d[1]) nx = x1 + out;
       else if (m === d[2]) nz = z0 - out;
       else nz = z1 + out;
+      // 家具外沿（扶手/靠背）通常比矩形更宽，逐步外推直到不再落在任何区块里
+      for (let extra = 0.18; extra <= 0.9; extra += 0.18) {
+        const hit = NAV_BLOCKS.some((b) => pointInRect([nx, nz], b.rect, 0.02));
+        if (!hit) break;
+        if (m === d[0]) nx -= 0.18;
+        else if (m === d[1]) nx += 0.18;
+        else if (m === d[2]) nz -= 0.18;
+        else nz += 0.18;
+      }
       target = { ...target, pos: [nx, nz] };
     }
   }

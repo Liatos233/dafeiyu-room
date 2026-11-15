@@ -4215,6 +4215,13 @@ function frame(now) {
     if (her.transitioning === true) window.__lastTransitionAt = performance.now();
     const transitionGrace = performance.now() - (window.__lastTransitionAt || 0) < 300;
     const solving = onFurniture && her.transitioning !== true && !transitionGrace;
+    // 目标在平台上的座位：绘制高度永远不低于所在位置的真实表面，
+    // 避免过渡瞬间（服务端 elev 还是 0）被画进沙发/床里。
+    if (Number(her.elevTarget || her.elev || 0) > 0.05 || (her.spot && /sofa|bed|chair|lounger/.test(her.spot))) {
+      const surf = world.surfaceYAt(drawPos[0], drawPos[1]);
+      if (surf > 0.05) drawElev = Math.max(drawElev, surf + 0.012);
+    }
+
     if (solving && !charDrag?.active && !placeHold) {
       // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
       const qx = Math.round(drawPos[0] * 10);
