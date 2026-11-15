@@ -21,6 +21,7 @@ import uuid
 from pathlib import Path
 
 import aiohttp
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from astrbot.api import logger
 from astrbot.api import message_components as Comp
@@ -113,6 +114,38 @@ class DafeiyuDraw(Star):
         path.write_bytes(image_bytes)
         return image_bytes, str(path)
 
+    async def _draw_for_tool(self, event: AstrMessageEvent, prompt: str, size: str):
+        """生成并发图；返回 (给模型看的文字, 图片字节或 None)。"""
+        user = str(event.get_sender_id())
+        ok, why = self._quota_ok(user)
+        if not ok:
+            return why, None
+        clean = (prompt or "").strip()
+        if not clean:
+            return "要画什么？把画面描述给我", None
+        if len(clean) > 1000:
+            return "描述太长了（最多 1000 字），精简一下", None
+        want = size.strip() if size and size.strip() in ALLOWED_SIZES else self.default_size
+        try:
+            image_bytes, path = await self._generate(clean, want)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[draw] 生图失败：{exc}")
+            return f"画失败了：{exc}", None
+        self._last[user] = time.time()
+        self._usage.setdefault(user, []).append(time.time())
+        sent_ok = True
+        try:
+            await event.send(event.chain_result([Comp.Image.fromBytes(image_bytes)]))
+        except Exception as exc:  # noqa: BLE001
+            sent_ok = False
+            logger.warning(f"[draw] 发送图片失败：{exc}")
+        logger.info(f"[draw] {user} 画好一张：{clean[:40]} size={want} file={path}")
+        if sent_ok:
+            text = f"画好了，已经发到聊天里了（{want}）。画面：{clean[:80]}"
+        else:
+            text = f"画好了但发送失败（{want}），文件在 {path}。画面：{clean[:80]}"
+        return text, image_bytes
+
     async def _draw_and_send(self, event: AstrMessageEvent, prompt: str, size: str) -> str:
         user = str(event.get_sender_id())
         ok, why = self._quota_ok(user)
@@ -141,10 +174,10 @@ class DafeiyuDraw(Star):
 
     @filter.llm_tool(name="draw_picture")
     async def draw_picture(self, event: AstrMessageEvent, prompt: str, size: str = ""):
-        """按描述画一张图并发给主人。
+        """按描述画一张图并发给主人，同时把画好的图返回给你自己看。
 
         主人让你画图、要你「画一个/画张/来张图」、想要头像/壁纸/表情时调用。
-        画完图片会直接发到当前会话，你只需要简短说一句就好。
+        图会直接发到当前会话；你在返回结果里也能看到这张图，可以照着它继续聊。
 
         Args:
             prompt(string): 画面描述，越具体越好（主体、动作、风格、配色、构图）
@@ -152,7 +185,20 @@ class DafeiyuDraw(Star):
         """
         if not self._is_owner(event):
             return "只有主人能让我画画。"
-        return await self._draw_and_send(event, prompt, size)
+        text, image_bytes = await self._draw_for_tool(event, prompt, size)
+        if image_bytes is None:
+            return text
+        # 把图片作为工具结果的一部分返回：核心会缓存并让模型真正“看到”这张图
+        return CallToolResult(
+            content=[
+                TextContent(type="text", text=text),
+                ImageContent(
+                    type="image",
+                    data=base64.b64encode(image_bytes).decode("ascii"),
+                    mimeType="image/png",
+                ),
+            ]
+        )
 
     @filter.command("画")
     async def draw_cmd(self, event: AstrMessageEvent):
