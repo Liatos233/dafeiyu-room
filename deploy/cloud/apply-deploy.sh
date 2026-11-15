@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# 服务器端部署落地：解包本地推上来的 tar（只含 git 跟踪文件），保留 state/config/node_modules
+# 服务器端部署落地：解包代码 tar（不含 assets），可选解包资产增量 tar，
+# 更新资产清单，保留 state/config/node_modules。
+# 用法：apply-deploy.sh <code.tar> <manifest.json> [assets.tar] [commit]
 set -euo pipefail
 
-TAR="${1:-/root/deploy-incoming.tar}"
-COMMIT="${2:-}"
+CODE_TAR="${1:-/root/deploy-incoming-code.tar}"
+MANIFEST="${2:-/root/deploy-incoming-manifest.json}"
+DIST_TAR="${3:-/root/deploy-incoming-dist.tar}"
+ASSET_TAR="${4:-}"           # 空 = 无资产变更
+COMMIT="${5:-}"
 APP="${APP_DIR:-/opt/dafeiyu-room}"
-[ -f "$TAR" ] || { echo "找不到 $TAR" >&2; exit 1; }
+
+[ -f "$CODE_TAR" ] || { echo "找不到代码包 $CODE_TAR" >&2; exit 1; }
 
 cd "$APP"
 PREV_LOCK=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
@@ -13,8 +19,24 @@ PREV_LOCK=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
 echo "==> 停止服务"
 systemctl stop dafeiyu-room || true
 
-echo "==> 解包"
-tar -xf "$TAR" -C "$APP"
+echo "==> 解包代码"
+tar -xf "$CODE_TAR" -C "$APP"
+
+if [ -f "$DIST_TAR" ]; then
+  echo "==> 解包前端构建产物"
+  rm -rf "$APP/dist/room"
+  mkdir -p "$APP/dist/room"
+  tar -xf "$DIST_TAR" -C "$APP/dist/room"
+fi
+
+if [ -n "$ASSET_TAR" ] && [ -f "$ASSET_TAR" ]; then
+  echo "==> 解包资产（git archive，路径含 public/room/assets/ 前缀）"
+  tar -xf "$ASSET_TAR" -C "$APP"
+fi
+
+if [ -f "$MANIFEST" ]; then
+  cp "$MANIFEST" "$APP/assets-manifest.json"
+fi
 
 NEW_LOCK=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
 if [ "$PREV_LOCK" != "$NEW_LOCK" ]; then

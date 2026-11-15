@@ -45,3 +45,12 @@ screenshots/
 _migrate/
 backups/
 *.tar.gz
+
+# 部署时在服务器生成的资产清单（运行时产物）
+assets-manifest.json
+
+# 前端构建产物（本地 npm run build 生成，不入库）
+dist/
+
+# 无头渲染验证截图（调试产物）
+.shots/

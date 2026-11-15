@@ -3,7 +3,7 @@
 // 这是可选的表现层：默认仍是原画 webm 立绘；切到 3D 后由同一份 home-state 快照驱动。
 // 不追求 1:1 还原（原画是 2D 立绘），追求「一眼是她」：蓝发、鲸鱼耳鳍、女仆头饰、
 // 白围裙、深蓝裙、鲸鱼尾巴，以及呼吸/眨眼/走路/坐下/睡觉。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;

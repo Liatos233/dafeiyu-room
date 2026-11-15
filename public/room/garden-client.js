@@ -1,4 +1,4 @@
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 import { createGardenWorld, GARDEN_PLOTS } from './garden-world.js';
 import { mountGardenUI } from './garden-ui.js';
 

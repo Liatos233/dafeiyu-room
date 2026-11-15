@@ -4323,8 +4323,13 @@ async function main() {
             ? 'index.html'
             : decodeURIComponent(url.pathname.slice('/room/'.length));
           if (rel === '' || rel.endsWith('/')) rel += 'index.html';
-          const file = path.resolve(path.join(ROOT, 'public', 'room'), rel);
-          const base = path.resolve(path.join(ROOT, 'public', 'room'));
+          const srcRoom = path.resolve(path.join(ROOT, 'public', 'room'));
+          const distRoom = path.resolve(path.join(ROOT, 'dist', 'room'));
+          // assets/ 与 vendor/ 这类大体积静态资源不随构建产物走（vite publicDir:false 不拷贝），永远从源码目录提供。
+          const useSrc = rel.startsWith('assets/') || rel.startsWith('vendor/');
+          const roomRoot = useSrc ? srcRoom : (fs.existsSync(path.join(distRoom, 'index.html')) ? distRoom : srcRoom);
+          const file = path.resolve(path.join(roomRoot), rel);
+          const base = path.resolve(roomRoot);
           if (!file.startsWith(base + path.sep) && file !== base) {
             sendJson({ ok: false, error: '非法路径' }, 400);
             return;
@@ -4342,6 +4347,8 @@ async function main() {
           }
           // 静态资源缓存策略：动画素材允许长缓存，页面/脚本每次校验
     function staticCacheControl(pathname) {
+      // 构建产物带内容哈希（index-<hash>.js），可永久缓存
+      if (pathname.includes('/_vite/')) return 'public, max-age=31536000, immutable';
       if (/\.(webm|mp4|m4a|mp3|ogg|wav|png|jpe?g|webp|gif|svg|woff2?|ttf|wasm)$/i.test(pathname)) {
         return 'public, max-age=604800, immutable';
       }

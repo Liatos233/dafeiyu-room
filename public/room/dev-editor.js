@@ -1,7 +1,7 @@
 // 开发用模型编辑器：?edit=1 打开
 // 右键选中（整组/单个）→ 方向键或 WASD 在地面平面移动，Q/E 旋转，Shift+W/S 升降
 // 地板会显示网格，方便对齐。改动存 localStorage，可一键复制补丁。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 import { NAV_DATA } from './nav-data.js';
 
 const STORE_KEY = 'home-edit-patches';

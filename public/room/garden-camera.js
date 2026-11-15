@@ -1,4 +1,4 @@
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 
 // Frame the actual yard within the space left by the controls, independent of
 // screen aspect ratio. The house remains visible as context behind the garden.

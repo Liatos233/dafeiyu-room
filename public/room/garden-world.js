@@ -1,5 +1,5 @@
 // 小蓝鱼的屋后菜园。纯表现层：种植规则和持久化由 garden-state / API 管理。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 
 export const GARDEN_PLOTS = Object.freeze(Array.from({ length: 8 }, (_, id) => Object.freeze({
   id, x: [2, 4.7, 7.4, 10.1][id % 4], z: id < 4 ? -2.2 : -5,
@@ -256,14 +256,15 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
     P('box',M.darkwood,x-.67,.36,z-d/2-.09,.035,.56,.035);
     P('bevel',M.endgrain,x-.67,.63,z-d/2-.09,.5,.22,.035,0,0,.035);
     const sign=label(String(id+1).padStart(2,'0')+' · 菜畦',.45,.17);sign.mesh.position.set(x-.67,.63,z-d/2-.112);sign.mesh.rotation.y=Math.PI;group.add(sign.mesh);
-    const plants=new THREE.Group();plants.name='garden-crop-'+id;plants.position.set(x,.18,z);group.add(plants);
     const selection=new THREE.Group();selection.visible=false;group.add(selection);
     const S=batch(selection);
     for(const zz of [-d/2-.045,d/2+.045])S.put('bevel',M.selected,x,.32,z+zz,w+.15,.025,.025);
     for(const xx of [-w/2-.045,w/2+.045])S.put('bevel',M.selected,x+xx,.32,z,.025,.025,d+.15);
-    S.flush();plotObjects.push({soil,plants,selection,sign,key:'',label:''});
+    S.flush();plotObjects.push({soil,selection,sign,label:''});
   }
   B.flush();
+  const cropsGroup=new THREE.Group();cropsGroup.name='garden-crops';group.add(cropsGroup);
+  let cropSignature='';
 
   // Hand tools accompany only a confirmed work dwell. Movement and rewards are
   // controlled by the server; these lightweight props never change save data.
@@ -362,11 +363,15 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
     }
   }
 
-  function clearInstances(node) {
-    for(const child of [...node.children]) {node.remove(child);if(child.isInstancedMesh)child.dispose();}
-  }
-  function drawCrop(plot,node) {
-    const b=batch(node);const p=b.put;
+  function drawCrop(plot,shared) {
+    const gp=GARDEN_PLOTS.find?.((q)=>q.id===plot.id)||GARDEN_PLOTS[plot.id];
+    const ox=gp?gp.x:0,oz=gp?gp.z:0;
+    const b={
+      put:(kind,m,x,y,z,...rest)=>shared.put(kind,m,x+ox,y+0.18,z+oz,...rest),
+      rod:(m,a,bb,r)=>shared.rod(m,[a[0]+ox,a[1]+0.18,a[2]+oz],[bb[0]+ox,bb[1]+0.18,bb[2]+oz],r),
+      flush:()=>{}
+    };
+    const p=b.put;
     const seed=plot.id*43+9;let r=seed;const rand=()=>{r=(r*1664525+1013904223)>>>0;return r/4294967296;};
     if(!plot.tilled) {
       for(let i=0;i<14;i++) {
@@ -484,10 +489,10 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
   }
   function update(view) {
     let changed=false;
+    let signature='';
     for(const plot of view?.plots||[]) {
       const item=plotObjects[plot.id];if(!item)continue;
-      const key=[!!plot.tilled,plot.cropId||'',plot.stage||0,!!plot.mature,!!plot.fertilized].join(':');
-      if(key!==item.key) {clearInstances(item.plants);drawCrop(plot,item.plants);item.key=key;changed=true;}
+      signature += plot.id + ':' + [!!plot.tilled,plot.cropId||'',plot.stage||0,!!plot.mature,!!plot.fertilized].join(':') + ';';
       const moisture=Math.max(0,Math.min(1,Number(plot.moisture)||0));
       item.soil.material.color.copy(new THREE.Color(0x75503a)).lerp(new THREE.Color(0x403425),moisture);
       const title=String(plot.id+1).padStart(2,'0')+' · '+(CROP_LABELS[plot.cropId]||'菜畦');
@@ -496,6 +501,15 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
         const ctx=item.sign.ctx;ctx.fillStyle=plot.mature?'#e9d391':'#e9dfc5';ctx.fillRect(0,0,512,128);ctx.strokeStyle='#385344';ctx.lineWidth=3;ctx.strokeRect(9,9,494,110);
         ctx.fillStyle='#385344';ctx.font='bold 48px "Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(title,256,66,470);item.sign.tex.needsUpdate=true;item.label=labelKey;
       }
+    }
+    if(signature!==cropSignature) {
+      // 跨畦合批：清空旧实例，把所有作物画进同一个共享 batch，一次 flush。
+      for(const child of [...cropsGroup.children]) {cropsGroup.remove(child);if(child.isInstancedMesh)child.dispose();}
+      const sb=batch(cropsGroup);
+      for(const plot of view?.plots||[]) {if(plotObjects[plot.id])drawCrop(plot,sb);}
+      sb.flush();
+      cropSignature=signature;
+      changed=true;
     }
     if(changed&&renderer?.shadowMap)renderer.shadowMap.needsUpdate=true;
   }

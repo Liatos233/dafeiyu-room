@@ -1,7 +1,7 @@
 // 小蓝鱼的立绘播放器 —— dsh-pet 的透明 webm 动画贴在 3D 画面上。
 //
 // 只做表现：切片段、交叉淡入、脚下阴影、朝向相机。行为由 home-state.js 决定。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 
 // 有些原始走路片段开头是站立/起步前摇。循环时从 trim 点开始，
 // 避免角色已经在移动、画面却还站着滑一段。

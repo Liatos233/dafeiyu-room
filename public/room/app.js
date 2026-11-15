@@ -1,6 +1,6 @@
 // 小蓝鱼的家 —— 页面表现层。
 // 事实/行为在 src/home-state.js；这里只读快照、画房间、处理相机与交互。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 import { ambience } from './ambience.js';
 import { createWorld } from './world.js';
 import { createDevEditor } from './dev-editor.js';
@@ -2660,7 +2660,6 @@ function showInfo(hs) {
   $('info').dataset.spot = hs.spot || '';
   $('info').classList.remove('hide');
 }
-$('infoClose')?.addEventListener('click', () => $('info').classList.add('hide'));
 $('infoGo').addEventListener('click', () => {
   const room = $('info').dataset.room;
   const spot = $('info').dataset.spot;

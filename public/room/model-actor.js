@@ -6,8 +6,8 @@
 //   · 坐下：压低 + 轻微后仰（静态模型做不出真正屈膝，尽量不穿模）
 //   · 躺下：绕 X 轴放平，脚下为原点，头朝床里
 // 行为仍由 home-state 决定，这里只读快照。
-import * as THREE from './vendor/three.module.js';
-import { GLTFLoader } from './vendor/GLTFLoader.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export const MODEL_URLS = Object.freeze({
   optimized: './assets/models/da-feiyu.opt.glb',

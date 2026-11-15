@@ -3,7 +3,7 @@
 // 这一层只做一件事：把 home-state.js 的状态画出来。
 // 家具位置、站位、门洞尺寸与 src/home-state.js 的 HOME_LAYOUT 对齐（1 单位 = 1 米）。
 // 不在这里做行为决定，也不改任何状态。
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -134,7 +134,7 @@ function furnitureSoftBox(parent, w, h, d, r, material, x, y, z, ry = 0) {
   shape.quadraticCurveTo(left, bottom, left + cr, bottom);
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: d - bevel * 2, steps: 1, bevelEnabled: true,
-    bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 5
+    bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 5
   });
   geometry.translate(0, 0, -d / 2 + bevel);
   return addMesh(parent, geometry, material, x, y, z, ry);
