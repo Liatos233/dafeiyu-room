@@ -1899,7 +1899,10 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
         emit(state, 'sleep', '关了灯，钻进被窝', now, { room: 'her_room', spot: 'bed' });
         state.dwell = null;
       } else {
-        setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
+        // 座位高度以「实际上座的 seg.elev」为准：布局里的 elev 是为平地站位准备的，
+        // 沙发/床这些是 SURFACES 支撑面，t.elev 往往是 0，会把刚坐上的人按回地面。
+        setActivity(state, t.kind, t.actText, t.pose, seg.elev, t.facing);
+        state.elev = seg.elev;
         state.clip = t.clip || null;
         state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
       }
