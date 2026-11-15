@@ -1,4 +1,4 @@
-# 把 AstrBot 全量状态包恢复到本机（Windows）
+﻿# 把 AstrBot 全量状态包恢复到本机（Windows）
 # 用法：
 #   # 先关闭本机 AstrBot（launcher 里点停止），再执行：
 #   powershell -ExecutionPolicy Bypass -File deploy\data\apply-state-windows.ps1 -Tar _migrate\astrbot-full-state.tar.gz

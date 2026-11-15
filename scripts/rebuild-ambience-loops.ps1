@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$SrcDir = "C:\Users\liato\dafeiyu-room\_tmp\audio-src",
   [string]$OutDir = "C:\Users\liato\dafeiyu-room\app\public\room\assets\sound\ambience"
 )

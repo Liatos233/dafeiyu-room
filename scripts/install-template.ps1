@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 $v = [int](node -p "process.versions.node.split('.')[0]")
 if ($v -lt 22) { throw "Node >= 22.13.0 required" }

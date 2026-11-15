@@ -1,4 +1,4 @@
-# 本地 → 云端 / 云端 → 本地 的 AstrBot 状态同步
+﻿# 本地 → 云端 / 云端 → 本地 的 AstrBot 状态同步
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File deploy\data\sync-state.ps1 -Direction push   # 本地覆盖云端
 #   powershell -ExecutionPolicy Bypass -File deploy\data\sync-state.ps1 -Direction pull   # 云端覆盖本地

@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Query = "thunder",
   [int]$Max = 6
 )
