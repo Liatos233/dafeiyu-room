@@ -2286,7 +2286,16 @@ function displayElevFor(her) {
   // 只有在“从家具上走下来”的过程中，才参考脚下家具高度（避免刚起步就掉到地板）；
   // 已经站定在普通地面时就按服务端给的高度，走路经过家具也不会突然升高。
   const transitLift = motionWalking ? furnitureTopAt(her.pos) : 0;
-  const base = Math.max(her.elev || 0, transitLift);
+  let base = Math.max(her.elev || 0, transitLift);
+  // 站在可站立平台上时，高度不低于平台面：
+  // 轮询快照会有零点几秒延迟，靠这一条保证"坐下的瞬间不会被画进沙发/床/躺椅"。
+  const plat = (NAV_DATA?.platforms || []).find((pf) => {
+    const r = pf.rect;
+    if (!r || !Array.isArray(her.pos)) return false;
+    return her.pos[0] >= r[0] - 0.05 && her.pos[0] <= r[2] + 0.05
+      && her.pos[1] >= r[1] - 0.05 && her.pos[1] <= r[3] + 0.05;
+  });
+  if (plat && her.transitioning !== true) base = Math.max(base, Number(plat.top) || 0);
   if (base < 0.2) return 0;
   // 只有真的躺着休息/睡觉时才加床面抬升；起身、过渡、普通躺姿都不加
   const resting = her.asleep || her.kind === 'sleep' || her.kind === 'nap';
