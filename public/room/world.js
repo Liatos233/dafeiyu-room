@@ -1135,14 +1135,51 @@ function mergeStaticDecor(world) {
 function buildShell(world, M, textures) {
   const p = world.root;
 
-  // 地板
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({
-    map: textures.wood, roughness: 0.78, metalness: 0, envMapIntensity: 0.18
-  }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(W / 2, 0, D / 2);
-  floor.receiveShadow = true;
-  p.add(floor);
+  // 地砖区域（这些地方不铺木地板，避免两层重叠）
+  const TILED = [
+    [0, 0, 4.2, 3.6],        // 厨房
+    [10.8, 5.6, 13.2, 8.2],  // 浴室
+    [8.4, 5.6, 10.8, 7.6],   // 洗衣间
+    [0, 7.6, 8.2, 9.0]       // 阳台
+  ];
+  // 木地板按条带铺，挖掉地砖区域；UV 用整块地板的映射，保证接缝处木纹连续
+  const addWoodRect = (x0, z0, x1, z1) => {
+    if (x1 - x0 < 0.02 || z1 - z0 < 0.02) return;
+    const t = textures.wood.clone();
+    t.needsUpdate = true;
+    t.repeat.set((x1 - x0) / W, (z1 - z0) / D);
+    t.offset.set(x0 / W, 1 - z1 / D);
+    t.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({
+      map: t, roughness: 0.78, metalness: 0, envMapIntensity: 0.18,
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
+    }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
+    mesh.receiveShadow = true;
+    p.add(mesh);
+  };
+  {
+    const zs = [...new Set([0, D, ...TILED.flatMap((r) => [r[1], r[3]])])]
+      .filter((z) => z >= 0 && z <= D)
+      .sort((a, b) => a - b);
+    for (let i = 0; i < zs.length - 1; i += 1) {
+      const z0 = zs[i];
+      const z1 = zs[i + 1];
+      if (z1 - z0 < 0.01) continue;
+      const mid = (z0 + z1) / 2;
+      const covered = TILED
+        .filter((r) => r[1] <= mid && r[3] >= mid)
+        .map((r) => [r[0], r[2]])
+        .sort((a, b) => a[0] - b[0]);
+      let cur = 0;
+      for (const [cx0, cx1] of covered) {
+        if (cx0 > cur) addWoodRect(cur, z0, cx0, z1);
+        cur = Math.max(cur, cx1);
+      }
+      if (cur < W) addWoodRect(cur, z0, W, z1);
+    }
+  }
 
   // 不同房间的地砖（略高于木地板）
   const tilePlane = (x0, z0, x1, z1, tex, repX, repY) => {
@@ -1152,7 +1189,7 @@ function buildShell(world, M, textures) {
     t.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: t, roughness: 0.66, metalness: 0.02, envMapIntensity: 0.3 }));
     m.rotation.x = -Math.PI / 2;
-    m.position.set((x0 + x1) / 2, 0.008, (z0 + z1) / 2);
+    m.position.set((x0 + x1) / 2, 0.012, (z0 + z1) / 2);
     m.receiveShadow = true;
     p.add(m);
   };
