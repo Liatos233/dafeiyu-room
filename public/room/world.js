@@ -888,10 +888,6 @@ function mergeStaticDecor(world) {
 
   world.updateEnvironment = (opts = {}) => updateEnvironment(world, opts);
   // 太阳/半球光平滑过渡（每帧调用）
-  // 占用网格必须在合批之前建：合批后整屋会并成少数大网格，
-  // AABB 覆盖全屋，网格里的表面高度会全部变成天花板顶（2.85m）。
-  try { world.buildOccupancy(); } catch (e) { console.warn('[occupancy] 构建失败', e); }
-  if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
   // ── 占用网格：一次性栅格化整间屋子，之后所有高度/占位查询都是 O(1) ───────
   // 逐帧打射线（几十次/帧）是上一版卡顿的根源，这里改成预计算。
   const GRID = { x0: -1.5, z0: -8.0, cell: 0.1, w: 0, h: 0 };
@@ -1018,6 +1014,11 @@ function mergeStaticDecor(world) {
     }
     return [x, z];
   };
+
+  // 占用网格在这里建：此时 buildOccupancy 已定义、家具几何都已在场景里，
+  // 且还没做静态合批（合批会生成覆盖全屋的大 AABB，把高度算成天花板顶）。
+  try { world.buildOccupancy(); } catch (e) { console.warn('[occupancy] 构建失败', e); }
+  if (!EDIT_MODE) try { mergeStaticDecor(world); } catch { /* 合批失败不影响画面 */ }
 
   world.updateSun = (dt = 0.016) => {
     if (!world.sun) return;
