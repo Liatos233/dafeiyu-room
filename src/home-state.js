@@ -92,7 +92,7 @@ export const HOME_LAYOUT = Object.freeze({
       washer: { pos: [9.7, 6.5], pose: 'stand', facing: 90, label: '洗衣机前', access: 'laundry' }
     },
     balcony: {
-        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.0, 7.70] },
+        chair: { pos: [3.0, 8.4], pose: 'sit', facing: 180, label: '躺椅上', access: 'bal_chair', support: 'balcony_chair', mount: [3.58, 8.3] },
       },
     pool: {
       lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.38, 10.58] },

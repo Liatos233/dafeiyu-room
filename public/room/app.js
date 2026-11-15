@@ -2831,7 +2831,7 @@ function buildNav3D() {
           new THREE.LineBasicMaterial({ color: 0x35d6c8, transparent: true, opacity: 0.5 })
         ));
       }
-      const lb = navLabel('P' + n, '#6ff2e6', 0.22);
+      const lb = navLabel('PL' + n, '#6ff2e6', 0.22);
       lb.position.set(r[0] + 0.03, 0.1, r[3] - 0.06);
       gPlat.add(lb);
       if (Array.isArray(pf.climb)) {
@@ -2851,7 +2851,7 @@ function buildNav3D() {
     const ids = Object.keys(nodes);
     ids.forEach((id, i) => {
       const [x, z] = nodes[id];
-      const lb = navLabel('P' + (i + 1), '#ffd23f', 0.22);
+      const lb = navLabel('N' + (i + 1), '#ffd23f', 0.22);
       lb.position.set(x, 0.22, z);
       gNodes.add(lb);
     });
