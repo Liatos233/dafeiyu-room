@@ -3990,7 +3990,8 @@ function frame(now) {
     let displayPos = her.pos;
     const swimmingNow = !!(her.swim && Date.now() < her.swim.until);
     if (swimmingNow) displayPos = swimHer(her).pos;
-    if (walkPredict && her.walking && !swimmingNow) {
+    // 过渡期间禁止路径外推：到达入口后的预测会把角色推进家具内部（高度还没抬起来）
+    if (walkPredict && her.walking && !swimmingNow && her.transitioning !== true) {
       const elapsed = Math.max(0, (performance.now() - walkPredict.at) / 1000);
       displayPos = advanceRoute(walkPredict.points, walkPredict.start, walkPredict.speed * elapsed);
     }
