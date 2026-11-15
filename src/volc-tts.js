@@ -28,8 +28,11 @@ export function resolveVolcTtsConfig(raw = {}, env = process.env) {
   const c = raw && typeof raw === 'object' ? raw : {};
   const appId = String(c.appId || env.VOLC_SPEECH_APP_ID || '').trim();
   const accessKey = String(c.accessKey || env.VOLC_SPEECH_ACCESS_TOKEN || '').trim();
+  // 新版控制台的「API Key」优先：只用一个 X-Api-Key 头，不再需要 APP ID / Access Token
+  const apiKey = String(c.apiKey || env.VOLC_SPEECH_API_KEY || '').trim();
   return {
-    configured: Boolean(c.enabled !== false && appId && accessKey),
+    configured: Boolean(c.enabled !== false && (apiKey || (appId && accessKey))),
+    apiKey,
     appId,
     accessKey,
     apiBase: String(c.apiBase || DEFAULT_API_BASE),
@@ -56,7 +59,7 @@ function buildPrompt(cfg, text) {
 export async function synthesizeVolcSpeech(text, cfg, { signal } = {}) {
   const clean = String(text ?? '').trim();
   if (!clean) throw new VolcTtsError('要说的话是空的');
-  if (!cfg?.appId || !cfg?.accessKey) throw new VolcTtsError('缺少豆包语音的 appId / accessKey');
+  if (!cfg?.apiKey && (!cfg?.appId || !cfg?.accessKey)) throw new VolcTtsError('缺少豆包语音的 apiKey（或 appId/accessKey）');
   if (clean.length > cfg.maxChars) {
     throw new VolcTtsError(`这条太长（${clean.length} 字），语音最多 ${cfg.maxChars} 字`);
   }
@@ -72,14 +75,17 @@ export async function synthesizeVolcSpeech(text, cfg, { signal } = {}) {
         enable_subtitle: true
       }
     };
+    // 新版 API Key 走 X-Api-Key；旧凭据走 App-Id + Access-Key
+    const authHeaders = cfg.apiKey
+      ? { 'X-Api-Key': cfg.apiKey }
+      : { 'X-Api-App-Id': cfg.appId, 'X-Api-Access-Key': cfg.accessKey };
     let response;
     try {
       response = await fetch(cfg.apiBase, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'X-Api-App-Id': cfg.appId,
-          'X-Api-Access-Key': cfg.accessKey,
+          ...authHeaders,
           'X-Api-Resource-Id': cfg.resourceId,
           'X-Api-Request-Id': crypto.randomUUID()
         },
