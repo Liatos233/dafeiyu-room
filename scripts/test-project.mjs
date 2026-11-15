@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-const navSource = read('public/room/nav-data.js').replace(/^export const NAV_DATA\s*=\s*/, '').trim().replace(/;\s*$/, '');
-const NAV = JSON.parse(navSource);
+// nav-data.js 是 ESM（对象字面量允许尾逗号），直接 import 比 JSON.parse 稳健，避免尾逗号炸解析。
+const { NAV_DATA: NAV } = await import('../public/room/nav-data.js');
 
 let pass = 0, fail = 0;
 function test(name, fn) {

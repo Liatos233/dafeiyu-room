@@ -53,11 +53,19 @@ QQ 用户 ──> QQ ──> SnowLuma ──> AstrBot（:6185/:6199）──插�
 # 首次
 copy config.example.json config.json     # 再按需填 dsh / snowluma / ownerQQ
 npm ci
-npm start                                 # 起 bridge，:3101
-# 房间页面：http://127.0.0.1:3101/room/（或本地 nginx 3100）
 ```
 
-`state/` 是运行时数据（房间、菜园、会话），`config.json` 是本机配置，两者都**不提交**。
+开发要**两个进程**（前端已改成 Vite 构建，源码是裸 `import 'three'`，不能再让 bridge 直接 serve 源码）：
+
+```powershell
+npm start        # 终端 1：bridge，:3101（API + 状态机 + 静态资产回源）
+npm run dev      # 终端 2：Vite 前端，:5173，热更新
+# 打开 http://localhost:5173/room/  （dev server 把 /api、/room/assets 代理回 bridge）
+```
+
+生产构建：`npm run build` 输出到 `dist/room/`（内容哈希 JS/CSS）；bridge 有 `dist/room/index.html` 时优先服务构建产物，否则回退 `public/room/` 源码。
+
+`state/` 是运行时数据（房间、菜园、会话），`config.json` 是本机配置，`dist/` 是构建产物，三者都**不提交**。
 
 ---
 
@@ -79,23 +87,29 @@ app/
 │  ├─ snowluma-conn.js / napcat-client.js                     QQ 网关连接
 │  ├─ mcp-*.js                                                MCP 服务（SnowLuma 安全封装、搜索）
 │  └─ dsh-client.js / v2-wait.js                              DSH 客户端与等待
-├─ public/room/           浏览器端（three.js）
-│  ├─ index.html          页面骨架 + 所有 UI/CSS（~47KB）
+├─ public/room/           浏览器端（Vite 构建，three 走 npm 依赖）
+│  ├─ index.html          页面骨架 + UI/CSS + boot 错误处理（Vite 入口）
 │  ├─ app.js              主逻辑（~187KB）：状态轮询、相机、UI、天气、动画调度
 │  ├─ world.js            场景搭建（~133KB）：房间、家具、天空、粒子、占用网格
 │  ├─ actor.js            2D 立绘播放器（三图层交叉淡化、脚底锚点）
 │  ├─ actor3d.js / model-actor.js   3D 模型（可选）
 │  ├─ ambience.js         环境音（程序化噪声 + CC0 采样）
-│  ├─ nav-data.js         导航数据：nodes/edges/keepout/platforms/spots
+│  ├─ nav-data.js         导航数据：nodes/edges/keepout/platforms/spots（与服务端 home-state.js 双源，见 §9）
 │  ├─ garden-*.js|css     菜园前端（世界构建、UI、相机）
 │  ├─ dev-editor.js       `?edit=1` 模型编辑器（选中/移动/旋转/补丁）
-│  └─ action-*.js         动作清单与目录
+│  ├─ action-*.js         动作清单与目录
+│  ├─ assets/             ~380MB 静态资产（311 个 webm 动画 + 2 个 glb + 贴图/音频；git 跟踪）
+│  └─ vendor/             three.module.js 等（仅 dev 页面 garden-showcase 用；主模块已切 npm three）
+├─ vite.config.js         Vite 构建配置（root=public/room，base=/room/，产物 dist/room）
+├─ dist/room/             前端构建产物（内容哈希 JS/CSS，gitignored，部署时本地 build 上传）
 ├─ deploy/cloud/          部署与运维脚本（见 §7）
 ├─ scripts/               生成器、测试、无头验收工具（见 §8）
-├─ docs/                  文档（本文件 + room-seats + 其他）
+│  ├─ build-asset-manifest.mjs   资产 sha256 清单（部署增量上传用）
+│  └─ garden-probe.mjs           菜园合批探针（InstancedMesh/三角形/包围盒对照）
+├─ docs/                  文档（本文件 + HANDOVER-room-seats.md + 其他）
 ├─ state/                 运行时状态（不提交）
 ├─ config.json            本机配置（不提交）
-└─ package.json           start / 大量 test:* 脚本
+└─ package.json           start / dev / build / 大量 test:* 脚本
 ```
 
 > 仓库里残留了一批 `*.bak-*` 文件（`world.js.bak-fix1..10`、`app.js.bak-sky` 等），是历史修补的备份，**不参与运行**，可在确认无回滚需求后清理。
@@ -145,6 +159,8 @@ app/
 
 ## 5. 浏览器端（`public/room/`）
 
+> **构建链**：前端用 Vite 构建（`npm run build` → `dist/room/`），`import 'three'` 走 npm `three@0.160.0`（tree-shake + minify），产物内容哈希 JS/CSS（`_vite/index-<hash>.js`）。开发 `npm run dev`（:5173，热更新）。`index.html` 内联的 `<style>` 和 boot 错误处理脚本保留内联。dev 页面（`garden-showcase.html` 等）仍引用 `vendor/three.module.js`，走 bridge 静态回源。
+
 - **渲染**：three.js；`world.js` 建场景并做静态合批（`mergeStaticDecor`，合批前必须刷新 `matrixWorld`）
 - **角色**：`actor.js` 2D 立绘，三层交叉淡化；`clipFor()` 决定当前片段（走/坐/睡/动作），`app.js` 里做最短保持
 - **天气**：客户端选择或自动轮换，粒子/雾/地面湿滑在 `world.updateEnvironment`；`ambience.js` 按天气+时段出环境音
@@ -189,18 +205,28 @@ pulids_snowluma_go_to_astrbot  SnowLuma/QQ 客户端托管
 powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
 ```
 
-参数：`-AllowDirty`（带未提交改动部署）、`-NoRestart`（只上传不解包）、`-Server/-User/-Key/-AppDir`。
+参数：`-AllowDirty`（带未提交改动部署）、`-NoRestart`（只上传不解包）、`-FullAssets`（资产不做增量，强制全量）、`-Server/-User/-Key/-AppDir`。
 
-流程：检查工作区 → `git archive HEAD`（**只含跟踪文件**，约 380MB）→ scp → 服务器 `stop → 解包（保留 state/config/node_modules）→ lock 变了才 npm ci → start → 自检`。
+流程（**三分通道**，不再 380MB 全量）：
+1. **代码包**：`git archive`（排除 `public/room/assets`）→ 约 4.4MB
+2. **资产包**：`scripts/build-asset-manifest.mjs` 生成 sha256 清单，与服务器 `assets-manifest.json` diff；**只有变更才** `git archive public/room/assets`（~377MB）。用 git archive 而非 tar.exe（Windows tar.exe 处理不了中文文件名）
+3. **构建产物**：本地 `npm run build` → `dist/room/`（~1.6MB）
+4. scp 三包 + 清单 + apply-deploy.sh → 服务器 `stop → 解包代码 → 清空并解包 dist → 解包资产(若变) → 更新 manifest → lock 变了才 npm ci → start → 自检`
+
+耗时：常规（资产/依赖未变）约 15–30 秒；依赖变了加 ~30s；资产变更或首次部署加 377MB 上传（看带宽 1–6 分钟）。
 
 ### 7.2 验证
 
 ```bash
 ssh -i C:\Users\liato\.ssh\dafeiyu_cloud root@101.245.76.51 \
-  'bash /opt/dafeiyu-room/deploy/cloud/check-drift.sh'
+  'bash /opt/dafeiyu-room/deploy/cloud/check-drift.sh'   # 版本 + 资产清单抽查
 curl -s -o /dev/null -w "%{http_code}\n" http://101.245.76.51:3100/room/
-curl -s -D - -o /dev/null http://101.245.76.51:3100/room/app.js | grep -i cache   # no-cache
+# 非回环访问需要 consoleToken（401 正常）；回环自检见 apply-deploy.sh 末尾
 ```
+
+> ⚠️ `nginx-room.conf`（§7.6）加了静态直出 + gzip，但 `deploy.ps1` **不自动更新 nginx 配置**。要启用需在服务器手动执行一次：
+> `install -m 644 deploy/cloud/nginx-room.conf /etc/nginx/sites-available/dafeiyu-room && nginx -t && systemctl reload nginx`
+> 未更新前 assets 仍走 bridge（功能正常，仅少 nginx 层缓存优化）。
 
 ### 7.3 首次安装 / 灾备
 

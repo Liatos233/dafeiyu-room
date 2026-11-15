@@ -1,4 +1,4 @@
-# 性能报告（2026-11-12）
+# 性能报告（2026-11-12，2026-11-15 更新瓶颈清单）
 
 测量方式：headless Chrome（`--disable-gpu`，1600×1000），页面里 `window.__getRenderer()` +
 累计计数求平均（`node scripts/perf-check.mjs` 或 `scripts/perf_avg.py`）。
@@ -41,18 +41,18 @@
 ### 3. 测量能力
 
 - `window.__renderer` / `window.__getRenderer()` / `window.__getWorld()` / `window.__frames`
-- `renderer.info.autoReset = false`，每帧手动 `reset()`，避免 TV 离屏渲染把统计清零
+- `renderer.info.autoReset = false`，但**当前只在 boot 时 reset 一次**，渲染循环里没有每帧 reset —— 所以 `perf-check.mjs` 读到的是累积值（`123102 draw calls` 这类假数），待修
 - `npm run perf:check` 一次输出 FPS / p95 / draw call / 三角形 / 几何体 / 纹理 / 堆
 
-## 现在的瓶颈
+## 现在的瓶颈（2026-11-15 更新）
 
-1. **615 draw call 仍然偏高**（桌面合适，移动端偏重）
-   - 剩余大头：每个家具的独立小网格、菜园 8 畦 × 12 作物的独立实例
-   - 下一步：把菜园作物改成 `InstancedMesh`（同一作物同一阶段一个实例批次），预计再降 150~250 call
-2. **三角形 233k** 主要来自 `ExtrudeGeometry` 的圆角家具（`furnitureSoftBox`，`bevelSegments: 3`）
-   - 降到 `bevelSegments: 2` 可省 10~15% 三角形，肉眼差异很小
-3. **TV 离屏渲染**：即使电视关着也在渲染目标里跑一遍
-   - 建议：`tvOn` 为 false 时跳过离屏 pass
+1. ~~菜园作物独立实例~~ ✅ **已做**：作物改成 `InstancedMesh`，并做了**跨畦合并**（8 畦同作物同阶段合成一批）。实测：58 → 20 个 InstancedMesh、单帧 draw call 542 → 504，三角形/包围盒完全不变。
+2. ~~`furnitureSoftBox` bevelSegments:3~~ ✅ **已做**：降到 `bevelSegments: 2`，省 10~15% 三角形。
+3. ~~TV 离屏渲染~~ ✅ **已消除**：电视改成「屏幕投屏」（`getDisplayMedia` → `VideoTexture`），关掉时 `stopTvCast` 会 pause 视频 + dispose 纹理，没有常驻离屏 pass 了。
+
+剩余可做的（非紧急）：
+- 615 draw call 仍偏高，大头是每个家具的独立小网格（静态装饰已合批过一轮，可再按材质继续合）
+- 前端已切 Vite 构建（主 bundle 939KB / gzip 270KB），`_vite/` 内容哈希可永久缓存
 
 ## 复现命令
 

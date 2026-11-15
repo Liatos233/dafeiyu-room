@@ -73,7 +73,7 @@ test('需求按经过的时间缩放，不按心跳次数', () => {
 });
 
 test('尿急优先级高于闲逛，去卫生间', () => {
-  let s = atState({ needs: { hunger: 0.1, thirst: 0.1, energy: 0.8, bladder: 0.93, pain: 0 }, nextDecisionAt: T0 });
+  let s = atState({ room: 'living', spot: 'water', pose: 'stand', elev: 0, needs: { hunger: 0.1, thirst: 0.1, energy: 0.8, bladder: 0.93, pain: 0 }, nextDecisionAt: T0 });
   s = advanceHomeState(s, T0, {}).state;
   assert.equal(s.walking, true);
   assert.equal(s.route.target.room, 'bathroom');
@@ -81,7 +81,7 @@ test('尿急优先级高于闲逛，去卫生间', () => {
 });
 
 test('夜里困了先走回床，路上不算睡着', () => {
-  let s = atState({ kind: 'tv', activity: '窝在沙发上看电视', needs: { hunger: 0.3, thirst: 0.3, energy: 0.4, bladder: 0.2, pain: 0 }, nextDecisionAt: 0 });
+  let s = atState({ room: 'living', spot: 'water', pose: 'stand', elev: 0, kind: 'tv', activity: '窝在沙发上看电视', needs: { hunger: 0.3, thirst: 0.3, energy: 0.4, bladder: 0.2, pain: 0 }, nextDecisionAt: 0 });
   const night = Date.parse('2026-11-06T23:30:00+08:00');
   s.lastTickAt = night;
   s = advanceHomeState(s, night, {}).state;
@@ -163,7 +163,7 @@ test('床边的水可以伸手够到，并写一条事件', () => {
 });
 
 test('移动立即出发、全程按奔跑速度', () => {
-  let s = atState({ needs: { hunger: 0.2, thirst: 0.8, energy: 0.8, bladder: 0.2, pain: 0 }, nextDecisionAt: T0 });
+  let s = atState({ room: 'living', spot: 'water', pose: 'stand', elev: 0, needs: { hunger: 0.2, thirst: 0.8, energy: 0.8, bladder: 0.2, pain: 0 }, nextDecisionAt: T0 });
   s = advanceHomeState(s, T0, {}).state;
   assert.equal(s.walking, true);
   assert.equal(s.route.departAt, T0, '不应再有 250ms 的思考/起跑延迟');
@@ -184,6 +184,7 @@ test('跑姿按心情/紧急度选，且两种都会出现', () => {
 
 test('到了不算做了：停留 dwell 之后才结算、才写事件', () => {
   let s = atState({
+    room: 'living', spot: 'water', pose: 'stand', elev: 0,
     needs: { hunger: 0.2, thirst: 0.75, energy: 0.8, bladder: 0.2, pain: 0 },
     nextDecisionAt: T0, lastTickAt: T0
   });
@@ -378,7 +379,7 @@ test('点击反应随 DSH 心情变化，而不是固定 happy', () => {
 });
 
 test('sleep / wake / lamp / command 动作会改状态并留痕', () => {
-  let s = atState({ nextDecisionAt: 0 });
+  let s = atState({ room: 'living', spot: 'water', pose: 'stand', elev: 0, nextDecisionAt: 0 });
   s = applyHomeAction(s, { action: 'lamp', on: false, at: T0 }).state;
   assert.equal(s.lamp, false);
   s = applyHomeAction(s, { action: 'command', room: 'balcony', spot: 'chair', at: T0 + 1 }).state;
@@ -393,6 +394,7 @@ test('sleep / wake / lamp / command 动作会改状态并留痕', () => {
   assert.equal(s.route.target.spot, 'bed');
   const bedAt = s.route.arriveAt;
   s = advanceHomeState(s, bedAt + 10, {}).state;
+  s = advanceHomeState(s, bedAt + 10 + 800, {}).state;
   assert.equal(s.asleep, true, '进被窝后才开始睡');
   assert.equal(`${s.room}.${s.spot}`, 'her_room.bed');
   s = applyHomeAction(s, { action: 'wake', at: bedAt + 20 }).state;
