@@ -384,6 +384,7 @@ class Layer {
       toneMapped: false
     });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_W, PLANE_H), this.material);
+    this.mesh.frustumCulled = false;
     this.mesh.position.set(0, FEET_CENTER_Y, index * 0.0015);
     this.mesh.visible = false;
     this.src = '';

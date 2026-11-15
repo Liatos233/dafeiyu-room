@@ -1318,10 +1318,6 @@ function playDrop() { playTone({ from: 190, to: 105, dur: 0.16, vol: 0.085, type
 function playTap() { playTone({ from: 520, to: 610, dur: 0.065, vol: 0.032, type: 'sine' }); }
 let walkPredict = null;
 let lastDisplayPos = null;
-let seatSolveKey = '';
-let seatSolve = null;
-let biasCache = { key: '', off: [0, 0] };
-let nearCache = { key: '', meshes: null };   // 家具落点解（缓存）
 
 // 事件文案统一成「你」的视角（也兼容历史数据里的旧文案）
 function toSecondPerson(text) {
@@ -4204,9 +4200,10 @@ function frame(now) {
         }).catch(() => {});
       } catch { /* 忽略 */ }
     }
-    // ── 几何修正：站/坐在家具上时，高度取真实表面，位置避开实体 ──────────
-    // 立绘是平面，写死座面高度会在床品/靠垫/伞杆处穿模，这里直接问场景几何。
-    let drawPos = seatOverride ? shownHer.pos : displayPos;
+    // ── 显示：完全跟随服务端状态（位置 / 高度），不做任何几何修正 ──────────
+    // 上/下座由服务端两段式完成：原地升降 + 沿座面平移。
+    // 客户端只负责画，不再采样场景、不再搜索落点、不再做深度偏置。
+    const drawPos = seatOverride ? shownHer.pos : displayPos;
     let drawElev = bubbleAnchorElev;
     const onFurniture = !walkingNow && (
       (bubbleAnchorElev || 0) > 0.05
@@ -4214,62 +4211,6 @@ function frame(now) {
       || her.transitioning === true
       || seatOverride
     );
-    if (her.transitioning === true) window.__lastTransitionAt = performance.now();
-    const transitionGrace = performance.now() - (window.__lastTransitionAt || 0) < 300;
-    const solving = onFurniture && her.transitioning !== true && !transitionGrace;
-    // 目标在平台上的座位：绘制高度永远不低于所在位置的真实表面，
-    // 避免过渡瞬间（服务端 elev 还是 0）被画进沙发/床里。
-    if (Number(her.elevTarget || her.elev || 0) > 0.05 || (her.spot && /sofa|bed|chair|lounger/.test(her.spot))) {
-      const surf = world.surfaceYAt(drawPos[0], drawPos[1]);
-      if (surf > 0.05) drawElev = Math.max(drawElev, surf + 0.012);
-    }
-
-    if (solving && !charDrag?.active && !placeHold) {
-      // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
-      // 座位点固定：只按「房间:座位」缓存，避免过渡期间每帧重算（重算是百毫秒级）
-      const cacheKey = `${her.room}:${her.spot}`;
-      if (seatSolveKey !== cacheKey) {
-        seatSolveKey = cacheKey;
-        const expected = Math.max(0.05, her.elev || 0);
-        const seat = world.bestSeatPoint(drawPos[0], drawPos[1], expected, 0.5);
-        seatSolve = seat ? { pos: [seat[0], seat[1]], y: seat[2] } : null;
-      }
-      if (seatSolve) {
-        drawPos = [seatSolve.pos[0], seatSolve.pos[1]];
-        drawElev = Math.min(Math.max(drawElev, seatSolve.y + 0.012), seatSolve.y + 0.06);
-      }
-    }
-
-    // 立绘是平面：站在家具上时，家具近侧的栏杆会挡在她腿前，
-    // 看起来像"穿进椅子"。沿相机方向轻微前移 0.22m，屏幕位置几乎不变，
-    // 但深度排到了家具前面，视觉上就不会互相穿插。
-    if (onFurniture && !charDrag?.active && !placeHold) {
-      // 朝相机方向轻微前移，缓解"被家具近侧遮挡"的观感。
-      // 这个偏移只跟「座位 + 相机方位」有关：按 15° 分桶缓存，不再每帧射线。
-      // 基准必须是「服务端座位点」或「求解结果」，不能用上一帧已偏置的 drawPos（会逐帧累加漂移）
-      const base = seatSolve ? seatSolve.pos : (Array.isArray(her.pos) ? her.pos : drawPos);
-      const dx = camera.position.x - base[0];
-      const dz = camera.position.z - base[1];
-      const len = Math.hypot(dx, dz) || 1;
-      const az = Math.round(Math.atan2(dx, dz) / (Math.PI / 12));
-      const bkey = `${her.room}:${her.spot}:${az}`;
-      const nkey = `${her.room}:${her.spot}`;
-      if (nearCache.key !== nkey) {
-        nearCache = { key: nkey, meshes: world.nearMeshes ? world.nearMeshes(base[0], base[1], 1.3) : null };
-      }
-      if (biasCache.key !== bkey) {
-        let bias = 0.42;
-        let off = [0, 0];
-        while (bias > 0.005) {
-          const cx = (dx / len) * bias;
-          const cz = (dz / len) * bias;
-          if (!world.preciseBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, 1.25, nearCache.meshes)) { off = [cx, cz]; break; }
-          bias -= 0.12;
-        }
-        biasCache = { key: bkey, off };
-      }
-      drawPos = [base[0] + biasCache.off[0], base[1] + biasCache.off[1]];
-    }
 
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, clip: actor.current, walking: walkingNow };
     actor.update(dt, camera, {

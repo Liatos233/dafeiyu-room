@@ -33,7 +33,7 @@ export const SURFACES = Object.freeze({
   floor: 0,
   rug: 0.02,
   sofa_seat: 0.48,
-  bed_top: 0.54,
+  bed_top: 0.65,
   balcony_chair: 0.40,
   pool_lounger: 0.445,
   dining_seat: 0,
