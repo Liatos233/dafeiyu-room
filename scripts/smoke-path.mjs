@@ -120,16 +120,20 @@ for (const f of frames) {
   }
 }
 // 位置跳变 & 动画切换统计
-let maxJump = 0, jumps = [], clipSwitches = 0, lastClip = null;
+let maxJump = 0, jumps = [], clipSwitches = 0, lastClip = null, lastClipAt = 0, quickCuts = 0;
 for (let i = 1; i < frames.length; i += 1) {
   const a = frames[i - 1], b = frames[i];
   if (a.label !== b.label) { if (b.clip && lastClip && b.clip !== lastClip) clipSwitches += 1; if (b.clip) lastClip = b.clip; continue; }
   const d = Math.hypot(b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]);
   if (!b.walking && d > maxJump) { maxJump = d; jumps.push({ label: b.label, d: +d.toFixed(2), pos: b.pos, elev: b.elev }); }
-  if (b.clip && lastClip && b.clip !== lastClip) clipSwitches += 1;
+  if (b.clip && lastClip && b.clip !== lastClip) {
+    clipSwitches += 1;
+    if (lastClipAt && b.t - lastClipAt < 900) quickCuts += 1;
+    lastClipAt = b.t;
+  }
   if (b.clip) lastClip = b.clip;
 }
-const summary = { total: frames.length, byLabel, maxStillJump: +maxJump.toFixed(2), jumps: jumps.slice(-5), clipSwitches };
+const summary = { total: frames.length, byLabel, maxStillJump: +maxJump.toFixed(2), jumps: jumps.slice(-5), clipSwitches, quickCuts };
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(summary, null, 2));
 console.log(JSON.stringify(summary, null, 2));
 process.exit(0);
