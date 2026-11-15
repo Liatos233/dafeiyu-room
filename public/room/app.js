@@ -4199,7 +4199,8 @@ function frame(now) {
       || ['up', 'play', 'down'].includes(seatPhase)
       || PREVIEW || PIN_TEST;
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
-    bubbleAnchorElev = displayElevFor(shownHer);
+    // 高度必须和位置用同一份快照：shownHer 会滞后一帧，导致 pos 已到座位、elev 还是 0
+    bubbleAnchorElev = displayElevFor(her || shownHer);
     // 走路/站立时一律贴地：服务端 elev 偶尔会残留座面高度，导致她悬空
     // 高度完全由服务端（support 面 × 姿态）决定，这里不再二次猜测
     if (walkingNow) bubbleAnchorElev = 0;
