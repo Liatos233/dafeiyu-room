@@ -43,7 +43,7 @@ const send = (method, params = {}) => new Promise((resolve) => {
 await send('Runtime.enable');
 await send('Page.enable');
 await send('Page.navigate', { url: 'http://101.245.76.51:3100/room/?sky=day&hour=12' });
-await sleep(26000);
+await sleep(34000);
 
 const evalJs = async (expr) => {
   const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });

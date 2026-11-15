@@ -4112,7 +4112,9 @@ function frame(now) {
       || her.transitioning === true
       || seatOverride
     );
-    const solving = onFurniture && her.transitioning !== true;
+    if (her.transitioning === true) window.__lastTransitionAt = performance.now();
+    const transitionGrace = performance.now() - (window.__lastTransitionAt || 0) < 300;
+    const solving = onFurniture && her.transitioning !== true && !transitionGrace;
     if (solving && !charDrag?.active && !placeHold) {
       // 结果缓存：只在位置/座位变化时重算（网格查询本身很便宜，但没必要每帧算）
       const qx = Math.round(drawPos[0] * 10);
@@ -4127,7 +4129,7 @@ function frame(now) {
       }
       if (seatSolve) {
         drawPos = [seatSolve.pos[0], seatSolve.pos[1]];
-        drawElev = Math.max(drawElev, seatSolve.y + 0.012);
+        drawElev = Math.min(Math.max(drawElev, seatSolve.y + 0.012), seatSolve.y + 0.06);
       }
     }
 
