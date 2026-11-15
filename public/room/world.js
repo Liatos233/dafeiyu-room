@@ -983,6 +983,25 @@ function mergeStaticDecor(world) {
     return false;
   };
 
+  /** 轻量遮挡检测：4 个水平方向 × 1 个高度 + 1 条垂直射线（约 10ms），给每帧偏置用 */
+  world.quickBlocked = (x, z, radius = 0.2, footY = 0) => {
+    const up = new THREE.Vector3(0, 1, 0);
+    const rc = new THREE.Raycaster();
+    for (let i = 0; i < 4; i += 1) {
+      const a = (i / 4) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      rc.set(new THREE.Vector3(x, footY + 0.45, z), dir);
+      rc.far = radius + 0.02;
+      const hits = rc.intersectObject(world.root, true);
+      for (const h of hits) if (!_occSkip(h.object) && h.distance <= radius + 0.02) return true;
+    }
+    rc.set(new THREE.Vector3(x, footY + 0.06, z), up);
+    rc.far = 1.1;
+    const hits = rc.intersectObject(world.root, true);
+    for (const h of hits) if (!_occSkip(h.object) && h.distance <= 1.1) return true;
+    return false;
+  };
+
   /** 精确身体柱检测（射线，慢但对斜放的家具准确）；只在换座位时调用 */
   world.preciseBlocked = (x, z, radius = 0.22, footY = 0, height = 1.35) => {
     const up = new THREE.Vector3(0, 1, 0);

@@ -4257,7 +4257,7 @@ function frame(now) {
         while (bias > 0.005) {
           const cx = (dx / len) * bias;
           const cz = (dz / len) * bias;
-          if (!world.preciseBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev, 1.25)) { off = [cx, cz]; break; }
+          if (!world.quickBlocked(base[0] + cx, base[1] + cz, 0.2, drawElev)) { off = [cx, cz]; break; }
           bias -= 0.12;
         }
         biasCache = { key: bkey, off };
