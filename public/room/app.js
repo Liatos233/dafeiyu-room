@@ -2355,7 +2355,8 @@ function syncCharacter() {
     syncCharacter._spot = her.spot;
     if (actor.current !== next) {
       const now = performance.now();
-      const urgent = URGENT.has(next) || poseChanged || spotChanged;
+      // 进入/离开走路都算紧急：起步要立刻播跑动，停下要立刻回待机
+      const urgent = URGENT.has(next) || URGENT.has(actor.current) || poseChanged || spotChanged;
       // 非紧急片段：至少驻留 1200ms，且新片段要连续 350ms 才切（防抖）
       if (!urgent) {
         if (now - (syncCharacter._lastAt || 0) < 1200) return;
@@ -4034,13 +4035,12 @@ function frame(now) {
     walkPrevPos = [displayPos[0], displayPos[1]];
     const movingNow = !swimmingNow && movedDist > 0.0035;
     stillMs = movingNow ? 0 : stillMs + dt * 1000;
-    const derivedWalk = !dragging && !placeHold
-      && (movingNow || (stillMs < 120 && (her.route?.length || 0) > 0));
+    // 起停判定以「服务端说她正在走」为主：轮询 500ms 一次，只靠画面位移会晚半秒才切动画。
+    const derivedWalk = !dragging && !placeHold && !swimmingNow
+      && (her.walking === true || movingNow || (stillMs < 120 && (her.route?.length || 0) > 0));
     if (derivedWalk !== motionWalking) {
-      const wasWalking = lastMotionWalking;
-    motionWalking = derivedWalk;
-    lastMotionWalking = motionWalking;
-    if (wasWalking !== motionWalking && !charDrag?.active && !placeHold) syncCharacter();
+      motionWalking = derivedWalk;
+      lastMotionWalking = derivedWalk;
       syncCharacter();
     }
     if (window.__ANIMDBG) {
