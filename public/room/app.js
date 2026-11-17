@@ -519,6 +519,11 @@ const actor = {
   _visible: true,
   get group() { return actorWebm.group; },
   get current() { return actorWebm.current; },
+  // 当前片段的视频时长（毫秒），用于「先让这段播完再切」
+  get clipMs() {
+    const d = actorWebm.video && actorWebm.video.duration;
+    return Number.isFinite(d) && d > 0 ? Math.round(d * 1000) : 0;
+  },
   get active() { return actorWebm.active; },
   setVisible(v) { actorWebm.setVisible(v); },
   prime(name) { return actorWebm.prime(name); },
@@ -2359,7 +2364,9 @@ function syncCharacter() {
       const urgent = URGENT.has(next) || URGENT.has(actor.current) || poseChanged || spotChanged;
       // 非紧急片段：至少驻留 1200ms，且新片段要连续 350ms 才切（防抖）
       if (!urgent) {
-        if (now - (syncCharacter._lastAt || 0) < 1200) return;
+        // 最短驻留 = 当前片段实际时长（至少 1.2s，最多 6s）：先让这段播完再换
+        const hold = Math.max(1200, Math.min(6000, actor.clipMs || 1200));
+        if (now - (syncCharacter._lastAt || 0) < hold) return;
         if (syncCharacter._want !== next) { syncCharacter._want = next; syncCharacter._wantAt = now; return; }
         if (now - (syncCharacter._wantAt || 0) < 350) return;
       }
