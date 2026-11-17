@@ -10,6 +10,7 @@ import { NAV_DATA } from './nav-data.js';
 import { createGardenClient } from './garden-client.js';
 import { createGardenWorld } from './garden-world.js';
 import { getGardenFraming } from './garden-camera.js';
+import { toggleAnimGraph, isAnimGraphOpen } from './clip-graph.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -3008,6 +3009,7 @@ function buildDevQuickMenu() {
     <button data-dev="nav" class="dq">地图 <b></b></button>
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
     <button data-dev="anim" class="dq">动画状态 <b></b></button>
+    <button data-dev="animgraph" class="dq">动画图 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
     <button data-dev="her" class="dq">状态卡 <b></b></button>
     <button data-dev="events" class="dq">事件卡 <b></b></button>
@@ -3052,6 +3054,12 @@ function buildDevQuickMenu() {
   el.querySelector('[data-dev="anim"]').addEventListener('click', () => {
     setDevMode(!devMode);
     mark('anim', devMode);
+  });
+  el.querySelector('[data-dev="animgraph"]').addEventListener('click', () => {
+    try {
+      toggleAnimGraph();
+      mark('animgraph', isAnimGraphOpen());
+    } catch (e) { console.warn('[anim-graph]', e); }
   });
   el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
     const el2 = cardEls().actions;
