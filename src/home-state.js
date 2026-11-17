@@ -694,7 +694,14 @@ export function normalizeHomeState(raw, now = Date.now()) {
         type: sanitizeText(e.type, 24),
         text: sanitizeText(e.text, 140),
         room: sanitizeText(e.room, 24),
-        spot: sanitizeText(e.spot, 24)
+        spot: sanitizeText(e.spot, 24),
+        // 右侧卡片展示用的细节字段；旧存档没有这些字段时为 null
+        roomLabel: e.roomLabel ? sanitizeText(e.roomLabel, 24) : null,
+        spotLabel: e.spotLabel ? sanitizeText(e.spotLabel, 24) : null,
+        activity: e.activity ? sanitizeText(e.activity, 80) : null,
+        clip: e.clip ? sanitizeText(e.clip, 40) : null,
+        kind: e.kind ? sanitizeText(e.kind, 24) : null,
+        pose: e.pose ? sanitizeText(e.pose, 16) : null
       }))
       .filter((e) => e.at > 0 && now - e.at < 24 * HOUR)
       .slice(-MAX_EVENT_LOG)
