@@ -2480,7 +2480,14 @@ export function homeView(state, now = Date.now(), env = {}) {
       type: e.type,
       text: e.text,
       room: e.room,
-      roomName: ROOM_NAMES[e.room] || e.room
+      roomName: ROOM_NAMES[e.room] || e.room,
+      // 右侧卡片细节：地点 / 当时在做什么 / 播放的片段
+      roomLabel: e.roomLabel || ROOM_NAMES[e.room] || e.room || null,
+      spotLabel: e.spotLabel || null,
+      activity: e.activity || null,
+      clip: e.clip || null,
+      kind: e.kind || null,
+      pose: e.pose || null
     })),
     updatedAt: s.updatedAt
   };
