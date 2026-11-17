@@ -1178,12 +1178,21 @@ function emit(state, type, text, now, extra = {}) {
   const last = Number(state.lastEventAt?.[type]) || 0;
   if (cd > 0 && now - last < cd) return false;
   state.lastEventAt = { ...(state.lastEventAt || {}), [type]: now };
+  const evRoom = extra.room || state.room;
+  const evSpot = extra.spot || state.spot;
   state.eventLog.push({
     at: now,
     type,
     text: sanitizeText(text, 140),
-    room: extra.room || state.room,
-    spot: extra.spot || state.spot
+    room: evRoom,
+    spot: evSpot,
+    // 便于右侧「刚刚发生」展示细节：地点、当时活动、播放片段、姿态
+    roomLabel: ROOM_NAMES[evRoom] || evRoom,
+    spotLabel: HOME_LAYOUT.spots?.[evRoom]?.[evSpot]?.label || (evSpot === 'free' ? '屋里' : evSpot),
+    activity: sanitizeText(String(extra.activity || state.activity || ''), 80) || null,
+    clip: String(extra.clip || state.clip || '') || null,
+    kind: extra.kind || state.kind || null,
+    pose: extra.pose || state.pose || null
   });
   state.eventLog = state.eventLog.slice(-MAX_EVENT_LOG);
   return true;

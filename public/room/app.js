@@ -1916,7 +1916,16 @@ function renderHUD() {
     ? events.map((e) => {
       const icon = ICON[e.type] || '·';
       const text = escapeHtml(toSecondPerson(e.text));
-      return `<li><span>${fmtAgo(e.ago)}</span><b><i>${icon}</i>${text}</b></li>`;
+      const where = escapeHtml(
+        [e.roomLabel || FP_PRESETS[e.room]?.label || '', e.spotLabel || '']
+          .filter(Boolean).join('·')
+      );
+      const doing = escapeHtml(String(e.activity || '').slice(0, 40));
+      const clip = escapeHtml(String(e.clip || '').slice(0, 24));
+      const detail = [where, doing && doing !== text ? `当时：${doing}` : '', clip ? `片段：${clip}` : '']
+        .filter(Boolean).join(' · ');
+      return `<li><span>${fmtAgo(e.ago)}</span><b><i>${icon}</i>${text}</b>`
+        + (detail ? `<em>${detail}</em>` : '') + '</li>';
     }).join('')
     : '<li class="empty">她刚回到家，还没发生什么。</li>';
 
