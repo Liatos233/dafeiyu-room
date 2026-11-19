@@ -101,7 +101,12 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const STATE_DIR = path.join(ROOT, 'state');
+// 状态目录可用环境变量覆盖（DSH_ROOM_STATE_DIR）：默认还是 <repo>/state。
+// 用途：受限环境（如 DSH 沙箱进程对默认 state/ 无写权限）下把状态放到可写位置，
+// 或测试/多实例场景隔离状态。覆盖目录里若没有已有存档会按新档初始化。
+const STATE_DIR = process.env.DSH_ROOM_STATE_DIR
+  ? path.resolve(process.env.DSH_ROOM_STATE_DIR)
+  : path.join(ROOT, 'state');
 const STATE_FILE = path.join(STATE_DIR, 'sessions.json');
 const ROLE_STATE_FILE = path.join(STATE_DIR, 'current-role.json');
 const SLANG_FILE = path.join(STATE_DIR, 'slang.json');
