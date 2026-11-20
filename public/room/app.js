@@ -2091,6 +2091,13 @@ function clipFor(her) {
     if (isSideRun(her)) return 'run_hurry';
     return 'run_happy';
   }
+  // 上下座过渡（mounting/dismounting）：先播「起身/坐下」的过渡动作。
+  // 问题：从躺椅上点「去游泳」时，服务端会先 dismounting（walking=false），
+  // 如果这里不处理，clipFor 会因 pose 还是 sit、elev 还是 0.44 而落到
+  // 「坐姿」分支，播坐姿片段直到下座结束 —— 观感就是「点了一下，先播好一会
+  // 动画才真的走」。过渡期间应统一播 mutter（站立过渡），下座一结束 walking=true
+  // 自然切回跑动。
+  if (her.transitioning === true) return 'mutter';
   if (petActionOverride && !her.asleep && Date.now() < petActionOverride.until) return petActionOverride.clip;
   if (her.asleep) {
     // 兜底：旧状态/异常状态下如果还没到床，绝不播睡眠动画。
@@ -4421,11 +4428,15 @@ function frame(now) {
     const facing = (her.facing || 0) * Math.PI / 180;
     gardenController?.updateCharacter(dragging || placeHold || VIEW.mode === 'eyes' ? { ...her, gardenWork: null } : her, { x: displayPos[0], y: her.elev || 0, z: displayPos[1] }, facing);
     let flip = flipState;
-    // 游泳：原画头朝左，按游动方向的屏幕左右镜像
+    // 游泳：原画头朝左，按游动方向的屏幕左右镜像。
+    // 注意 dirX 必须反映**真实泳道方向**（from→to 的 x 分量符号），
+    // 不能写死成「先朝 +X」——泳道可能 from 在右、to 在左（朝西游），
+    // 写死就会把游动方向镜像反了。
     if (her.kind === 'swim' && her.swim && !dragging && !placeHold) {
       const leg = Math.max(1200, Number(her.swim.oneWayMs) || 5000);
       const phase = ((Date.now() - her.swim.startedAt) / leg) % 2;
-      const dirX = phase < 1 ? 1 : -1;
+      const laneSign = Math.sign((her.swim.to?.[0] ?? 0) - (her.swim.from?.[0] ?? 0)) || 1;
+      const dirX = (phase < 1 ? 1 : -1) * laneSign;
       camera.updateMatrixWorld();
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
       flip = new THREE.Vector3(dirX, 0, 0).dot(right) > 0;
@@ -4439,12 +4450,15 @@ function frame(now) {
     const leg = Math.max(1200, Number(sw.oneWayMs) || 6000);
     const phase = ((t - sw.startedAt) / leg) % 2;
     const k = phase < 1 ? phase : 2 - phase;
-    const dir = phase < 1 ? 1 : -1;
     const x = sw.from[0] + (sw.to[0] - sw.from[0]) * k;
+    // facing 也要跟着真实泳道方向：朝 +X 是 90，朝 -X 是 -90。
+    // 之前用 `dir > 0 ? 90 : -90`，但 dir 只表示「正程/回程」，没考虑泳道本身
+    // 可能朝西（from 在右、to 在左），所以方向会反。
+    const facing = (sw.to[0] >= sw.from[0] ? 1 : -1) * (phase < 1 ? 1 : -1);
     return {
       ...h,
       pos: [x, sw.from[1]],
-      facing: dir > 0 ? 90 : -90,
+      facing: facing > 0 ? 90 : -90,
       walking: false,
       elev: 0,
       kind: 'swim',
