@@ -1093,13 +1093,83 @@ function charHit(e) {
 }
 // 沙发、床等家具体积上点到的位置不可走：命中家具禁区就当作「点不动」。
 function blockedByFurniture(p) {
-  const keep = NAV_DATA?.keepout || [];
-  for (const item of keep) {
-    const M = 0.15; // 稍微放大一点，点到家具边缘也算不可走
+  if (!p) return false;
+  const M = 0.15; // 稍微放大一点，点到家具边缘也算不可走
+  // K 区（家具/墙/泳池水面）：一律不可走
+  for (const item of NAV_DATA?.keepout || []) {
     const [x0, z0, x1, z1] = item.rect;
     if (p[0] >= x0 - M && p[0] <= x1 + M && p[1] >= z0 - M && p[1] <= z1 + M) return true;
   }
+  // PL 区（有顶面的可站立家具）：站在地面上也是不可走的。
+  // 以前只查 K 区，所以点沙发（PL 区、top=0.48）会被当成「走过去」，
+  // 结果人卡在沙发里——这是「自由移动点 PL 区不提示」的根源。
+  for (const pf of NAV_DATA?.platforms || []) {
+    if (!pf.rect) continue;
+    const [x0, z0, x1, z1] = pf.rect;
+    if (p[0] >= x0 && p[0] <= x1 && p[1] >= z0 && p[1] <= z1) return true;
+  }
   return false;
+}
+
+// ── 点家具：按矩形命中，而不是只认 hotspot 圆柱 ──────────────────────────
+// hotspot 是半径 0.2~0.6 的透明柱，点在家具边缘（矩形内、圆柱外）会落到地面上，
+// 表现就是「点了沙发却让她走过去」。这里按 PL/K 的矩形补一层命中，
+// 让整块家具都是可点的。
+//
+// 优先级（用户定的）：角色 > 家具 > 地面。
+// 角色那步在 onClick 里先判（charHit），这里只管家具。
+//
+// 这一段是纯几何判断，不碰 three.js 场景 —— 除了 world.hotspots 的读取，
+// 所以 test-project 可以把它整段抽出来在 Node 里跑（见 scripts/test-click.mjs）。
+export function spotAtRect(p, { keepout = [], platforms = [], hotspots = [] } = {}) {
+  if (!p) return null;
+  // 先看可站立平台（PL）：它们有明确的 spot，菜单能给出「来这里玩」
+  for (const pf of platforms) {
+    if (!pf.rect) continue;
+    // 注意 platforms 里的字段是 `id: "living.sofa"`，**没有 room/spot 两个字段**。
+    // 早先按 pf.room/pf.spot 判断会全部落空（PL 命中完全失效），所以要解析 id。
+    const [pfRoom, pfSpot] = String(pf.id || '').split('.');
+    if (!pfRoom || !pfSpot) continue;
+    const [x0, z0, x1, z1] = pf.rect;
+    if (p[0] >= x0 && p[0] <= x1 && p[1] >= z0 && p[1] <= z1) {
+      return hotspots.find((h) => h.room === pfRoom && h.spot === pfSpot) || null;
+    }
+  }
+  // 再看 K 区：找「位置落在这块区域里」的 hotspot，取离中心最近的那个。
+  // 泳池水面这类没有平台、只有 hotspot 的大块区域，就靠这一条覆盖。
+  for (const item of keepout) {
+    const [x0, z0, x1, z1] = item.rect;
+    if (p[0] < x0 || p[0] > x1 || p[1] < z0 || p[1] > z1) continue;
+    let best = null;
+    for (const hs of hotspots) {
+      if (!Array.isArray(hs.at)) continue;
+      if (hs.at[0] < x0 || hs.at[0] > x1 || hs.at[1] < z0 || hs.at[1] > z1) continue;
+      const d = Math.hypot(hs.at[0] - (x0 + x1) / 2, hs.at[1] - (z0 + z1) / 2);
+      if (!best || d < best.d) best = { hs, d };
+    }
+    if (best) return best.hs;
+  }
+  return null;
+}
+
+// 场景里的 hotspot 转成纯数据（附上世界坐标），供上面的纯函数使用。
+function hotspotGeom() {
+  const out = [];
+  for (const m of world.hotspots || []) {
+    const hs = m.userData?.hotspot;
+    if (!hs) continue;
+    out.push({ ...hs, at: [m.position.x, m.position.z] });
+  }
+  return out;
+}
+
+function spotAtPoint(p) {
+  if (!p) return null;
+  return spotAtRect(p, {
+    keepout: NAV_DATA?.keepout || [],
+    platforms: NAV_DATA?.platforms || [],
+    hotspots: hotspotGeom()
+  });
 }
 
 function onClick(e) {
@@ -1124,16 +1194,22 @@ function onClick(e) {
     requestGo(p);
     return;
   }
+  // ── 点击优先级：角色 > 家具 > 地面（角色分支已在上面处理）──────────────
+  // 自由移动开着时：点到家具（PL/K 区）一律提示去不了，不让她往家具里走。
+  // 自由移动关着时：点到家具就弹菜单。
+  const p = floorPointAt(e);
+  const spot = spotAtPoint(p);
   if (clickMoveOn) {
     closeSpotMenu();
-    const p = floorPointAt(e);
     if (!p) { toast('点地面，别点墙或家具'); return; }
-    if (blockedByFurniture(p)) { toast('去不了这里'); return; }
+    if (spot || blockedByFurniture(p)) { toast('去不了这里，那是家具'); return; }
     showClickMarker(p);
     playTap();
     requestGo(p);
     return;
   }
+  // 优先用矩形命中的家具（整块可点），没有才回落到 hotspot 圆柱。
+  if (spot) { showSpotMenuFor(spot, e); return; }
   const hs = hotspotAt(e);
   if (hs) { showSpotMenuFor(hs, e); return; }
   closeSpotMenu();

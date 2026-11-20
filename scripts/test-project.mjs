@@ -129,11 +129,19 @@ test('家具菜单只给真实能去的站位，且不残留左下角卡片', ()
   // 每个 addHotspot 的 spot 必须在 home-state 里有对应站位，否则菜单会露出「去不了」。
   // 注意 addHotspot(...) 里含嵌套括号/逗号，不能用「匹配到第一个 ) 」那种偷懒正则
   // （之前就漏掉了 pool.gate / pool.water）。
+  //
+  // 例外：显式标了 `seeOnly: true` 的物件（茶几这种「能看不能站上去」的），
+  // 本来就该显示「去不了这里」—— 那是正确提示，不是遗漏。
   const world = read('public/room/world.js');
   const homeState = read('src/home-state.js');
   const pairs = [...world.matchAll(/addHotspot\(world,[\s\S]*?room:\s*'([^']+)',\s*spot:\s*'([^']+)'/g)];
   assert.ok(pairs.length > 20, `hotspot 数量异常：${pairs.length}`);
+  const seeOnly = new Set(
+    [...world.matchAll(/room:\s*'([^']+)',\s*spot:\s*'([^']+)'[^}]*seeOnly:\s*true/g)]
+      .map(([, room, spot]) => `${room}.${spot}`)
+  );
   const missing = pairs.filter(([, room, spot]) => {
+    if (seeOnly.has(`${room}.${spot}`)) return false;
     // 站位在 home-state 的 spots 表里以 `spot: { pos: ...` 出现；菜畦这类动态 spot 用 plotN 生成
     const re = new RegExp(`\\b${spot}:\\s*\\{`);
     return !re.test(homeState);

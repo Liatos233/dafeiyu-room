@@ -1751,7 +1751,8 @@ function buildLiving(world, M, textures) {
   addHotspot(world, 0.506, 3.205, 0.4, { title: '饮水机', sub: '温水按键有点松，杯架上只剩一只杯子', room: 'living', spot: 'water', label: '饮水机旁' });
   addHotspot(world, 7.85, 1.75, 0.45, { title: '书架', sub: '第三层夹着一张手写的便签', room: 'living', spot: 'shelf', label: '书架前' });
   addHotspot(world, 6.3, 3.0, 0.5, { title: '电视', sub: '屏幕里在放海，声音开得很小', room: 'living', spot: 'tv', label: '电视前' });
-  addHotspot(world, 6.3, 3.8, 0.4, { title: '茶几', sub: '杯子剩半杯，书翻到一半扣着', room: 'living', spot: 'sofa', label: '茶几旁' });
+  // seeOnly：茶几能看不能站上去，菜单会显示「去不了这里」——那是正确提示。
+  addHotspot(world, 6.3, 3.8, 0.4, { title: '茶几', sub: '杯子剩半杯，书翻到一半扣着', room: 'living', spot: 'coffee_table', label: '茶几旁', seeOnly: true });
 }
 
 function buildBedroom(world, M, textures) {
