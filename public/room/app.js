@@ -1885,21 +1885,25 @@ function renderHUD() {
     $('affStage').textContent = roomView.stage || '';
   }
 
-  // 同一句话 10 分钟内重复出现只留一条（历史日志里可能已经有噪音）
+  // 同一句话 3 分钟内重复出现只留一条；「出发/到达/菜园」这类过程事件不参与去重，
+  // 它们每次都是不同的一趟，压掉就会出现「有出发没到达」的断头日志。
   const rawEvents = (state.events || []).slice(-60).reverse();
   const events = [];
   const seenKey = new Map();
   const typeCount = new Map();
-  const CAPPED = new Set(['freestyle', 'depart', 'arrive', 'done']);
+  const CAPPED = new Set(['freestyle']);
+  const REPEATABLE = new Set(['depart', 'arrive', 'garden']);
   for (const e of rawEvents) {
     const key = `${e.type}|${e.text}`;
-    const lastAt = seenKey.get(key);
-    if (lastAt !== undefined && Math.abs(lastAt - e.ago) < 10) continue;
-    seenKey.set(key, e.ago);
+    if (!REPEATABLE.has(e.type)) {
+      const lastAt = seenKey.get(key);
+      if (lastAt !== undefined && Math.abs(lastAt - e.ago) < 3) continue;
+      seenKey.set(key, e.ago);
+    }
     if (CAPPED.has(e.type) && e.ago <= 10) {
       const n = (typeCount.get(e.type) || 0) + 1;
       typeCount.set(e.type, n);
-      if (n > 2) continue;          // 10 分钟内同类最多两条，避免「自己找了点事」刷屏
+      if (n > 3) continue;          // 10 分钟内同类最多三条，避免「自己找了点事」刷屏
     }
     events.push(e);
     if (events.length >= 40) break;
@@ -1923,7 +1927,9 @@ function renderHUD() {
       );
       const doing = escapeHtml(String(e.activity || '').slice(0, 40));
       const clip = escapeHtml(String(e.clip || '').slice(0, 24));
-      const detail = [where, doing && doing !== text ? `当时：${doing}` : '', clip ? `片段：${clip}` : '']
+      // arrive 的正文本身就是「地点：活动」，再用「当时：活动」重复一遍没有信息量。
+      const doingRedundant = doing && String(e.text || '').includes(doing.replace(/&amp;/g, '&'));
+      const detail = [where, doing && !doingRedundant ? `当时：${doing}` : '', clip ? `片段：${clip}` : '']
         .filter(Boolean).join(' · ');
       return `<li><span>${fmtAgo(e.ago)}</span><b><i>${icon}</i>${text}</b>`
         + (detail ? `<em>${detail}</em>` : '') + '</li>';

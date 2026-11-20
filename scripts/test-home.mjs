@@ -9,9 +9,11 @@ import {
   HOME_LAYOUT,
   applyHomeAction,
   advanceHomeState,
+  beginGardenWork,
   buildHomePromptLine,
   buildRoute,
   emptyHomeState,
+  endGardenWork,
   graphPath,
   homeSummary,
   homeView,
@@ -452,6 +454,71 @@ test('屏幕/提示词共用同一份需求', () => {
   assert.equal(v.body.hunger, 0.66);
   assert.equal(v.body.words.hunger, '饿了');
   assert.equal(v.body.words.energy, '很困');
+});
+
+// ── 事件卡与真实动作的一致性（右侧事件列表字段）──────────────────────────
+
+test('坐具也要有「到了」：depart 与 arrive 必须成对', () => {
+  // 去沙发上坐着：旧实现走座具分支直接 return，永远只有 depart 没有 arrive
+  let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  s = applyHomeAction(s, { action: 'command', room: 'living', spot: 'sofa', at: T0 }).state;
+  // 走到沙发边 → 上座（mounting）→ 上座完成才发 arrive，所以等到 dwell 才停
+  let t = T0;
+  for (let i = 0; i < 600 && !s.dwell; i++) {
+    t += 1000;
+    s = advanceHomeState(s, t, {}).state;
+  }
+  assert.equal(s.room, 'living');
+  assert.equal(s.spot, 'sofa');
+  const depart = s.eventLog.filter((e) => e.type === 'depart').pop();
+  const arrive = s.eventLog.filter((e) => e.type === 'arrive').pop();
+  assert.ok(depart, '应该有 depart');
+  assert.ok(arrive, '坐上沙发也要有 arrive，否则事件卡只有「出发」没有「到达」');
+  assert.equal(arrive.room, depart.room);
+  assert.equal(arrive.spot, depart.spot);
+});
+
+test('事件里的「当时/片段」只属于这条事件：depart 不带上一段的片段', () => {
+  let s = atState({ room: 'living', spot: 'rug', pose: 'stand', elev: 0, kind: 'freestyle', clip: '三球抛接', nextDecisionAt: T0 });
+  s = applyHomeAction(s, { action: 'command', room: 'bathroom', spot: 'toilet', at: T0 }).state;
+  s = advanceHomeState(s, T0 + 1000, {}).state;
+  const depart = s.eventLog.filter((e) => e.type === 'depart').pop();
+  assert.ok(depart, '应该有 depart');
+  assert.equal(depart.clip, null, '走在路上不该挂着上一个片段');
+  assert.equal(depart.kind, 'walk');
+});
+
+test('结算事件记的是这次动作，不是结算后的占位活动', () => {
+  let s = atState({ room: 'kitchen', spot: 'sink', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  s.route = null;
+  s.spot = 'sink';
+  s.kind = 'drink';
+  s.activity = '喝了杯水，真解渴';
+  s.dwell = { until: T0 + 1, target: { room: 'kitchen', spot: 'sink', kind: 'drink', actText: '喝了杯水，真解渴', pose: 'stand', elev: 0, effect: 'thirst', dwellMs: 1000, eventType: 'drink', eventText: '喝了杯水，真解渴', clip: null } };
+  s = advanceHomeState(s, T0 + 2, {}).state;
+  const e = s.eventLog.filter((x) => x.type === 'drink').pop();
+  assert.ok(e, '应该有喝水事件');
+  assert.equal(e.activity, '喝了杯水，真解渴', '不该记成「把杯子放下，站着发会儿呆」');
+});
+
+test('菜园事件带齐字段，且不把「小蓝鱼：」当她的活动', () => {
+  let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  const job = { id: 'job-test', action: { type: 'till', plotId: 3 } };
+  s = beginGardenWork(s, job, T0);
+  assert.equal(s.route.target.spot, 'plot3');
+  let t = T0;
+  for (let i = 0; i < 400 && !s.dwell; i++) {
+    t += 1000;
+    s = advanceHomeState(s, t, { gardenReady: true }).state;
+  }
+  s = endGardenWork(s, job, t + 7000, '小蓝鱼：3 号田松好了土，接下来可以播种。', true);
+  const e = s.eventLog.filter((x) => x.type === 'garden').pop();
+  assert.ok(e, '应该有菜园事件');
+  assert.equal(e.room, 'garden');
+  assert.equal(e.spot, 'plot3', '地点由动作决定，不能拿她此刻所在位置顶替');
+  assert.ok(e.activity && !e.activity.includes('小蓝鱼'), '活动必须是她自己的，不是菜园伙伴的第三人称汇报');
+  assert.ok(e.kind && e.pose, 'kind/pose 不能为空，否则详情行永远是空的');
+  assert.ok(!e.text.includes('小蓝鱼：'), '正文要剥掉第三人称前缀');
 });
 
 if (process.exitCode) {

@@ -347,9 +347,13 @@ const EVENT_COOLDOWN = Object.freeze({
   sick: 0,
   recover: 0,
   // 详细日志用的类型：短冷却，避免刷屏但保留过程
-  depart: 90_000,
-  arrive: 90_000,
-  done: 60_000,
+  depart: 10_000,
+  // 「到了」必须每次都记：它由 arrive()/上座完成各触发一次，不会重复刷屏，
+  // 但被 90 秒冷却拦掉就会出现「有出发没到达」的断头事件。
+  arrive: 0,
+  done: 30_000,
+  // 菜园事件由 endGardenWork 直接写日志，不需要去重。
+  garden: 0,
   freestyle: 5 * MIN,
   clip: 0,
   say: 0,
@@ -1197,7 +1201,9 @@ function emit(state, type, text, now, extra = {}) {
     roomLabel: ROOM_NAMES[evRoom] || evRoom,
     spotLabel: HOME_LAYOUT.spots?.[evRoom]?.[evSpot]?.label || (evSpot === 'free' ? '屋里' : evSpot),
     activity: sanitizeText(String(extra.activity || state.activity || ''), 80) || null,
-    clip: String(extra.clip || state.clip || '') || null,
+    // 片段只认调用方显式给的值：state.clip 会一直留着上一个 freestyle/游泳的片段，
+    // 沿用它会让「走到卫生间的路上」挂着「3 球抛接」这种明显不属于这条事件的片段。
+    clip: extra.clip === undefined || extra.clip === null ? null : (sanitizeText(extra.clip, 40) || null),
     kind: extra.kind || state.kind || null,
     pose: extra.pose || state.pose || null
   });
@@ -1381,7 +1387,9 @@ function beginRoute(state, target, now, env = {}) {
   if (prevRoom && target.room !== prevRoom) {
     const destRoom = ROOM_NAMES[target.room] || target.room;
     const destSpot = HOME_LAYOUT.spots[target.room]?.[target.spot]?.label || '';
-    emit(state, 'depart', `去${destRoom}${destSpot ? '·' + destSpot : ''}`, now, { room: target.room, spot: target.spot });
+    emit(state, 'depart', `去${destRoom}${destSpot ? '·' + destSpot : ''}`, now, {
+      room: target.room, spot: target.spot, activity: state.activity, clip: null, kind: 'walk', pose: 'stand'
+    });
   }
 }
 
@@ -1455,7 +1463,9 @@ function arrive(state, now) {
   // 详细日志：到了、开始做什么
   {
     const where = HOME_LAYOUT.spots[t.room]?.[t.spot]?.label || ROOM_NAMES[t.room] || '那边';
-    emit(state, 'arrive', `${where}：${t.actText || '待着'}`, now, { room: t.room, spot: t.spot });
+    emit(state, 'arrive', `${where}：${t.actText || '待着'}`, now, {
+      room: t.room, spot: t.spot, activity: t.actText, clip: t.clip, kind: t.kind, pose: t.pose
+    });
   }
   // 被主人指到某个位置：到了之后至少清醒活动 9 分钟，别一落地就自己摸回床上。
   if (t.awakeHold) state.awakeUntil = Math.max(Number(state.awakeUntil) || 0, now + 9 * MIN);
@@ -1494,11 +1504,15 @@ function applyEffect(state, target, now, env) {
     desk: '写完了，站起来伸了个懒腰', phone: '看完手机了', laundry: '衣服洗好了'
   };
   if (target.eventType && target.eventText) {
-    if (emit(state, target.eventType, target.eventText, now, { room: target.room, spot: target.spot })) {
+    if (emit(state, target.eventType, target.eventText, now, {
+      room: target.room, spot: target.spot, activity: target.actText, clip: target.clip, kind: target.kind, pose: target.pose
+    })) {
       state.lastEventAt[target.eventType] = now;
     }
   } else if (effect && DONE_TEXT[effect]) {
-    emit(state, 'done', DONE_TEXT[effect], now, { room: target.room, spot: target.spot });
+    emit(state, 'done', DONE_TEXT[effect], now, {
+      room: target.room, spot: target.spot, activity: target.actText, clip: target.clip, kind: target.kind, pose: target.pose
+    });
   }
   // 事件消费端（提示词/记忆）只读 15 分钟内的，见 recentEvents。
   if (target.eventType === 'help') state.counts.help += 1;
@@ -1707,7 +1721,9 @@ function decideTarget(state, now, env) {
         recent.unshift(act.clip);
         state.recentFreestyle = recent.slice(0, FREESTYLE_DEFAULTS.recentWindow);
         state.freestylePick = act.reason;
-        emit(state, 'freestyle', `自己找了点事：${act.clip}`, now, { room: act.room, spot: act.spot });
+        emit(state, 'freestyle', `自己找了点事：${act.clip}`, now, {
+          room: act.room, spot: act.spot, activity: act.actText, clip: act.clip, kind: 'freestyle', pose: act.pose
+        });
         return act;
       }
       state.freestyleNextAt = now + 30_000;
@@ -1894,7 +1910,9 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
       changed = true;
     }
     if ((n.thirst > 0.8 || n.hunger > 0.8) && now - (state.lastEventAt.help || 0) > 26 * MIN) {
-      if (emit(state, 'help', n.thirst > n.hunger ? '渴得嗓子发干，喊了一声：有人吗……' : '饿得胃疼，喊了一声：有人吗……', now, { room: 'her_room', spot: 'bed' })) {
+      if (emit(state, 'help', n.thirst > n.hunger ? '渴得嗓子发干，喊了一声：有人吗……' : '饿得胃疼，喊了一声：有人吗……', now, {
+        room: 'her_room', spot: 'bed', activity: '裹着被子，小声喊人', clip: null, kind: 'help', pose: 'lie'
+      })) {
         state.counts.help += 1;
         state.activity = '裹着被子，小声喊人';
         state.kind = 'help';
@@ -1925,6 +1943,14 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
         state.elev = seg.elev;
         state.clip = t.clip || null;
         state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
+        // 座具方向必须有「到了」：arrive() 在坐具分支提前 return 了，
+        // 不在这里补一条，右侧事件就会永远只有「去沙发」没有「坐上沙发」。
+        {
+          const where = HOME_LAYOUT.spots[t.room]?.[t.spot]?.label || ROOM_NAMES[t.room] || '那边';
+          emit(state, 'arrive', `${where}：${t.actText || '待着'}`, now, {
+            room: t.room, spot: t.spot, activity: t.actText, clip: t.clip, kind: t.kind, pose: t.pose
+          });
+        }
       }
       changed = true;
     } else {
@@ -2546,14 +2572,29 @@ export const HOME_PLATFORM_LIST = HOME_PLATFORMS;
 
 
 // Narrow bridge between the home's physical behavior and the authoritative garden.
+
+// 菜园动作 → 中文标签 / 落地站位。beginGardenWork 与 endGardenWork 共用一份，
+// 避免结束事件的地点只能拿「她此刻在哪」去猜（以前会出现 garden 事件地点是书桌/床边）。
+const GARDEN_ACTION_LABELS = Object.freeze({
+  till: '松土', plant: '播种', water: '浇水', fertilize: '施肥', harvest: '采收',
+  sell: '整理并出售收成', buySeed: '挑选种子', buyCompost: '补充堆肥', visit: '巡视菜园'
+});
+
+function gardenSpotFor(action) {
+  if (Number.isInteger(action?.plotId)) return `plot${action.plotId}`;
+  if (action?.type === 'buyCompost') return 'compost';
+  if (action?.type === 'sell') return 'market';
+  if (action?.type === 'visit') return 'gate';
+  return 'shop';
+}
+
 export function beginGardenWork(input, job, now = Date.now()) {
   const state = normalizeHomeState(input, now);
   const action = job.action;
-  const spotId = Number.isInteger(action.plotId) ? `plot${action.plotId}`
-    : action.type === 'buyCompost' ? 'compost' : action.type === 'sell' ? 'market' : action.type === 'visit' ? 'gate' : 'shop';
+  const spotId = gardenSpotFor(action);
   const spot = spotOf('garden', spotId);
   if (!spot || state.route || state.dwell || state.asleep || state.sleepPending) return state;
-  const labels = {till:'松土',plant:'播种',water:'浇水',fertilize:'施肥',harvest:'采收',sell:'整理并出售收成',buySeed:'挑选种子',buyCompost:'补充堆肥',visit:'巡视菜园'};
+  const labels = GARDEN_ACTION_LABELS;
   const duration = {till:7000,plant:6500,water:6500,fertilize:6000,harvest:8000,sell:6000,buySeed:5000,buyCompost:6000,visit:4500}[action.type] || 6000;
   const label = labels[action.type] || '照料菜园';
   const target = {room:'garden',spot:spotId,kind:`garden_${action.type}`,walkText:`去${spot.label}${label}`,actText:`正在${spot.label}${label}`,dwellMs:duration,pose:'stand',elev:0,facing:spot.facing,effect:null,eventType:null,eventText:null,gardenJobId:job.id,gardenAction:action.type,gardenPlotId:action.plotId};
@@ -2571,14 +2612,32 @@ export function endGardenWork(input, job, now, message, completed = false) {
   }
   if (state.dwell?.target?.gardenJobId === job.id) {
     state.dwell = null;
-    setActivity(state, 'idle', message, 'stand', 0, state.facing);
+    // 菜园伙伴（小蓝鱼）的汇报是第三人称，不能当她的活动；她的活动另给一句。
+    setActivity(state, 'idle', '刚忙完菜园，站着歇一会儿', 'stand', 0, state.facing);
   }
   state.nextDecisionAt = completed ? now + 30_000 : 0;
   if (completed) {
     state.needs.energy = clamp01(state.needs.energy - .002);
     state.needs.thirst = clamp01(state.needs.thirst + .0015);
     // Each committed job emits once; save receipt in garden before saving this state.
-    state.eventLog.push({at:now,type:'garden',text:sanitizeText(message,140),room:'garden',spot:state.spot});
+    const action = job.action || {};
+    const spotId = gardenSpotFor(action);
+    const label = GARDEN_ACTION_LABELS[action.type] || '照料菜园';
+    const text = String(message || '').replace(/^小蓝鱼[：:]\s*/, '') || `在菜园${label}`;
+    // 补齐活动/片段/姿态字段：以前只 push 5 个字段，右侧事件卡的「当时」「片段」永远是空的。
+    state.eventLog.push({
+      at: now,
+      type: 'garden',
+      text: sanitizeText(text, 140),
+      room: 'garden',
+      spot: spotId,
+      roomLabel: ROOM_NAMES.garden || '菜园',
+      spotLabel: HOME_LAYOUT.spots?.garden?.[spotId]?.label || spotId,
+      activity: sanitizeText(`正在菜园${label}`, 80) || null,
+      clip: null,
+      kind: `garden_${action.type || 'visit'}`,
+      pose: 'stand'
+    });
     state.eventLog = state.eventLog.slice(-MAX_EVENT_LOG);
   }
   return state;

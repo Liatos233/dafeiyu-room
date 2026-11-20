@@ -205,9 +205,18 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
     }
     const mayPlan=!reason && (g.care.task || g.care.queue.length || (g.care.autoEnabled && now>=g.care.nextPlanAt));
     const beforeMotion=JSON.stringify([h.route,h.dwell,h.asleep,h.sleepPending]);
+    // 事件也要触发落盘：需求类事件（饿了/渴了/憋了）不改 route/dwell/asleep/sleepPending，
+    // 只比这四项的话，它们在内存里生成后会被下一次 loadHomeState 覆盖掉。
+    // 用「条数 + 末条时间戳」而不是只比条数：eventLog 到 300 条后会被 slice 截断，条数就不再变化。
+    const log=h.eventLog||[];
+    const beforeEvents=`${log.length}|${log.length?log[log.length-1].at:0}`;
     if(reason && !h.route && !h.dwell)h.nextDecisionAt=0;
     const advanced=advanceHomeState(h,now,{...env,gardenReady:!!mayPlan}); h=advanced.state;
     if(beforeMotion!==JSON.stringify([h.route,h.dwell,h.asleep,h.sleepPending]))homeTransition=true;
+    else {
+      const log2=h.eventLog||[];
+      if(beforeEvents!==`${log2.length}|${log2.length?log2[log2.length-1].at:0}`)homeTransition=true;
+    }
     // 收菜/浇水期间不要让自主动作插进来
     if(g.care.task || g.care.queue.length) h.freestyleHoldUntil = now + 4000;
     reason = g.care.pendingConflict ? '在等你回答，先不安排菜园' : (Number(g.care.forceUntil) > now ? '' : restReason(h,now,env));
