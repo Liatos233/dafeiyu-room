@@ -43,35 +43,67 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 // 客户端沿服务端给的路点前进：快照每 1.2 秒才来一次，靠它做插值，
 // 出发那一刻就能连续移动，不再等下一次轮询。
-function advanceRoute(points, start, distance) {
-  if (!Array.isArray(points) || points.length < 2) return start;
-  let idx = 0;
-  let best = Infinity;
-  // Choose the current segment, not the nearest waypoint. After a segment's
-  // midpoint, nearest-waypoint prediction would skip the next corner and cut
-  // through a wall or raised bed before the next server snapshot arrives.
+// ── 路线位置推算：用「绝对弧长」而不是「从任意起点起算的距离」 ──────────────
+// 旧版 advanceRoute(points, start, distance) 有个会抖的缺陷：start 是「上次轮询时
+// 的位置」，每轮询会变一次；函数用「离 start 最近的线段」决定从第几段开始累积距离，
+// 于是 start 走过一个拐角后 idx 会跳一格，同一个 distance 就映射到完全不同的位置
+// —— 实测能产生 1.2m 的瞬时跳变（37 m/s），观感就是「一卡一卡」，
+// 而且位移跳变会让 movingNow 翻转，走路/待机动画跟着横跳，也就是「一闪一闪」。
+//
+// 改成三步、全部基于**整条折线的绝对弧长**，锚点变化不会跳格：
+//   1) routeLengths(points)      预计算每段长度与累计弧长
+//   2) arcLengthAt(points, pos)  把任意位置投影成「在这条路线上的弧长」
+//   3) pointAtArc(points, s)     按弧长取点
+// 轮询时只需要记住 s0（她此刻的弧长）和 t0，之后位置 = pointAtArc(s0 + speed*Δt)。
+let routeCache = { key: null, lens: null, cum: null };
+
+function routeLengths(points) {
+  const key = points;
+  if (routeCache.key === key) return routeCache;
+  const lens = [];
+  const cum = [0];
+  for (let i = 1; i < points.length; i += 1) {
+    const len = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+    lens.push(len);
+    cum.push(cum[i - 1] + len);
+  }
+  routeCache = { key, lens, cum };
+  return routeCache;
+}
+
+/** 把位置投影到折线上，返回它的绝对弧长（0..total）。 */
+function arcLengthAt(points, pos) {
+  if (!Array.isArray(points) || points.length < 2) return 0;
+  const { cum } = routeLengths(points);
+  let best = { s: 0, d: Infinity };
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i], b = points[i + 1];
-    const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
-    const t = len2 ? clamp(((start[0] - a[0]) * dx + (start[1] - a[1]) * dz) / len2, 0, 1) : 0;
-    const d = Math.hypot(a[0] + dx * t - start[0], a[1] + dz * t - start[1]);
-    if (d < best) { best = d; idx = i; }
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const len2 = dx * dx + dz * dz;
+    const t = len2 ? clamp(((pos[0] - a[0]) * dx + (pos[1] - a[1]) * dz) / len2, 0, 1) : 0;
+    const px = a[0] + dx * t, pz = a[1] + dz * t;
+    const d = Math.hypot(px - pos[0], pz - pos[1]);
+    if (d < best.d) best = { s: cum[i] + Math.sqrt(len2) * t, d };
   }
-  let pos = [start[0], start[1]];
-  let left = Math.max(0, distance);
-  for (let i = idx + 1; i < points.length; i += 1) {
-    const nx = points[i][0];
-    const nz = points[i][1];
-    const seg = Math.hypot(nx - pos[0], nz - pos[1]);
-    if (seg < 1e-6) continue;
-    if (left <= seg) {
-      const t = left / seg;
-      return [pos[0] + (nx - pos[0]) * t, pos[1] + (nz - pos[1]) * t];
+  return best.s;
+}
+
+/** 按绝对弧长取点；超出末端就钉在终点。 */
+function pointAtArc(points, s) {
+  if (!Array.isArray(points) || points.length < 2) return points?.[0] || [0, 0];
+  const { lens, cum } = routeLengths(points);
+  const total = cum[cum.length - 1];
+  const target = Math.max(0, Math.min(total, s));
+  for (let i = 0; i < lens.length; i += 1) {
+    if (target <= cum[i + 1]) {
+      const t = lens[i] > 1e-9 ? (target - cum[i]) / lens[i] : 0;
+      return [
+        points[i][0] + (points[i + 1][0] - points[i][0]) * t,
+        points[i][1] + (points[i + 1][1] - points[i][1]) * t
+      ];
     }
-    left -= seg;
-    pos = [nx, nz];
   }
-  return pos;
+  return points[points.length - 1].slice();
 }
 
 const canvas = $('scene');
@@ -1740,16 +1772,17 @@ function applyState(next) {
     });
     world.setClock?.(next.hour || 0, 0);
     if (next.her.walking && Array.isArray(next.her.route) && next.her.route.length > 1) {
-      // 预测锚点要对齐「服务端算这个 pos 的时刻」，不是「收到快照的时刻」。
-      // 服务端 pos 是它最后一次 tick 时的位置，快照里带 now；如果拿收到的时间当锚点，
-      // 就会把 pos 当成「现在」的位置，于是每次轮询都把预测往回拽一点 —— 走路发顿。
-      // 用 now 和本地时钟对齐：elapsed = (服务端 now → 现在) + (收到后过了多久)。
+      // 锚点记「绝对弧长」而不是「起点 + 距离」：
+      // 起点每轮询都会变，而弧长是整条路线上的全局量，换锚点不会让位置跳格。
+      // 时间同样要对齐到服务端算出这个 pos 的时刻（快照里的 now），
+      // 否则会把「过去的 pos」当成「现在的位置」，每次轮询往回拽一点。
       const serverNow = Number(next.now) || Date.now();
-      const transit = Math.max(0, Math.min(400, Date.now() - serverNow)); // 只信 400ms 内的网络延迟
+      const transit = Math.max(0, Math.min(400, Date.now() - serverNow));
+      const route = next.her.route;
+      const s0 = arcLengthAt(route, next.her.pos);
       walkPredict = {
-        points: next.her.route,
-        start: next.her.pos.slice(),
-        // 锚点时间往前推 transit：等价于「这个 pos 是 transit 毫秒之前的位置」
+        points: route,
+        s0,
         at: performance.now() - transit,
         speed: Math.max(0.5, Number(next.her.speed) || 1.05)
       };
@@ -3997,7 +4030,7 @@ function frame(now) {
     // 过渡期间禁止路径外推：到达入口后的预测会把角色推进家具内部（高度还没抬起来）
     if (walkPredict && her.walking && !swimmingNow && her.transitioning !== true) {
       const elapsed = Math.max(0, (performance.now() - walkPredict.at) / 1000);
-      displayPos = advanceRoute(walkPredict.points, walkPredict.start, walkPredict.speed * elapsed);
+      displayPos = pointAtArc(walkPredict.points, walkPredict.s0 + walkPredict.speed * elapsed);
     }
     const dragging = !!charDrag?.active;
     if (dragging) displayPos = charDrag.pos;
@@ -4009,9 +4042,18 @@ function frame(now) {
     walkPrevPos = [displayPos[0], displayPos[1]];
     const movingNow = !swimmingNow && movedDist > 0.0035;
     stillMs = movingNow ? 0 : stillMs + dt * 1000;
-    // 起停判定以「服务端说她正在走」为主：轮询 500ms 一次，只靠画面位移会晚半秒才切动画。
+    // 起停判定：以「服务端说她正在走」为准，**不看画面这一帧有没有位移**。
+    //
+    // 原来掺了 movingNow（这一帧位移 > 3.5mm）：拐角处跨线段采样、以及外推走到
+    // 路线末端后位置不再变化，都会让它瞬间变 false —— motionWalking 一翻转就调用
+    // syncCharacter()，走路/待机片段来回切，观感就是「动画一闪一闪」。
+    // 位置抖属于位移层，该不该播走路动画属于状态层，不该混在一个判据里。
+    //
+    // 唯一要补的是起步延迟：服务端 walking 只在轮询里拿到（最长 1.2s），
+    // 光靠它起步会晚。所以把「刚拿到一条新路线」也算作在走 —— walkPredict 非空
+    // 就说明服务端给了路线且还没到达，这与 walking 等价，而且不用等位移。
     const derivedWalk = !dragging && !placeHold && !swimmingNow
-      && (her.walking === true || movingNow || (stillMs < 120 && (her.route?.length || 0) > 0));
+      && (her.walking === true || (!!walkPredict && (her.route?.length || 0) > 0));
     if (derivedWalk !== motionWalking) {
       motionWalking = derivedWalk;
       lastMotionWalking = derivedWalk;
