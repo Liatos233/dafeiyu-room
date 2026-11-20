@@ -10,7 +10,7 @@ import { NAV_DATA } from './nav-data.js';
 import { createGardenClient } from './garden-client.js';
 import { createGardenWorld } from './garden-world.js';
 import { getGardenFraming } from './garden-camera.js';
-import { toggleAnimGraph, isAnimGraphOpen } from './clip-graph.js';
+import { toggleAnimGraph, isAnimGraphOpen, setAnimGraphOpen } from './clip-graph.js';
 import { actionClip, actionSeatedClip, SEATED_FALLBACK } from './action-map.js';
 import { NEED_BARS, NEED_THRESHOLDS, barPercents, tickPercents, glowActions } from './need-bars.js';
 // 运动求值和服务端是**同一个文件**（src/home-state.js 也 import 它）。
@@ -3217,7 +3217,6 @@ function buildDevQuickMenu() {
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
     <button data-dev="her" class="dq">状态卡 <b></b></button>
     <button data-dev="events" class="dq">事件卡 <b></b></button>
-    <button data-dev="bubble" class="dq">头顶气泡 <b></b></button>
     <button data-dev="edit" class="dq">进入编辑模式</button>
   `;
   const st = document.createElement('style');
@@ -3289,15 +3288,6 @@ function buildDevQuickMenu() {
     showEl(el2, !isShown(el2));
     mark('events', isShown(el2));
   });
-  el.querySelector('[data-dev="bubble"]').addEventListener('click', () => {
-    // 头顶气泡的显隐由 bubbleOn 控制（走 opacity/.show 类），不是 display。
-    // 之前这里用 showEl 改 display，既没效果又让勾选和实际显示永远对不上。
-    bubbleOn = !bubbleOn;
-    try { localStorage.setItem('home-bubble', bubbleOn ? '1' : '0'); } catch { /* 忽略 */ }
-    applyBubblePref();
-    if (bubbleOn && (state?.her?.speech || state?.her?.activity)) setBubble(state.her.speech || state.her.activity, 3600);
-    mark('bubble', bubbleOn);
-  });
   el.querySelector('[data-dev="edit"]').addEventListener('click', () => {
     if (window.__devEditor) {
       window.__devEditor.setEnabled(!window.__devEditor.enabled);
@@ -3322,8 +3312,6 @@ function buildDevQuickMenu() {
     mark('her', true);
     mark('events', true);
     mark('actions', true);
-    // 头顶气泡由 bubbleOn 控制（不是 display），勾选跟随 bubbleOn 而非「全部显示」
-    mark('bubble', bubbleOn);
     mark('nav', !!navMapEl);
     mark('anim', devMode);
   }, 60);
@@ -3337,23 +3325,26 @@ function setDevMode(on) {
   q.style.display = on || EDIT_MODE ? 'block' : 'none';
   devMode = !!on;
   // 开发模式不再强制开「动画调试」卡：那是独立开关（clipLogOn），
-  // 由开发菜单里的「动画调试」按钮控制。关开发模式时统一收掉。
-  if (!devMode) {
-    const dbg = document.getElementById('__animdbg');
-    if (dbg) dbg.remove();
-  }
+  // 由开发菜单里的「动画调试」按钮控制；关开发模式时在下面的 else 分支统一收掉。
   if (devMode) {
     // 地图默认不自动弹出：需要时在开发菜单点「地图」按钮。这里只开 3D 导航层。
     setNav3D(true);
     setAnimBox(animBoxOn);
   } else {
+    // 关开发模式时，把「开发模式开启期间打开的那些调试层」全部收掉：
+    // 地图 / 房间标签 / 动画框 / 动画调试 / 动画转移图。
+    // 这些开关独立于 devMode，只关 devMode 不清它们的话，下次进来会看到一堆
+    // 上次遗留的浮层，而且菜单勾选还显示「已开」—— 状态和画面就对不上了。
     if (navMapEl) { navMapEl.remove(); navMapEl = null; }
     if (nav3dGroup) nav3dGroup.visible = false;
-    // 关开发模式时一并收掉房间名标记和动画框（都是开发调试用）
     if (typeof setRoomLabels === 'function' && roomLabelsOn) setRoomLabels(false);
-    if (animBoxMesh) animBoxMesh.visible = false;
-    if (animBoxFoot) animBoxFoot.visible = false;
+    setAnimBox(false);          // 不只隐藏 mesh，把 animBoxOn 也置 false
     clipLogOn = false;
+    renderClipLog();            // clipLogOn=false 时它会移除「动画调试」卡片
+    try { setAnimGraphOpen(false); } catch { /* 忽略 */ }
+    // 勾选一起清空，否则重新开开发模式时菜单会显示「已开」但其实没有
+    const menu = document.getElementById('devQuickMenu');
+    if (menu) for (const b of menu.querySelectorAll('[data-dev] b')) b.textContent = '';
   }
   const btn = document.getElementById('devModeBtn');
   if (btn) { btn.setAttribute('aria-pressed', String(devMode)); btn.textContent = devMode ? '开发模式：开' : '开发模式'; }

@@ -205,11 +205,11 @@ test('动画框默认关闭，只在开发模式里手动开', () => {
   // 开发菜单里要有切换入口
   assert.ok(/data-dev="hitbox"/.test(appSrc), '开发菜单应该有「动画框」按钮');
   assert.ok(/setAnimBox\(!animBoxOn\)/.test(appSrc), '点击应该切换开关');
-  // 关开发模式时要收起框
+  // 关开发模式时要收起框（并且 animBoxOn 也要置 false）
   const devFn = appSrc.slice(appSrc.indexOf('function setDevMode'));
   const devBody = devFn.slice(0, devFn.indexOf('\n}') + 2);
-  assert.ok(/animBoxMesh\.visible = false/.test(devBody),
-    '关开发模式时应该把动画框藏起来');
+  assert.ok(/setAnimBox\(false\)/.test(devBody),
+    '关开发模式时应该调 setAnimBox(false)（不只是隐藏 mesh）');
 });
 
 test('开发模式卡片不遮挡：地图错开开发菜单，动画调试合并', () => {
@@ -274,24 +274,40 @@ test('动画图背景无模糊、保留半透明深色底', () => {
   assert.ok(/\.cg-side\{[^}]*background:rgba\(11,16,24,\.96\)/.test(src), 'cg-side 背景应为半透明深色');
 });
 
-test('开发菜单：地图默认不显示、删「全部卡片」、动画转移图改名、气泡勾选跟随 bubbleOn', () => {
+test('开发菜单：地图默认不显示、无「全部卡片」/「头顶气泡」、动画转移图改名', () => {
   const appSrc = read('public/room/app.js');
   // 1. 地图默认不显示：setDevMode 和初始化里都不该再 showNavMap
   const setDevFn = appSrc.slice(appSrc.indexOf('function setDevMode'));
   const setDevBody = setDevFn.slice(0, setDevFn.indexOf('\n}\n') + 3);
   assert.ok(!/if \(!navMapEl \|\| !document\.body\.contains\(navMapEl\)\) showNavMap\(\)/.test(setDevBody),
     'setDevMode 不该再自动弹出地图');
-  // 2. 删掉「全部卡片」按钮
+  // 2. 删掉「全部卡片」和「头顶气泡」两个按钮（头顶气泡已有自己的菜单）
   assert.ok(!/data-dev="all"/.test(appSrc), '不该再有「全部卡片」按钮');
+  assert.ok(!/data-dev="bubble"/.test(appSrc), '不该再有「头顶气泡」按钮');
   // 3. 动画图改名动画转移图
   assert.ok(/动画转移图/.test(appSrc), '按钮应该叫「动画转移图」');
   assert.ok(!/>动画图 </.test(appSrc), '不该再叫「动画图」');
-  // 4. 气泡勾选跟随 bubbleOn，不再用 showEl 改 display
-  const bubbleHandler = appSrc.slice(appSrc.indexOf('[data-dev="bubble"]'));
-  const bubbleBody = bubbleHandler.slice(0, bubbleHandler.indexOf('});') + 2);
-  assert.ok(/bubbleOn = !bubbleOn/.test(bubbleBody), '气泡开关应该切换 bubbleOn');
-  assert.ok(/applyBubblePref\(\)/.test(bubbleBody), '气泡开关应该调 applyBubblePref');
-  assert.ok(!/showEl\(el2, !isShown\(el2\)\)/.test(bubbleBody), '气泡不该再用 showEl 改 display');
+});
+
+test('关开发模式时把打开过的调试层全部收掉', () => {
+  const appSrc = read('public/room/app.js');
+  // setDevMode 里有很多嵌套块，不能用第一个 "\n}" 去切；直接取到下一个函数为止
+  const start = appSrc.indexOf('function setDevMode');
+  const end = appSrc.indexOf('function positionSettingsMenu');
+  const body = appSrc.slice(start, end > start ? end : start + 4000);
+  // 地图 / 房间标签 / 动画框 / 动画调试 / 动画转移图 五样都要关
+  assert.ok(/navMapEl\.remove\(\)/.test(body), '关开发模式应移除地图');
+  assert.ok(/setRoomLabels\(false\)/.test(body), '关开发模式应关房间标签');
+  assert.ok(/setAnimBox\(false\)/.test(body), '关开发模式应关动画框（并置 animBoxOn=false）');
+  assert.ok(/clipLogOn = false/.test(body) && /renderClipLog\(\)/.test(body),
+    '关开发模式应关动画调试并移除卡片');
+  assert.ok(/setAnimGraphOpen\(false\)/.test(body), '关开发模式应关动画转移图');
+  // 勾选也要清空，否则重新开时菜单显示「已开」但其实没开
+  assert.ok(/data-dev\] b/.test(body) && /textContent = ''/.test(body),
+    '关开发模式应清空菜单勾选');
+  // import 里要有 setAnimGraphOpen
+  assert.ok(/import \{[^}]*setAnimGraphOpen[^}]*\} from '\.\/clip-graph\.js'/.test(appSrc),
+    'app.js 应该 import setAnimGraphOpen');
 });
 
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
