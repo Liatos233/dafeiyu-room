@@ -2564,22 +2564,30 @@ function openSpotMenu(hs, at) {
     return b;
   };
 
+  // 先按新内容量出尺寸、把位置写死，再取消 hide 让它淡入。
+  // 顺序反过来就会用「上一个家具的位置」先画一帧，看着像从别处飞过来。
   if (!spotDef) {
     // 服务端没有这个站位：老实说去不了，别给一个点了没反应的按钮。
     add('去不了这里', false, () => {}, { disabled: true, hint: '这个位置没有对应的站位，只能看看' });
-    menu.classList.remove('hide');
-    layoutSpotMenu();
-    return;
+  } else {
+    // 坐具：「坐上去玩」（服务端按 support/mount 做两段式上座）。
+    // 站着的地方：「来这里」就是走过去；文案跟着对象说，不硬套「玩」。
+    // 只给一条——多一条就会是「两个按钮干同一件事」，那种菜单比没有还糟。
+    add(seatable ? '来这里玩' : '来这里', true, () => {
+      void act('command', { room: hs.room, spot: hs.spot });
+    });
   }
 
-  // 坐具：「坐上去玩」（服务端按 support/mount 做两段式上座）。
-  // 站着的地方：「来这里」就是走过去；文案跟着对象说，不硬套「玩」。
-  // 只给一条——多一条就会是「两个按钮干同一件事」，那种菜单比没有还糟。
-  add(seatable ? '来这里玩' : '来这里', true, () => {
-    void act('command', { room: hs.room, spot: hs.spot });
-  });
-  menu.classList.remove('hide');
+  // 关键顺序：先把位置算好（此时仍是 hidden，布局照样能量到尺寸），
+  // 再取消 hide —— 淡入从第一帧就是正确位置，不会出现位移。
+  // visibility 用 visibility 而不是 display，就是为了「藏起来但仍可测量」。
+  menu.style.visibility = 'hidden';
   layoutSpotMenu();
+  requestAnimationFrame(() => {
+    if (spotMenuHit !== hs) return;   // 这一帧里又点了别的东西：别把它显示出来
+    menu.style.visibility = '';
+    menu.classList.remove('hide');
+  });
 }
 
 function closeSpotMenu() {
@@ -2588,17 +2596,26 @@ function closeSpotMenu() {
   spotMenuHost()?.classList.add('hide');
 }
 
-/** 把菜单摆到锚点上方。每帧调用（相机可能一直在转）。 */
+/**
+ * 把菜单摆到锚点上方。每帧调用（相机可能一直在转）。
+ *
+ * 这里只写 **位置**（translate），绝不碰 opacity/scale —— 出场效果属于内层 .spot-card，
+ * 由 CSS 过渡。两层分开之后，菜单就不会出现「从屏幕左上角滑过来」的位移：
+ * 位置是每帧即时生效的，只有卡片自己在原地淡入。
+ */
 function layoutSpotMenu() {
   const menu = spotMenuHost();
-  if (!menu || !spotMenuAnchor || menu.classList.contains('hide')) return;
+  // 注意不能因为 hide 就提前返回：打开菜单时要「先摆好位置、再淡入」，
+  // 那一步正是在 hide 状态下量尺寸算位置的。
+  if (!menu || !spotMenuAnchor) return;
   const p = spotMenuAnchor.clone().project(camera);
-  // 在相机背后：直接收起来，别在屏幕上乱飘
-  if (p.z > 1) { menu.style.opacity = '0'; menu.style.pointerEvents = 'none'; return; }
-  menu.style.opacity = '';
-  menu.style.pointerEvents = '';
-  const w = menu.offsetWidth || 196;
-  const h = menu.offsetHeight || 90;
+  // 相机转到锚点背后：先藏起来（这一层没有过渡，立刻生效，不会飘过屏幕）
+  if (p.z > 1) { menu.style.visibility = 'hidden'; return; }
+  menu.style.visibility = '';
+  // 尺寸要量内层卡片（外层只是定位壳，没有背景和边框）
+  const card = menu.firstElementChild;
+  const w = card?.offsetWidth || 196;
+  const h = card?.offsetHeight || 90;
   let x = (p.x * 0.5 + 0.5) * innerWidth - w / 2;
   let y = (-p.y * 0.5 + 0.5) * innerHeight - h - 14;   // 抬起一个身位，别糊在物件上
   // 贴边收进来，保证整块菜单都在屏幕里（手机上尤其重要）

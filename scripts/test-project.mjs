@@ -145,6 +145,23 @@ test('家具菜单只给真实能去的站位，且不残留左下角卡片', ()
     assert.ok(!html.includes(gone) && !appSource.includes(gone), `还在引用旧的左下角卡片：${gone}`);
   }
   assert.ok(html.includes('id="spotMenu"'), '缺少新的家具菜单 #spotMenu');
+
+  // 出场动画必须是「原地淡入」，不能有位移。
+  // 位置的写法是每帧 style.transform = translate(...)；一旦外层也写了 transition:transform，
+  // 浏览器就会在两个 translate 之间补间 —— 表现就是菜单从屏幕左上角滑到家具上。
+  const menuRule = html.match(/\.spot-menu\{[^}]*\}/)?.[0] || '';
+  assert.ok(menuRule, 'index.html 里找不到 .spot-menu 规则');
+  assert.ok(!/transition[^;}]*transform/.test(menuRule),
+    `.spot-menu 是定位壳，不能过渡 transform（会从左上角滑过来）：${menuRule}`);
+  assert.ok(!/transition/.test(menuRule),
+    `.spot-menu 只负责定位，任何 transition 都不该加在这里：${menuRule}`);
+  // 淡入放大得在内层卡片上做
+  assert.ok(/\.spot-card\{/.test(html), '缺少内层卡片 .spot-card（出场动画挂在它上面）');
+  const cardRule = html.match(/\.spot-card\{[^}]*\}/)?.[0] || '';
+  assert.ok(/transition[^;}]*opacity/.test(cardRule), `.spot-card 应该过渡 opacity：${cardRule}`);
+  // 打开时先量尺寸、摆好位置，再取消 hide —— 否则会先用上一个家具的位置画一帧
+  assert.ok(/visibility\s*=\s*'hidden'[\s\S]{0,220}layoutSpotMenu\(\)[\s\S]{0,220}classList\.remove\('hide'\)/.test(appSource),
+    '打开菜单的顺序应该是「先定位再淡入」（hidden → layoutSpotMenu() → remove("hide")）');
 });
 
 console.log(`\n${pass} 项通过，${fail} 项失败`);
