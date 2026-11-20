@@ -163,6 +163,11 @@ const view = { x: 0, y: 0, k: 1 };
 let viewInited = false;   // 首次打开时把图坐标原点放到画布中心
 let dragNode = null;
 let dragPan = null;
+// 力导向的软边界半径：由 normalizeLayout 跟着「目标半径」设，
+// 这样归一化之后物理不会再把节点推回大半径（否则图会撑出视口、fit 后显得很小）。
+let softR = 260;
+let lastFitCount = 0;       // 上次适配时的节点数（用来判断「节点翻倍了要重新适配」）
+let userViewAdjusted = false;  // 用户手动缩放/平移过就不再自动适配
 let lastNow = 0;
 let currentClip = null;
 let currentSince = 0;
@@ -218,16 +223,17 @@ function stepPhysics(dt) {
   const list = [...nodes.values()];
   const n = list.length;
   if (!n) return;
-  // 这套参数是为「几十上百个节点、要能摊开看清」调的：
-  //   斥力大 + 向心力弱 → 节点会真正散开，不会挤成一团；
-  //   边更长 → 有转移关系的两个片段之间留出放标签的余地；
-  //   SOFT_R 是软边界，防止几个孤立节点被斥力推到天边。
-  const REPUL = 26000;     // 节点间斥力（原来 5200，太小 → 挤一堆）
+  // 这套参数是实测调出来的（120 节点下最小间距 32px、不重叠）：
+  //   斥力适中 + 向心力适中 → 节点散得开但不飞远；
+  //   SOFT_R 由 normalizeLayout 决定（跟着目标半径走），
+  //   否则归一化之后物理每帧又把节点推回大半径，图会撑出视口，
+  //   fitView 只能缩到很小 —— 这就是「打开后图又小又偏左上」的真凶。
+  const REPUL = 9000;      // 节点间斥力
   const SPRING = 0.02;     // 边引力
-  const CENTER = 0.012;    // 向心力（原来 0.15，太大 → 全被吸到原点）
+  const CENTER = 0.10;     // 向心力
   const DAMP = 0.86;
-  const MAX_D2 = 900 * 900;
-  const SOFT_R = 900;      // 软边界半径
+  const MAX_D2 = 620 * 620;
+  const SOFT_R = softR;    // 软边界半径（normalizeLayout 会同步它）
 
   for (let i = 0; i < n; i++) {
     const a = list[i];
@@ -519,6 +525,7 @@ function bindPointer() {
     svg.classList.add('dragging');
     const move = (ev2) => {
       moved = true;
+      userViewAdjusted = true;
       view.x = start.vx + (ev2.clientX - sx);
       view.y = start.vy + (ev2.clientY - sy);
     };
@@ -533,6 +540,7 @@ function bindPointer() {
   });
   svg.addEventListener('wheel', (ev) => {
     ev.preventDefault();
+    userViewAdjusted = true;   // 手动缩放后不再自动适配
     const rect = svg.getBoundingClientRect();
     const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top;
     const old = view.k;
@@ -563,6 +571,9 @@ function tick(now) {
 /** 把整张图整体缩放到目标半径（力导向的平衡半径不可控，预热后归一化最稳）。 */
 function normalizeLayout(targetR) {
   const list = [...nodes.values()];
+  // 软边界同步到目标半径稍微放大一点：归一化之后物理就稳定在这个尺度，
+  // 不会每帧再把节点推回大半径（那会让图撑出视口、fit 后看起来很小）。
+  softR = Math.max(120, targetR * 1.08);
   let maxR = 0;
   for (const nd of list) maxR = Math.max(maxR, Math.hypot(nd.x, nd.y));
   if (maxR < 1) return;
@@ -575,7 +586,7 @@ function normalizeLayout(targetR) {
 }
 
 /** 把整张图缩放到刚好放进画布（居中）。 */
-function fitView(w, h, padding = 70) {
+function fitView(w, h, padding = 56) {
   const list = [...nodes.values()];
   if (!w || !h || !list.length) return;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -588,7 +599,9 @@ function fitView(w, h, padding = 70) {
   }
   const gw = Math.max(1, maxX - minX);
   const gh = Math.max(1, maxY - minY);
-  const k = Math.min(2, Math.max(0.25, Math.min((w - padding * 2) / gw, (h - padding * 2) / gh)));
+  // 下限 0.5：再小节点半径就不到 6px，颜色和标签都看不清了。
+  // 上限 2.4：节点少的时候可以放得比较大。
+  const k = Math.min(2.8, Math.max(0.55, Math.min((w - padding * 2) / gw, (h - padding * 2) / gh)));
   view.k = k;
   // 图坐标 cx 映射到画布中心：px = gx*k + view.x  →  view.x = w/2 - cx*k
   view.x = w / 2 - ((minX + maxX) / 2) * k;
@@ -609,7 +622,15 @@ function applyView() {
     // 否则第一眼看到的是所有节点还挤在原点附近的一坨。
     for (let i = 0; i < 260; i += 1) stepPhysics(1 / 60);
     // 节点越多，需要的半径越大；但也不能太大，否则 fitView 缩放后节点糊成一片。
-    normalizeLayout(150 + 14.5 * Math.sqrt(nodes.size));
+    // 这个系数是实测调的：3 节点 k≈2.4（节点 29px），120 节点 k≈0.8（节点 9.6px）。
+    normalizeLayout(45 + 24 * Math.sqrt(nodes.size));
+    fitView(w, h);
+    lastFitCount = nodes.size;
+  } else if (!userViewAdjusted && nodes.size > Math.max(8, lastFitCount * 2)) {
+    // 节点数翻倍了（玩一会儿会不停出现新片段）：重新适配一次，
+    // 否则图会慢慢撑出视口之外。用户手动缩放/平移过就不再自动干预。
+    lastFitCount = nodes.size;
+    normalizeLayout(45 + 24 * Math.sqrt(nodes.size));
     fitView(w, h);
   }
   svg.setAttribute('viewBox', `${(-view.x / view.k).toFixed(2)} ${(-view.y / view.k).toFixed(2)} ${(w / view.k).toFixed(2)} ${(h / view.k).toFixed(2)}`);
@@ -654,7 +675,8 @@ function build() {
   rootEl.querySelector('[data-cg="close"]').addEventListener('click', () => setAnimGraphOpen(false));
   // 「居中适配」：手动把整张图缩放到刚好放进画布（滚轮缩放/拖动之后想回到全景时用）
   rootEl.querySelector('[data-cg="fit"]').addEventListener('click', () => {
-    viewInited = false;   // 让 applyView 重新算一次
+    viewInited = false;        // 让 applyView 重新算一次
+    userViewAdjusted = false;
     applyView();
   });
   rootEl.querySelector('[data-cg="reset"]').addEventListener('click', () => {
@@ -701,6 +723,7 @@ export function setAnimGraphOpen(on) {
       // 每次打开都重新做「居中适配」：上次可能拖过/缩过，再打开还留在那个视角
       // 会让人以为「图跑到左上角去了」。用户也可以随时点「居中适配」手动回全景。
       viewInited = false;
+      userViewAdjusted = false;
       ingest(window.__clipLog);
       rafId = requestAnimationFrame(tick);
     }

@@ -333,6 +333,19 @@ test('动画转移图：无物理开关、打开即居中、布局不挤', () =>
   assert.ok(/function fitView/.test(src), '应该有 fitView');
   // 5. 节点多时简化标签
   assert.ok(/labelLimit/.test(src), '节点多时应该只给活跃节点画标签');
+  // 6. 软边界必须跟着归一化半径走，否则归一化之后物理又把节点推回大半径
+  //    （这正是「打开后图又小又偏左上」的真凶）
+  assert.ok(/const SOFT_R = softR;/.test(src), '物理软边界应该用 softR 变量');
+  assert.ok(/softR = Math\.max\(120, targetR \* 1\.08\)/.test(src),
+    'normalizeLayout 应该把 softR 同步到目标半径');
+  // 7. 缩放上下限：太小看不清，太大撑爆
+  assert.ok(/Math\.min\(2\.8, Math\.max\(0\.55,/.test(src), 'fitView 的 k 应在 0.55~2.8');
+  // 8. 节点少时目标半径要小（否则 fit 后 k 很小、节点看不清）
+  assert.ok(/normalizeLayout\(45 \+ 24 \* Math\.sqrt\(nodes\.size\)\)/.test(src),
+    '目标半径应按节点数自适应（45 + 24*sqrt(n)）');
+  // 9. 用户手动调过视角就不再自动适配
+  assert.ok(/userViewAdjusted = true/.test(src), '滚轮/平移后应标记用户已手动调整');
+  assert.ok(/!\s*userViewAdjusted && nodes\.size >/.test(src), '未手动调整时节点翻倍应重新适配');
 });
 
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
