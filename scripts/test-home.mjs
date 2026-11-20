@@ -521,6 +521,44 @@ test('菜园事件带齐字段，且不把「小蓝鱼：」当她的活动', ()
   assert.ok(!e.text.includes('小蓝鱼：'), '正文要剥掉第三人称前缀');
 });
 
+test('「去洗漱」「去卫生间」按钮真的会结算需求，不是走过去站着', () => {
+  // 面板上这两只按钮发的是 command。command 的默认实现只是「到了站在那里」，
+  // 那洗完之后 hygiene 一点都不掉，按钮就是假的。
+  for (const [spot, field, mustFall] of [['sink', 'hygiene', true], ['toilet', 'bladder', true]]) {
+    let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+    s.needs[field] = 0.9;
+    const before = s.needs[field];
+    s = applyHomeAction(s, { action: 'command', room: 'bathroom', spot, at: T0 }).state;
+    let t = T0;
+    for (let i = 0; i < 600; i++) {
+      t += 1000;
+      s = advanceHomeState(s, t, {}).state;
+      if (s.eventLog.some((e) => e.at >= T0 && ['shower', 'toilet'].includes(e.type) && e.spot === spot)) break;
+    }
+    const after = s.needs[field];
+    if (mustFall) {
+      assert.ok(after < before - 0.2, `${spot}：${field} 应该明显下降，实际 ${before} → ${after}`);
+    }
+    const ev = s.eventLog.filter((e) => ['shower', 'toilet'].includes(e.type)).pop();
+    assert.ok(ev && ev.at >= T0, `${spot}：应该写出结算事件`);
+  }
+});
+
+test('hygiene 有出口：邋遢到阈值她会自己去洗澡', () => {
+  // 只有「加」没有「减」的话，这根条会一路涨到 1.0 再也不回落。
+  let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  s.needs.hygiene = 0.8;
+  s.needs.hunger = 0; s.needs.thirst = 0; s.needs.bladder = 0; s.needs.energy = 0.9; s.needs.pain = 0;
+  let t = T0;
+  let went = false;
+  for (let i = 0; i < 400 && !went; i++) {
+    t += 2000;
+    s = advanceHomeState(s, t, {}).state;
+    if (s.route?.target?.spot === 'shower' || s.spot === 'shower') went = true;
+  }
+  assert.ok(went, '邋遢到 0.8 应该自己去洗澡，否则「清爽」这根条的刻度是假的');
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {

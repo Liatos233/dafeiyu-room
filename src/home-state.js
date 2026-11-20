@@ -1781,6 +1781,15 @@ function commandTarget(command, now) {
   const sp = HOME_LAYOUT.spots[command.room]?.[command.spot];
   if (!sp) return null;
   const isWater = command.room === 'living' && command.spot === 'water';
+  // 洗手台/马桶/淋浴是有实际结算的，不能只是「走过去站在那里」：
+  // 面板上的「去洗漱」「去卫生间」如果只让她站着，洗完 hygiene 一点都不掉，
+  // 那按钮就是假的。这里直接借用 TRIPS 里现成的动作与结算。
+  if (command.room === 'bathroom') {
+    const trip = command.spot === 'toilet' ? TRIPS.toilet(now)
+      : command.spot === 'shower' ? TRIPS.shower(now)
+        : command.spot === 'sink' ? TRIPS.brush(now) : null;
+    if (trip) return { ...trip, urgent: false, awakeHold: true };
+  }
   return {
     room: command.room,
     spot: command.spot,
