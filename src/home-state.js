@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { CATALOG, FREESTYLE_DEFAULTS } from '../public/room/action-catalog.js';
+import { FREESTYLE_BUBBLE, actionBubble } from '../public/room/action-map.js';
 
 const MIN = 60_000;
 const HOUR = 3_600_000;
@@ -480,11 +481,14 @@ const TRIPS = {
   brush: (now) => defaultArrival('bathroom', 'sink', 'bath', '站在洗手台前刷牙洗脸', 25_000, 'brush', 'shower', '在卫生间洗漱完，清醒了一点'),
   shower: (now) => defaultArrival('bathroom', 'shower', 'bath', '在淋浴间冲了个澡', 45_000, 'shower', 'shower', '洗了个热水澡，头发还湿着'),
   balcony: (now) => defaultArrival('balcony', 'chair', 'balcony', '在躺椅上躺着吹海风', 28_000, 'balcony', 'balcony', '在阳台吹了会儿风'),
-  tv: (now) => defaultArrival('living', 'sofa', 'tv', '窝在沙发上，抱着抱枕看屏幕', 35_000, 'tv', 'tv', '窝在沙发上看了一会儿电视'),
+  // 电视：她其实是在打主机游戏（片段也只有「打主机游戏」），文案跟片段对齐，
+  // 否则气泡/事件说「看电视」、画面在打游戏，怎么看都是两件事。
+  tv: (now) => defaultArrival('living', 'sofa', 'tv', '抱着手柄打游戏，眼睛盯着屏幕', 35_000, 'tv', 'tv', '窝在沙发上打了一会儿游戏'),
   desk: (now) => defaultArrival('her_room', 'desk', 'desk', '趴在书桌前写写画画', 40_000, 'desk', 'desk', '在书桌前写了一会儿东西'),
   phone: (now) => defaultArrival('living', 'sofa', 'phone', '低头看手机，有人在 QQ 找你', 10_000, 'phone', 'phone', '看到手机上有未读，凑过去看了一会儿'),
   nap: (now) => defaultArrival('living', 'sofa', 'nap', '抱着抱枕在沙发上打盹', 60_000, 'nap', 'nap', '在沙发上眯了一会儿'),
-  laundry: (now) => defaultArrival('laundry', 'washer', 'laundry', '在研究洗衣机，把衣服塞进去', 30_000, 'laundry', 'laundry', '把攒的衣服丢进洗衣机'),
+  // 洗衣服：片段是「叠衣服」，文案也说叠衣服，不再让她"把衣服塞进洗衣机"却播叠衣服。
+  laundry: (now) => defaultArrival('laundry', 'washer', 'laundry', '把洗好的衣服叠起来', 30_000, 'laundry', 'laundry', '把洗好的衣服叠好了'),
   window: (now) => defaultArrival('her_room', 'window', 'idle', '站在窗边看楼下的灯', 20_000, 'window', 'balcony', '在窗边站了一会儿'),
   dinner: (now) => defaultArrival('kitchen', 'dining', 'eat', '坐在餐桌边，小口小口地吃', 30_000, 'eat', 'eat', '在餐桌边吃了顿饭'),
   sickBed: (now) => defaultArrival('her_room', 'bed', 'sick', '烧得厉害，只能裹着被子躺着', 0, 'sick', null, '')
@@ -2388,14 +2392,26 @@ function chooseRunStyle(s, emotion, now) {
 }
 
 /** 页面与提示词共用的唯一快照。 */
-// 气泡用第一人称台词（面板仍然用 activity 的第三人称描述）
-function speechFor(kind, activity) {
+// 气泡用第一人称台词（面板仍然用 activity 的第三人称描述）。
+// 先查 action-map 里的 kind→台词表（与动画共用一张表），查不到才回落到关键词规则：
+// 关键词规则只能覆盖几十个中文词，而动作库有 270 条、kind 有 30 多种，
+// 以前全靠它就会让书桌前写代码、躺着打盹、被摸头都统一说成「本鱼在这儿呢」。
+function speechFor(kind, activity, extra = {}) {
+  // freestyle 的动作名千变万化（270 条 CATALOG），按目录里的分组给台词才说得通。
+  if (String(kind || '') === 'freestyle') {
+    const group = String(extra?.freestyleGroup || '');
+    return FREESTYLE_BUBBLE[group] || '本鱼自个儿玩会儿～';
+  }
+  const mapped = actionBubble(kind, activity);
+  if (mapped) return mapped;
   const t = String(activity || '');
   const k = String(kind || '');
   if (k === 'drink' || t.includes('喝水') || t.includes('杯子')) return '本鱼喝口水，真解渴～';
   if (k === 'eat' || t.includes('小鱼干') || t.includes('嚼')) return '本鱼开吃啦！';
   if (k === 'sleep' || t.includes('被窝') || t.includes('睡着')) return '本鱼睡一会儿…';
   if (k === 'wake' || t.includes('刚醒') || t.includes('赖床')) return '唔…本鱼醒啦';
+  // 「走」这条要放在菜园/到了之前，但不能把「自己在菜园里走动」也算成这两个：
+  // 已经先查过表了，菜园的 garden_* kind 不会走到这里。
   if (k === 'walk' || t.includes('走')) return '本鱼去那边看看';
   if (k === 'play' || t.includes('玩')) return '本鱼玩会儿～';
   if (t.includes('吓了一跳') || t.includes('戳')) return '呀！你吓本鱼一跳';
@@ -2449,7 +2465,9 @@ export function homeView(state, now = Date.now(), env = {}) {
       spot: s.spot,
       spotLabel: spot?.label || (s.spot === 'free' ? '你指的地方' : ''),
       activity: s.activity,
-      speech: (s.sayUntil && s.sayUntil > now && s.sayText) ? s.sayText : speechFor(s.kind, s.activity),
+      speech: (s.sayUntil && s.sayUntil > now && s.sayText)
+        ? s.sayText
+        : speechFor(s.kind, s.activity, { freestyleGroup: s.freestylePick?.group }),
       say: (s.sayUntil && s.sayUntil > now) ? s.sayText : null,
       kind: s.kind,
       clip: (s.kind === 'freestyle' || s.kind === 'swim') ? (s.clip || null) : null,
