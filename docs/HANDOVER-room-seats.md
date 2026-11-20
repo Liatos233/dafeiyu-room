@@ -124,7 +124,8 @@ NAV_KEEPOUT ──┬──> HOME_PLATFORMS（由 spots 里 support>0.05 的点�
   6. 按 `kind` 查表（eat/drink/swim/toilet/bath/balcony/tv/desk/…）
 - **片段最短保持 350ms**（`app.js:2334`）：切换新片段前，若 `now - _lastAt < 350` 且新片段不在
   `URGENT = {run_happy, run_hurry, walk, sleep_in, sleep_loop, sleep_out}` 里，就**不切**，避免抖动。
-- 坐具 play 阶段（`sofaPhase/chaisePhase === 'play'`）强制 `dance`；上/下座阶段强制 `mutter`。
+- 坐具 play 阶段（`sofaPhase === 'play'`）强制 `dance`；上/下座阶段强制 `mutter`。
+  （躺椅那套客户端假上座 `chaisePhase` 已删除，原因见 `ANIMATION.md` 播放层级表的注释。）
 
 **已知偏置**：2D 立绘被家具近侧栏杆遮挡时，已加 **0.22m 朝相机偏置**（遮挡 ≠ 相交）；根治需坐姿素材（技术债 #1/#2）。
 

@@ -34,7 +34,7 @@ const CLIP_CLASSES = [
   },
   {
     id: 'seat', name: '坐具/上座', color: '#ffc36e',
-    desc: 'seatPhase/sofaPhase/chaisePhase=play → dance；上下座过渡 → mutter',
+    desc: 'seatPhase/sofaPhase=play → dance；上下座过渡 → mutter',
     clips: ['dance', 'mutter'],
   },
   {

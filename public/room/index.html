@@ -97,20 +97,23 @@
   .activity{margin:0; font-size:15px; line-height:1.55; min-height:44px}
   .activity .spot{color:var(--accent-2); font-size:12px; display:block; margin-bottom:2px; letter-spacing:.08em}
   .mood{display:grid; gap:7px}
-  .mood-row{display:grid; grid-template-columns:52px 1fr 76px; gap:8px; align-items:center; font-size:11.5px; color:var(--muted)}
-  .bar{height:5px; border-radius:99px; background:rgba(255,255,255,.09); overflow:hidden}
+  .mood-row{display:grid; grid-template-columns:34px 1fr 76px; gap:8px; align-items:center; font-size:11.5px; color:var(--muted)}
+  .mood-row .bar{position:relative}
+  /* 刻度：她自己的行为阈值。实心 = 到了会自己处理，空心红 = 到了算紧急。 */
+  .bar .tick{
+    position:absolute; top:-2px; bottom:-2px; width:1px; margin-left:-0.5px;
+    background:rgba(199,214,232,.5); border-radius:1px; pointer-events:auto; cursor:help;
+  }
+  .bar .tick.urgent{background:rgba(255,120,120,.62); width:1px}
+  .bar{height:5px; border-radius:99px; background:rgba(255,255,255,.09); overflow:visible}
   .bar i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#6fa9ea,#a9d1ff); transition:width .8s ease}
+  .bar.energy i{background:linear-gradient(90deg,#6fa9ea,#a9d1ff)}
   .bar.hunger i{background:linear-gradient(90deg,#e8b06a,#ffd591)}
   .bar.thirst i{background:linear-gradient(90deg,#6fc7d8,#9fe8ef)}
-  .bar.pain i{background:linear-gradient(90deg,#e07d7d,#ff9db0)}
-  .bar.mood i{background:linear-gradient(90deg,#b07dff,#d6b0ff)}
+  .bar.hygiene i{background:linear-gradient(90deg,#7fd8a8,#b6f0cf)}
+  .bar.comfort i{background:linear-gradient(90deg,#e07d7d,#ff9db0)}
   .bar.bladder i{background:linear-gradient(90deg,#8fa8c9,#bcd4f0)}
   .mood-row .word{text-align:right; color:#c7d6e8; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .mood-tips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-  .mood-tips .tip-label{font-size:10px;color:var(--muted);opacity:.7}
-  .mood-tips .tip{display:none}
-  .mood-tips button{border:1px solid rgba(143,193,255,.35);background:rgba(143,193,255,.12);color:#dbe9ff;font:inherit;font-size:11px;padding:4px 9px;border-radius:999px;cursor:pointer}
-  .mood-tips button:hover{background:rgba(143,193,255,.22)}
   .act-group{display:flex;flex-direction:column;gap:5px}
   .act-title{font-size:10px;letter-spacing:.12em;color:var(--muted);opacity:.75;padding-left:2px}
   .actions{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:2px}
@@ -120,6 +123,19 @@
   }
   .act:hover{background:rgba(48,72,102,.65); border-color:rgba(170,210,255,.35); transform:translateY(-1px)}
   .act:active{transform:translateY(0)}
+  /* 需求已经越过她自己会处理的阈值：微光提示这只按钮现在有用 */
+  .act.glow{
+    border-color:rgba(143,193,255,.62);
+    box-shadow:0 0 0 1px rgba(143,193,255,.18), 0 0 12px rgba(111,169,234,.42);
+    animation:actGlow 2.4s ease-in-out infinite;
+  }
+  @keyframes actGlow{
+    0%,100%{box-shadow:0 0 0 1px rgba(143,193,255,.14), 0 0 8px rgba(111,169,234,.26)}
+    50%{box-shadow:0 0 0 1px rgba(143,193,255,.34), 0 0 16px rgba(111,169,234,.6)}
+  }
+  /* 她睡着了 / 生病动不了：相关按钮置灰，不做「点了才知道不行」 */
+  .act:disabled{opacity:.38; cursor:default; transform:none; filter:grayscale(.6)}
+  .act:disabled:hover{background:rgba(26,38,54,.55); border-color:var(--line); transform:none}
   .act.primary{background:linear-gradient(135deg,rgba(111,169,234,.35),rgba(143,193,255,.16)); border-color:rgba(143,193,255,.4)}
   .affection{display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--muted); border-top:1px solid rgba(255,255,255,.07); padding-top:10px}
   .affection b{color:var(--accent-2); font-weight:600}
@@ -619,37 +635,41 @@
     <div class="panel-head"><span class="room" id="roomName">客厅</span><span class="head-right"><span class="emotion" id="emotionChip"></span><span class="clock" id="clock">--:--</span></span></div>
     <p class="activity" id="activity"><span class="spot" id="spotLabel"></span><span id="activityText">正在推门进去…</span></p>
     <div class="mood" id="mood">
-      <div class="mood-row"><span>精力值</span><div class="bar"><i id="barEnergy" style="width:70%"></i></div><span class="word" id="wordEnergy"></span></div>
-      <div class="mood-row"><span>饱腹值</span><div class="bar hunger"><i id="barHunger" style="width:30%"></i></div><span class="word" id="wordHunger"></span></div>
-      <div class="mood-row"><span>口渴值</span><div class="bar thirst"><i id="barThirst" style="width:30%"></i></div><span class="word" id="wordThirst"></span></div>
-      <div class="mood-row"><span>不适值</span><div class="bar pain"><i id="barPain" style="width:0%"></i></div><span class="word" id="wordPain"></span></div>
-      <div class="mood-row"><span>心情值</span><div class="bar mood"><i id="barMood" style="width:70%"></i></div><span class="word" id="wordMood"></span></div>
-      <div class="mood-row"><span>健康值</span><div class="bar bladder"><i id="barBladder" style="width:0%"></i></div><span class="word" id="wordBladder"></span></div>
+      <!-- 六根条统一「满 = 好」。刻度由 need-bars.js 的 tickPercents() 在启动时画上去，
+           标的是她自己的行为阈值（普通 = 到了会自己处理，红色 = 到了算紧急）。
+           数字不许写死在这里：写死就会和 src/home-state.js 的 decideTarget 漂移。 -->
+      <div class="mood-row" data-need="energy"><span>体力</span><div class="bar energy"><i id="barEnergy" style="width:70%"></i></div><span class="word" id="wordEnergy"></span></div>
+      <div class="mood-row" data-need="hunger"><span>饱腹</span><div class="bar hunger"><i id="barHunger" style="width:70%"></i></div><span class="word" id="wordHunger"></span></div>
+      <div class="mood-row" data-need="thirst"><span>水分</span><div class="bar thirst"><i id="barThirst" style="width:70%"></i></div><span class="word" id="wordThirst"></span></div>
+      <div class="mood-row" data-need="hygiene"><span>清爽</span><div class="bar hygiene"><i id="barHygiene" style="width:90%"></i></div><span class="word" id="wordHygiene"></span></div>
+      <div class="mood-row" data-need="pain"><span>舒适</span><div class="bar comfort"><i id="barPain" style="width:100%"></i></div><span class="word" id="wordPain"></span></div>
+      <div class="mood-row" data-need="bladder"><span>轻松</span><div class="bar bladder"><i id="barBladder" style="width:80%"></i></div><span class="word" id="wordBladder"></span></div>
     </div>
-    <div class="mood-tips" id="moodTips" hidden></div>
     <div class="act-group">
-      <span class="act-title">亲密</span>
+      <span class="act-title">照顾身体</span>
       <div class="actions">
-        <button class="act" data-act="pet">摸摸头</button>
         <button class="act" data-act="feed">喂小鱼干</button>
-        <button class="act" data-act="play">陪她玩</button>
-        <button class="act" data-act="talk">留句话</button>
-      </div>
-    </div>
-    <div class="act-group">
-      <span class="act-title">照顾</span>
-      <div class="actions">
         <button class="act" data-act="water">去喝水</button>
+        <button class="act" data-act="wash">去洗漱</button>
+        <button class="act" data-act="toilet">去卫生间</button>
         <button class="act" id="sleep" data-act="sleep">哄她睡</button>
         <button class="act" id="lamp" data-act="lamp">关灯</button>
       </div>
     </div>
     <div class="act-group">
-      <span class="act-title">一起</span>
+      <span class="act-title">陪着她</span>
       <div class="actions">
-        <button class="act" data-act="sofa_play">沙发玩</button>
-        <button class="act" data-act="chaise_play">躺椅玩</button>
+        <button class="act" data-act="pet">摸摸头</button>
+        <button class="act" data-act="poke">戳一下</button>
+        <button class="act" data-act="play">陪她玩</button>
+        <button class="act" data-act="talk">留句话</button>
         <button class="act" data-act="roomchat">和她聊聊</button>
+      </div>
+    </div>
+    <div class="act-group">
+      <span class="act-title">屋子</span>
+      <div class="actions">
+        <button class="act" data-act="garden">进入菜园</button>
       </div>
     </div>
     <div class="affection"><span>和小屋的亲近</span><span><b id="affection">—</b> · <span id="affStage">刚搬进来</span></span></div>

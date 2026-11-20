@@ -12,6 +12,7 @@ import { createGardenWorld } from './garden-world.js';
 import { getGardenFraming } from './garden-camera.js';
 import { toggleAnimGraph, isAnimGraphOpen } from './clip-graph.js';
 import { actionClip, actionSeatedClip, SEATED_FALLBACK } from './action-map.js';
+import { NEED_BARS, NEED_THRESHOLDS, barPercents, tickPercents, glowActions } from './need-bars.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -1793,53 +1794,55 @@ function applyState(next) {
   }
 }
 
-// 「现在能做什么」：把需求和现成的按钮接起来
-function renderMoodTips(body) {
-  const box = document.getElementById('moodTips');
-  if (!box) return;
-  if (!body) { box.hidden = true; box.innerHTML = ''; return; }
+// 「现在能做什么」那排推荐已经删掉：它只是把下面本来就有的按钮重挑两个出来，
+// 真正缺的入口（洗漱/卫生间）现在直接做成了按钮。
+// 需求越线时改为让对应按钮微光（见 syncActionHints），比多一排小结更省地方。
 
-  const tips = [];
-  const push = (label, act, weight) => tips.push({ label, act, weight });
+// 指标条怎么算、刻度画在哪，唯一事实源在 need-bars.js（和 home-state 的阈值一一对应）。
 
-  // 越难受给的权重越高，最后取前两个
-  if ((body.hunger ?? 0) >= 0.45) push('喂小鱼干', 'feed', (body.hunger ?? 0));
-  if ((body.thirst ?? 0) >= 0.40) push('去喝水', 'water', (body.thirst ?? 0));
-  if ((body.energy ?? 1) <= 0.45) push('哄她睡', 'sleep', 1 - (body.energy ?? 1));
-  if ((body.pain ?? 0) >= 0.15) push('关灯让她休息', 'lamp', (body.pain ?? 0) + 0.1);
-  if ((body.bladder ?? 0) >= 0.6) push('去卫生间', 'toilet', (body.bladder ?? 0));
-  if ((body.hygiene ?? 0) >= 0.5) push('去洗漱', 'wash', (body.hygiene ?? 0));
-  const moodNow = Number(state?.emotion?.mood);
-  if (Number.isFinite(moodNow) && moodNow < 50) push('摸摸头', 'pet', (50 - moodNow) / 100 + 0.2);
-  if ((body.energy ?? 1) > 0.45 && (body.hunger ?? 0) < 0.45 && (body.thirst ?? 0) < 0.40) {
-    push('陪她玩', 'play', 0.3);
-    push('留句话', 'talk', 0.2);
+// 启动时把行为阈值刻度画到条上。数字来自 need-bars.js，HTML 里不写死。
+function buildNeedTicks() {
+  for (const bar of NEED_BARS) {
+    const row = document.querySelector(`.mood-row[data-need="${bar.key}"] .bar`);
+    const pos = tickPercents(bar.key);
+    if (!row || !pos) continue;
+    row.querySelectorAll('.tick').forEach((n) => n.remove());
+    const mk = (left, urgent, hint) => {
+      const el = document.createElement('b');
+      el.className = urgent ? 'tick urgent' : 'tick';
+      el.style.left = `${left}%`;
+      el.title = hint;
+      row.appendChild(el);
+    };
+    // 取反的条要把刻度镜像过来，否则刻度会画反（条是 1-x，刻度却是 x）
+    const label = NEED_THRESHOLDS[bar.key];
+    mk(pos.act, false, `过了这条她会自己处理（原始 ${label.act}）`);
+    mk(pos.urgent, true, `过了这条算紧急、会插队（原始 ${label.urgent}）`);
   }
+}
 
-  if (!tips.length) { box.hidden = true; box.innerHTML = ''; return; }
-  tips.sort((a, b) => b.weight - a.weight);
-  const top = tips.slice(0, 2);
-
-  box.hidden = false;
-  box.innerHTML = '';
-  const lab = document.createElement('span');
-  lab.className = 'tip-label';
-  lab.textContent = '现在可以';
-  box.appendChild(lab);
-  for (const t of top) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = t.label;
-    b.addEventListener('click', () => {
-      if (t.act === 'toilet') { void act('command', { room: 'bathroom', spot: 'toilet' }); return; }
-      if (t.act === 'wash') { void act('command', { room: 'bathroom', spot: 'sink' }); return; }
-      const btn = document.querySelector(`[data-act="${t.act}"]`);
-      if (btn) btn.click();
-      else if (t.act === 'sleep') document.getElementById('sleep')?.click();
-      else if (t.act === 'lamp') document.getElementById('lamp')?.click();
-    });
-    box.appendChild(b);
-  }
+// 按钮状态：需求越线 → 微光；她睡着/动不了 → 相关按钮置灰，别让人点了才知道不行。
+function syncActionHints(body) {
+  const her = state?.her;
+  const glow = glowActions(body, state);
+  const asleep = !!her?.asleep;
+  const immobile = !!her?.immobile;
+  document.querySelectorAll('[data-act]').forEach((btn) => {
+    const a = btn.dataset.act;
+    btn.classList.toggle('glow', glow.has(a));
+    // 睡着或疼得动不了时，这些「要她自己动」的指令发出去也不会执行
+    const needsHer = a === 'water' || a === 'wash' || a === 'toilet' || a === 'play' || a === 'poke';
+    const disabled = (asleep || immobile) && needsHer;
+    if (btn.disabled !== disabled) btn.disabled = disabled;
+    // 原始提示语（title 在 HTML 里写的）留一份，置灰解除后要还原回去
+    if (disabled) {
+      if (!btn.dataset.baseTitle) btn.dataset.baseTitle = btn.title || '';
+      btn.title = asleep ? '她睡着了，先叫醒她' : '她不舒服，动不了';
+    } else if (btn.dataset.baseTitle) {
+      btn.title = btn.dataset.baseTitle;
+      delete btn.dataset.baseTitle;
+    }
+  });
 }
 
 function renderHUD() {
@@ -1850,40 +1853,22 @@ function renderHUD() {
   $('clock').textContent = state.clock || '--:--';
   $('spotLabel').textContent = her.spotLabel ? `${her.spotLabel} · ` : '';
   $('activityText').textContent = her.activity || '在发呆';
-  $('barEnergy').style.width = `${Math.round((body.energy ?? 0) * 100)}%`;
-  // 条表示「饱腹值」：越满越饱，所以取反
-  $('barHunger').style.width = `${Math.round((1 - (body.hunger ?? 0)) * 100)}%`;
-  $('barThirst').style.width = `${Math.round((body.thirst ?? 0) * 100)}%`;
-  $('barPain').style.width = `${Math.round((body.pain ?? 0) * 100)}%`;
-  // 心情值（0-100）与如厕值（bladder 0-1）
-  const mood = Number(state?.emotion?.mood);
-  const moodPct = Number.isFinite(mood) ? Math.round(Math.max(0, Math.min(100, mood))) : 70;
-  const barMoodEl = $('barMood');
-  if (barMoodEl) barMoodEl.style.width = `${moodPct}%`;
-  const wordMoodEl = $('wordMood');
-  if (wordMoodEl) {
-    wordMoodEl.textContent = moodPct >= 78 ? '心情很好' : moodPct >= 60 ? '还不错'
-      : moodPct >= 45 ? '有点闷' : moodPct >= 30 ? '心情低落' : '很难过';
-  }
-  // 健康值：由「疼痛 + 憋 + 没洗漱」共同决定，100 = 状态很好
-  const bladder = Number(body.bladder) || 0;
-  const hygiene = Number(body.hygiene) || 0;
-  const pain = Number(body.pain) || 0;
-  const health = Math.max(0, Math.min(100, Math.round(
-    100 - pain * 45 - Math.max(0, bladder - 0.45) * 60 - hygiene * 45
-  )));
-  const barHealthEl = $('barBladder');
-  if (barHealthEl) barHealthEl.style.width = `${health}%`;
-  const wordHealthEl = $('wordBladder');
-  if (wordHealthEl) {
-    wordHealthEl.textContent = health >= 85 ? '状态很好' : health >= 70 ? '还不错'
-      : health >= 55 ? '有点不适' : health >= 40 ? '不太舒服' : health >= 25 ? '明显不适' : '很难受';
-  }
-  renderMoodTips(body);
+
+  const pct = barPercents(body, state);
+  $('barEnergy').style.width = `${Math.round(pct.energy * 100)}%`;
+  $('barHunger').style.width = `${Math.round(pct.hunger * 100)}%`;
+  $('barThirst').style.width = `${Math.round(pct.thirst * 100)}%`;
+  $('barHygiene').style.width = `${Math.round(pct.hygiene * 100)}%`;
+  $('barPain').style.width = `${Math.round(pct.comfort * 100)}%`;
+  $('barBladder').style.width = `${Math.round(pct.bladder * 100)}%`;
+
   $('wordEnergy').textContent = body.words?.energy || '';
   $('wordHunger').textContent = body.words?.hunger || '';
   $('wordThirst').textContent = body.words?.thirst || '';
+  $('wordHygiene').textContent = body.words?.hygiene || '';
   $('wordPain').textContent = body.words?.pain || '';
+  $('wordBladder').textContent = body.words?.bladder || '';
+  syncActionHints(body);
 
   const emo = state.emotion;
   const emoChip = $('emotionChip');
@@ -2084,87 +2069,16 @@ function clipFor(her) {
 // 调试预览：?preview=sit 或 ?preview=lie 直接把她的显示位置放在沙发/床上，
 // 用来调坐姿下沉/躺姿高度，不改服务端状态。
 // ── 沙发玩：走到沙发，到了就坐上去玩一会儿 ─────────────────────────────
+// 只由「点场景里的沙发 → 来这里玩」触发。躺椅那套客户端假上座（chaisePlay）
+// 已经删掉：它自己算了一套坐标（离服务端 chair.pos 差 0.37 米）、又用 act('go')
+// 绕过了服务端 mounting/dismounting，是交接文档里点名的违规做法。
 const SOFA_POINT = [5.84, 4.95];   // 坐垫中心（与 home-state sofa.pos 保持一致）
 let sofaPlayUntil = 0;
-// 躺椅玩：先走到躺椅前面 → 平滑“抬脚”坐上躺椅 → 播动作 → 结束再平滑下来
-const CHAISE_POINT = [2.67, 8.22];   // 躺椅中心（坐上去的位置）
-const CHAISE_STAGE = [3.55, 8.30];   // 躺椅前面的落脚点
-const CHAISE_SEAT = 0.40;            // 座面高度
-let chaisePhase = 'idle';            // idle | walk | up | play | down
-let chaiseT0 = 0;
-let chaisePlayUntil = 0;
 
-function chaiseEase(t) {
+function seatEase(t) {
   return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); // smoothstep
 }
 const SEAT_PHASES = ['rise', 'enter', 'play', 'exit', 'lower'];
-
-function chaisePlayHer(her) {
-  if (!her) return her;
-  const now = Date.now();
-  const SEAT = CHAISE_SEAT;
-
-  // 她已经（被服务端）走开了：立刻结束躺椅流程，不要顶着“玩耍”动作被拖走
-  if (SEAT_PHASES.includes(chaisePhase) && (her.walking || her.kind === 'walk')) {
-    chaisePhase = 'idle';
-    return her;
-  }
-
-  if (chaisePhase === 'walk') {
-    if (now - chaiseT0 > 20000) { chaisePhase = 'idle'; return her; }
-    if (!her.walking) {
-      const d = Math.hypot((her.pos?.[0] || 0) - CHAISE_STAGE[0], (her.pos?.[1] || 0) - CHAISE_STAGE[1]);
-      if (d < 0.7) { chaisePhase = 'rise'; chaiseT0 = now; }
-      else return her;
-    } else return her;
-  }
-  // 先抬到座面高度（原地，像跳上去）
-  if (chaisePhase === 'rise') {
-    const t = chaiseEase((now - chaiseT0) / 600);
-    if (t >= 1) { chaisePhase = 'enter'; chaiseT0 = now; }
-    return { ...her, pos: CHAISE_STAGE.slice(), elev: SEAT * t, pose: 'sit', walking: false };
-  }
-  // 抬到位后再横向进入躺椅范围
-  if (chaisePhase === 'enter') {
-    const t = chaiseEase((now - chaiseT0) / 450);
-    const pos = [
-      CHAISE_STAGE[0] + (CHAISE_POINT[0] - CHAISE_STAGE[0]) * t,
-      CHAISE_STAGE[1] + (CHAISE_POINT[1] - CHAISE_STAGE[1]) * t
-    ];
-    if (t >= 1) { chaisePhase = 'play'; chaiseT0 = now; }
-    return { ...her, pos, elev: SEAT, pose: 'sit', walking: false };
-  }
-  if (chaisePhase === 'play') {
-    if (now - chaiseT0 > 16000) { chaisePhase = 'exit'; chaiseT0 = now; }
-    return { ...her, pos: CHAISE_POINT.slice(), elev: SEAT, pose: 'sit', walking: false };
-  }
-  // 先横向退出躺椅范围（保持座面高度）
-  if (chaisePhase === 'exit') {
-    const t = chaiseEase((now - chaiseT0) / 450);
-    const pos = [
-      CHAISE_POINT[0] + (CHAISE_STAGE[0] - CHAISE_POINT[0]) * t,
-      CHAISE_POINT[1] + (CHAISE_STAGE[1] - CHAISE_POINT[1]) * t
-    ];
-    if (t >= 1) { chaisePhase = 'lower'; chaiseT0 = now; }
-    return { ...her, pos, elev: SEAT, pose: 'sit', walking: false };
-  }
-  // 退出后再落回地面
-  if (chaisePhase === 'lower') {
-    const t = chaiseEase((now - chaiseT0) / 550);
-    if (t >= 1) { chaisePhase = 'idle'; return her; }
-    return { ...her, pos: CHAISE_STAGE.slice(), elev: SEAT * (1 - t), pose: 'sit', walking: false };
-  }
-  return her;
-}
-async function chaisePlay() {
-  if (!state?.her) { toast('她还没出来'); return; }
-  if (state.her.asleep) { toast('她睡着了，先叫醒'); return; }
-  chaisePhase = 'walk';
-  chaiseT0 = Date.now();
-  toast(`${PET_NAME}去躺椅上玩`);
-  // 走到躺椅前面，不直接走进躺椅里
-  void act('go', { pos: CHAISE_STAGE });
-}
 
 // ── 通用「上座玩」：走到座点 → 抬到座面 → 跳一会儿 → 落回地面 ──────
 let seatPhase = 'idle';     // idle | walk | up | play | down
@@ -2245,12 +2159,12 @@ function sofaPlayHer(her) {
     if (d < 0.7) { sofaPhase = 'rise'; sofaT0 = now; } else return her;
   }
   if (sofaPhase === 'rise') {
-    const t = chaiseEase((now - sofaT0) / 600);
+    const t = seatEase((now - sofaT0) / 600);
     if (t >= 1) { sofaPhase = 'enter'; sofaT0 = now; }
     return { ...her, pos: sofaStage.slice(), elev: SEAT * t, pose: 'sit', walking: false };
   }
   if (sofaPhase === 'enter') {
-    const t = chaiseEase((now - sofaT0) / 450);
+    const t = seatEase((now - sofaT0) / 450);
     const pos = [
       sofaStage[0] + (SOFA_POINT[0] - sofaStage[0]) * t,
       sofaStage[1] + (SOFA_POINT[1] - sofaStage[1]) * t
@@ -2263,7 +2177,7 @@ function sofaPlayHer(her) {
     return { ...her, pos: SOFA_POINT.slice(), elev: SEAT, pose: 'sit', walking: false };
   }
   if (sofaPhase === 'exit') {
-    const t = chaiseEase((now - sofaT0) / 450);
+    const t = seatEase((now - sofaT0) / 450);
     const pos = [
       SOFA_POINT[0] + (sofaStage[0] - SOFA_POINT[0]) * t,
       SOFA_POINT[1] + (sofaStage[1] - SOFA_POINT[1]) * t
@@ -2272,7 +2186,7 @@ function sofaPlayHer(her) {
     return { ...her, pos, elev: SEAT, pose: 'sit', walking: false };
   }
   if (sofaPhase === 'lower') {
-    const t = chaiseEase((now - sofaT0) / 550);
+    const t = seatEase((now - sofaT0) / 550);
     if (t >= 1) { sofaPhase = 'idle'; return her; }
     return { ...her, pos: sofaStage.slice(), elev: SEAT * (1 - t), pose: 'sit', walking: false };
   }
@@ -2361,7 +2275,6 @@ function syncCharacter() {
   // 动画必须和位移对应（否则会出现边播动作边滑走）。
   if (motionWalking) {
     petActionOverride = null;
-      if (['rise', 'enter', 'play', 'exit', 'lower'].includes(chaisePhase)) chaisePhase = 'idle';
     if (['rise', 'enter', 'play', 'exit', 'lower'].includes(sofaPhase)) sofaPhase = 'idle';
   }
   // 喝水：现在 webm 里已经有「举杯敬酒」的完整动画，直接用视频素材，
@@ -2418,15 +2331,6 @@ function syncCharacter() {
     return;
   }
   if (['rise', 'enter', 'exit', 'lower'].includes(sofaPhase)) {
-    if (actor.current !== 'mutter') actor.setClip('mutter');
-    return;
-  }
-  if (chaisePhase === 'play' && !her.asleep) {
-    if (actor.current !== 'dance') actor.setClip('dance');
-    setBubble('躺椅上玩', 5000);
-    return;
-  }
-  if (['rise', 'enter', 'exit', 'lower'].includes(chaisePhase)) {
     if (actor.current !== 'mutter') actor.setClip('mutter');
     return;
   }
@@ -2769,14 +2673,18 @@ function setBubble(text, ms = 4500, opts = {}) {
 }
 
 // 按钮
+buildNeedTicks();
 document.querySelectorAll('[data-act]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const a = btn.dataset.act;
     if (a === 'talk') { openTalk(); return; }
     if (a === 'sleep') { act(lastSleep ? 'wake' : 'sleep'); return; }
     if (a === 'lamp') { act('lamp', { on: !(state?.env?.lamp) }); return; }
-    if (a === 'sofa_play') { void sofaPlay(); return; }
-    if (a === 'chaise_play') { void chaisePlay(); return; }
+    // 洗漱/卫生间在服务端没有同名 action，是前端翻成「去某个站位」的 command。
+    // 这两条以前藏在「现在可以」那排推荐里，推荐删掉后必须在这儿有正式入口。
+    if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink' }); return; }
+    if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet' }); return; }
+    if (a === 'garden') { gardenController?.toggle?.(); return; }
     if (a === 'roomchat') { setRoomChatOpen(!chatOpen); return; }
     act(a);
   });
@@ -3421,8 +3329,6 @@ if (params.get('devmenu') === '1') setTimeout(() => {
   }
 }, 1200);
 if (params.get('sofaplay') === '1') setTimeout(() => { void sofaPlay(); }, 1200);
-if (params.get('chaiseplay') === '1') setTimeout(() => { void chaisePlay(); }, 1200);
-if (params.get('chaisesit') === '1') setTimeout(() => { chaisePhase = 'play'; chaiseT0 = Date.now(); }, 800);
 if (params.get('sofasit') === '1') setTimeout(() => { sofaPhase = 'play'; sofaT0 = Date.now(); }, 800);
 {
   const aw = Number(params.get('autowake') || 0);
@@ -4126,7 +4032,7 @@ function frame(now) {
         el.style.cssText = 'position:fixed;left:12px;top:120px;z-index:99999;background:rgba(0,0,0,.78);color:#7dff9b;font:12px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none';
         document.body.appendChild(el);
       }
-      el.textContent = `walkdbg\nchar=${charMode}\nmoving=${movingNow} derived=${derivedWalk}\nstateWalk=${her.walking} predict=${!!walkPredict}\nclip=${actor.current} kind=${her.kind} speed=${her.speed}\nsofa=${sofaPhase} chaise=${chaisePhase}`;
+      el.textContent = `walkdbg\nchar=${charMode}\nmoving=${movingNow} derived=${derivedWalk}\nstateWalk=${her.walking} predict=${!!walkPredict}\nclip=${actor.current} kind=${her.kind} speed=${her.speed}\nsofa=${sofaPhase}`;
     }
     if (window.__PROBE) {
       window.__probe = {
@@ -4242,10 +4148,10 @@ function frame(now) {
     };
   }
 
-    const shownHer = pinHer(chaisePlayHer(sofaPlayHer(seatPlayHer(swimHer(PREVIEW ? previewHer(her) : her)))));
+    const shownHer = pinHer(sofaPlayHer(seatPlayHer(swimHer(PREVIEW ? previewHer(her) : her))));
     // 有“坐上去/躺上去”的覆盖时，位置也要跟着覆盖走，否则人会站在原地被抬高
     const seatedPhase = ['rise', 'enter', 'play', 'exit', 'lower'];
-    const seatOverride = seatedPhase.includes(chaisePhase) || seatedPhase.includes(sofaPhase)
+    const seatOverride = seatedPhase.includes(sofaPhase)
       || ['up', 'play', 'down'].includes(seatPhase)
       || PREVIEW || PIN_TEST;
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
@@ -4275,7 +4181,7 @@ function frame(now) {
             serverPos: her.pos,
             shownPos: shownHer.pos, shownElev: shownHer.elev,
             displayElev: bubbleAnchorElev,
-            chaise: chaisePhase, sofa: sofaPhase,
+            sofa: sofaPhase,
             seatOverride, walkingNow, model3d: !!modelReady
           })
         }).catch(() => {});

@@ -20,7 +20,7 @@
 | `her.walking` | 是否在移动（客户端用位移再判一次） | 行走动画最高优先 |
 | `her.clip` | 仅 `freestyle` 用：服务端抽好的片段名 | 自主动作具体播什么 |
 
-客户端另有几个**本地状态**（不来自服务端）：`seatPhase` / `sofaPhase` / `chaisePhase`（座位小流程）、
+客户端另有几个**本地状态**（不来自服务端）：`seatPhase` / `sofaPhase`（座位小流程）、
 `petActionOverride`（宠物动作）、`opinionClip`（电视弹幕吐槽）、`sleepPhase`。
 
 ---
@@ -36,11 +36,15 @@
 | 3 | **在移动** | `motionWalking`（位移 > 0.0035/帧） | `run_happy` / `run_hurry`；并清空所有表演类覆盖 |
 | 4 | 座位玩（server 流程） | `seatPhase === 'play'` | `dance`；`up/down` → `mutter` |
 | 5 | 沙发玩（本地流程） | `sofaPhase === 'play'` | `dance`；`rise/enter/exit/lower` → `mutter` |
-| 6 | 躺椅玩（本地流程） | `chaisePhase === 'play'` | `dance`；其余阶段 → `mutter` |
-| 7 | 沙发玩冷却 | `sofaPlayUntil` 未到期且距沙发 ≤0.5m | `dance` |
-| 8 | 预览 | `?preview=sit/lie` | `mutter` / `sleep_loop` |
-| 9 | **睡眠** | `her.asleep` | 未到床 → `idle/run`；到床 → `sleep_in`（一次）→ `sleep_loop`；醒来 → `sleep_out`（一次）→ 回到 `clipFor` |
-| 10 | 普通决策 | `clipFor(her)` | 见下表 |
+| 6 | 沙发玩冷却 | `sofaPlayUntil` 未到期且距沙发 ≤0.5m | `dance` |
+| 7 | 预览 | `?preview=sit/lie` | `mutter` / `sleep_loop` |
+| 8 | **睡眠** | `her.asleep` | 未到床 → `idle/run`；到床 → `sleep_in`（一次）→ `sleep_loop`；醒来 → `sleep_out`（一次）→ 回到 `clipFor` |
+| 9 | 普通决策 | `clipFor(her)` | 见下表 |
+
+> 曾经还有一层「躺椅玩（本地流程）」（`chaisePhase`），已经删掉：它自己算了一套坐标
+> （离服务端 `chair.pos` 差 0.37 米），又用 `act('go')` 绕过了服务端 `mounting/dismounting`，
+> 违反交接文档里「坐具上下必须走 mounting/dismounting」的不变量。躺椅现在只走
+> 「点场景物件 → 来这里玩」→ 服务端 `command` 流程。
 
 `clipFor()` 的决策表（第 10 层）：
 
@@ -115,7 +119,7 @@ urgent = next ∈ {run_happy, run_hurry, walk, sleep_in, sleep_loop, sleep_out}
    现在有 350ms + 1200ms 防抖挡着，但更稳的做法是给 mood 分桶（如每 20 点一档）。
 2. **坐姿素材缺失**：`sit` 用 `dance`（站姿）兜底，所以坐在沙发上看起来是站着的；这是素材问题，不是逻辑问题。
 3. **`freestyle` 的 clip 名字是中文**，和 `CLIPS` 的 key 一致；拼错会 fallback 到 `idle_look`。
-4. **本地座位流程**（`sofaPlay` / `chaisePlay` / `seatPlay`）会覆盖服务端 kind，直到流程结束；
+4. **本地座位流程**（`sofaPlay` / `seatPlay`）会覆盖服务端 kind，直到流程结束；
    如果中途被走动打断，`syncCharacter` 顶部的 `motionWalking` 分支会强制清零这些 phase。
 5. **切换日志**：`window.__clipLog`（最近 200 条 `{t, from, to}`）记录每次 `actor.setClip`；
    `window.__drawState` 带 `kind/activity/pose/spot/clip`，排查时先看这两个。

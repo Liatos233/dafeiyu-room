@@ -452,8 +452,12 @@ export function needsWords(needs) {
     thirst: thirst < 0.25 ? '不渴' : thirst < 0.5 ? '有点渴' : thirst < 0.72 ? '渴了' : thirst < 0.9 ? '很渴' : '渴得嗓子发干',
     energy: energy > 0.75 ? '精神不错' : energy > 0.5 ? '还行' : energy > 0.3 ? '有点累' : energy > 0.12 ? '很困' : '快撑不住了',
     pain: pain < 0.15 ? '没有不舒服' : pain < 0.4 ? '有点不舒服' : pain < 0.7 ? '很难受' : '疼得动不了',
-    hygiene: (needs?.hygiene ?? 0) > 0.7 ? '该洗漱了' : (needs?.hygiene ?? 0) > 0.45 ? '有点邋遢'
-      : (needs?.hygiene ?? 0) > 0.25 ? '还算清爽' : '清清爽爽'
+    // 邋遢度：越高越该洗。0.78 起她会自己去洗澡（见 decideTarget），所以文案阈值跟行为阈值对齐。
+    hygiene: (needs?.hygiene ?? 0) > 0.78 ? '该洗澡了' : (needs?.hygiene ?? 0) > 0.45 ? '有点邋遢'
+      : (needs?.hygiene ?? 0) > 0.25 ? '还算清爽' : '清清爽爽',
+    // 如厕：之前没有词条，指标条上「憋」这件事是空白的。
+    bladder: (needs?.bladder ?? 0) > 0.9 ? '快憋不住了' : (needs?.bladder ?? 0) > 0.7 ? '憋着'
+      : (needs?.bladder ?? 0) > 0.5 ? '有点想去厕所' : '没什么感觉'
   };
 }
 
@@ -1687,6 +1691,10 @@ function decideTarget(state, now, env) {
   if (n.bladder >= 0.7) return TRIPS.toilet(now);
   if (n.thirst >= 0.62) return TRIPS.drink(now);
   if (n.hunger >= 0.66) return TRIPS.eat(now);
+  // 邋遢到一定程度自己去洗澡。之前 hygiene 只有「加」没有「减」的自主路径，
+  // 于是它会一路涨到 1.0 永不回落（只有早上轮换顺手刷牙才降一点）——
+  // 指标条上「会自己动」的刻度必须有对应的行为，否则那根条是在说谎。
+  if (n.hygiene >= 0.78) return { ...TRIPS.shower(now), urgent: n.hygiene >= 0.92 };
 
   if (n.energy < 0.28 && canSleep) {
     if (inBed) return null;
@@ -2046,10 +2054,10 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
 
   if (state.route || state.dwell) return { state, changed };
 
-  const critical = n.bladder >= 0.93 || n.thirst >= 0.9 || n.hunger >= 0.93 || n.pain >= 0.7;
+  const critical = n.bladder >= 0.93 || n.thirst >= 0.9 || n.hunger >= 0.93 || n.pain >= 0.7 || n.hygiene >= 0.92;
   // The caretaker may claim idle time, never sleep, commands, or bodily needs.
   if (env.gardenReady && !(state.command && now < state.command.until) && !state.sleepPending && !critical
-    && n.thirst < .62 && n.hunger < .66 && n.bladder < .7 && n.energy >= .35 && n.pain < .28) return { state, changed };
+    && n.thirst < .62 && n.hunger < .66 && n.bladder < .7 && n.energy >= .35 && n.pain < .28 && n.hygiene < .78) return { state, changed };
   if (now < state.nextDecisionAt && !critical) return { state, changed };
 
   const target = decideTarget(state, now, env);
