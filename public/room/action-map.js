@@ -55,6 +55,8 @@ export const ACTION_MAP = Object.freeze({
   desk: { clip: '写代码', bubble: '本鱼在写东西，别吵～', seated: '写代码' },
   balcony: {
     clip: (her, ctx) => (ctx?.night ? 'mooncake' : 'fan'),
+    // 躺椅也是坐具：坐上去之后同样要有个坐着的样子，不能突然站起来。
+    seated: (her, ctx) => (ctx?.night ? 'mooncake' : 'fan'),
     bubble: '吹吹风，好舒服～'
   },
   freestyle: { clip: (her) => her?.clip || 'idle_look', bubble: null },   // 气泡按 CATALOG 的 group 走 FREESTYLE_BUBBLE

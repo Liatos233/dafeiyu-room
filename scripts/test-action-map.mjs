@@ -138,6 +138,24 @@ test('她主动说话时气泡必须是原话，不被动作覆盖', () => {
   assert.equal(v.her.say, '我先忙一会儿，等我写完就来找你');
 });
 
+test('页面上的 clipFor 已改成查表，不再自己维护第二份 switch', () => {
+  const src = fs.readFileSync(new URL('../public/room/app.js', import.meta.url), 'utf8');
+  assert.ok(src.includes("from './action-map.js'"), 'app.js 应导入 action-map.js');
+  assert.ok(src.includes('actionClip('), 'clipFor 应走 actionClip 查表');
+  assert.ok(src.includes('actionSeatedClip('), 'clipFor 应走 actionSeatedClip 查坐姿片段');
+  // 老的那些写死 return 会被这张表取代；留着说明有人又加了一份平行映射。
+  for (const stale of ["case 'tv': return", "case 'desk': return", "case 'bath': return"]) {
+    assert.ok(!src.includes(stale), `app.js 里还留着旧的写死分支：${stale}`);
+  }
+});
+
+test('气泡跟着 kind 变，而不是停在旧文本', () => {
+  const src = fs.readFileSync(new URL('../public/room/app.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('lastBubbleKind'), 'app.js 应记录上一次气泡对应的 kind');
+  assert.ok(/kindNow !== lastBubbleKind/.test(src), 'kind 变化时应刷新气泡');
+  assert.ok(/const speaking = !!state\.her\?\.say/.test(src), '她主动说话时不该被动作覆盖');
+});
+
 test('home-state 的气泡也走同一张表', () => {
   const src = fs.readFileSync(new URL('../src/home-state.js', import.meta.url), 'utf8');
   assert.ok(src.includes('actionBubble('), 'speechFor 应先查 actionBubble');

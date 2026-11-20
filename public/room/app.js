@@ -11,6 +11,7 @@ import { createGardenClient } from './garden-client.js';
 import { createGardenWorld } from './garden-world.js';
 import { getGardenFraming } from './garden-camera.js';
 import { toggleAnimGraph, isAnimGraphOpen } from './clip-graph.js';
+import { actionClip, actionSeatedClip, SEATED_FALLBACK } from './action-map.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -1187,6 +1188,11 @@ function flushPendingGo() {
 
 let requestInFlight = false;
 let lastActivity = '';
+// 上一次跟着「动作/状态」走的气泡对应的 kind 与台词。
+// 只在 kind 真的换了时才刷新气泡：动画是每帧按状态算的，气泡要是也每帧重设就永远刷不完；
+// 但只在 activity 文案变化时刷又太迟钝——同一个 kind 的文案会反复变，动作却没变。
+let lastBubbleKind = '';
+let lastBubbleText = '';
 let bubbleUntil = 0;
 let bubbleAnchorPos = null;   // 坐姿覆盖时气泡要跟着覆盖位置
 let bubbleAnchorElev = 0;
@@ -1756,17 +1762,34 @@ function applyState(next) {
   const bubbleText = state.her?.speech || state.her?.activity || '';
   if (bubbleOn && bubbleText) {
     const walking = state.her?.walking === true || state.her?.kind === 'walk';
-    if (bubbleKind === 'action' && Date.now() - bubbleKindAt < 30_000) {
+    const kindNow = String(state.her?.kind || '');
+    // 她主动说话（say 非空）时气泡必须是她的原话，不能跟着动作换掉。
+    const speaking = !!state.her?.say;
+    if (speaking) {
+      lastActivity = bubbleText;
+    } else if (bubbleKind === 'action' && Date.now() - bubbleKindAt < 30_000) {
       // 动作类提示（「她朝你指的地方走过去」）只负责过渡：一旦到了/站定，
       // 下一次状态刷新就用真实 activity 覆盖，避免气泡停在过期的那句话上。
       if (!walking) {
         lastActivity = bubbleText;
         setBubble(bubbleText, 4200, { kind: 'activity' });
       }
-    } else if (bubbleText !== lastActivity) {
-      // 普通闲聊/活动气泡只记录变化，不在这里打断（她主动说的话要能说完）。
+    } else if (kindNow !== lastBubbleKind) {
+      // kind 换了 = 动作真的换了，这时候才动气泡，让「动画在演什么」和「气泡在说什么」对上。
+      // 以前只有「动作类过渡文案到站后接管」这一条通路，普通活动完全不会更新气泡，
+      // 于是动画已经换成打游戏/打盹，气泡还停在很久以前那句。
+      lastBubbleKind = kindNow;
+      lastBubbleText = bubbleText;
+      lastActivity = bubbleText;
+      setBubble(bubbleText, 3800, { kind: 'activity' });
+    } else if (bubbleText !== lastBubbleText) {
+      // 同一个 kind 内的文案变化只记账，不打断当前气泡（例如「本鱼在写东西」不该每帧重来）。
+      lastBubbleText = bubbleText;
       lastActivity = bubbleText;
     }
+  } else if (!bubbleOn) {
+    lastBubbleKind = '';
+    lastBubbleText = '';
   }
 }
 
@@ -2012,40 +2035,37 @@ function clipFor(her) {
 
   const k = her.kind || 'idle';
   if (k.startsWith('garden_')) {
+    // 菜园的 kind 也在 action-map 里（garden_till/plant/harvest → 敲桌面，其余 → 东张西望）
+    const g = actionClip(k, her);
+    if (g) return g;
     if (k === 'garden_till' || k === 'garden_plant' || k === 'garden_harvest') return 'desk_tap';
     return 'idle_look';
   }
-  // 坐在家具上（沙发/躺椅/床沿）时，必须有坐姿动画；
+  // 坐在家具上（沙发/躺椅/床沿/泳池躺椅）时，必须有坐姿动画；
   // 否则会用站姿站在坐垫里，看起来就是穿模。
-  if ((her.elev || 0) > 0.2 && (her.kind === 'idle' || her.kind === 'free' || her.kind === 'sit')) {
+  // 以前这里只对 idle/free/sit 生效，于是「窝在沙发上打游戏」「在沙发刷手机」「在沙发上打盹」
+  // 这类把 kind 换成 tv/phone/nap 的动作会漏出去播站姿片段，人站在坐垫里。
+  // 反应类（react_*/wake/play）例外：它们是短暂反馈，站姿帧看得更清楚，也一直是这么播的。
+  const seated = (her.elev || 0) > 0.2 && (her.pose === 'sit' || her.pose === 'lie')
+    && !/^react_|^wake$|^play$/.test(k);
+  if (seated) {
     if (her.pose === 'lie') return her.asleep ? 'sleep_loop' : 'nap';
-    if (her.pose === 'sit') return 'dance';   // 素材里没有通用坐姿帧，用与上座脚本一致的姿势
+    // 有专用坐姿素材就用（打游戏/玩手机/写代码/沙发打瞌睡），没有就用通用坐姿兜底，
+    // 而不是继续用站姿帧——宁可动作不贴切，也不要人站在坐垫里。
+    return actionSeatedClip(k, her, { night: (state?.hour ?? 12) >= 19 || (state?.hour ?? 12) < 7 })
+      || SEATED_FALLBACK;
   }
 
   // 自由视角只在站立/自由落点/行走时用背面；坐着、吃饭、反应等仍保留正面动作。
   if (isBackView() && her.pose === 'stand' && (her.elev || 0) < 0.2 && (k === 'idle' || k === 'free')) return 'back_idle';
   const night = (state?.hour ?? 12) >= 19 || (state?.hour ?? 12) < 7;
+
+  // kind → 片段/台词 只有一份事实源（public/room/action-map.js），气泡那边查的也是同一张表。
+  const mapped = actionClip(k, her, { night });
+  if (mapped) return mapped;
+
+  // 只有 idle 这类「没有明确动作」的 kind 才走到这里，按时间/心情抽待机变体。
   switch (k) {
-    case 'eat': return (her.activity || '').includes('小鱼干') ? 'eat_snack' : '吃午餐';
-    case 'drink': return '举杯敬酒';   // 新导入的完整喝水动作
-    case 'freestyle': return her.clip || 'idle_look';   // 自主动作：由服务端抽好的 clip
-    case 'swim': return '游泳';                         // 泳池里来回游
-    case 'toilet': return 'mutter';
-    case 'bath': return '晨间刷牙';
-    case 'balcony': return night ? 'mooncake' : 'fan';
-    case 'tv': return '原地专心玩魔方';
-    case 'desk': return '写代码';
-    case 'phone': return '熬夜刷手机';
-    case 'nap': return 'nap';
-    case 'laundry': return '叠衣服';
-    case 'sick':
-    case 'help': return 'sick';
-    case 'react_happy': return 'react_happy';
-    case 'react_shy': return 'react_shy';
-    case 'react_scare': return 'react_scare';
-    case 'idle_look': return 'idle_look';
-    case 'wake': return 'stretch';
-    case 'play': return 'dance';
     case 'idle':
     default: {
       if (her.pose === 'lie') return 'sleep_loop';
