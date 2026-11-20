@@ -7,6 +7,11 @@
 // 所以这里的断言都直接对着「只有一份、且算得对」写。
 // 跑法：node scripts/test-motion.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 import {
   routeLengths, polylineLength, pointAtArc, arcLengthAt, motionAt, walkAnchorAt
 } from '../public/room/motion.js';
@@ -203,6 +208,59 @@ test('motionFor 的 kind 覆盖所有运动形态，且客户端能分辨', () =
   for (const k of ['from', 'to', 'seatY', 't0', 'dur']) {
     assert.ok(k in mo, `mount motion 缺少 ${k}`);
   }
+});
+
+test('渲染高度必须取 motionAt 的平滑值，不能取轮询快照的 her.elev', () => {
+  // 这是「平移丝滑、上座一顿一顿」的根因：位置用 motionAt 每帧算（平滑），
+  // 高度却用 homeView 的 her.elev —— 那是 250ms 才更新一次的离散值。
+  // 上床时 seatY=0.662，分几次轮询跳上去，单帧最大跳 0.22 米。
+  const s0 = emptyHomeState(T0);
+  let s = applyHomeAction(s0, { action: 'command', room: 'her_room', spot: 'bed', at: T0 }).state;
+
+  const FRAME = 1000 / 60;
+  const POLL = 250;
+  let srvTime = T0;
+  let snap = null;
+  let nextPoll = T0;
+  const oldElev = [];
+  const newElev = [];
+
+  for (let frame = 0; frame < 60 * 6; frame += 1) {
+    const t = T0 + frame * FRAME;
+    while (srvTime + 100 <= t) {
+      srvTime += 100;
+      s = advanceHomeState(s, srvTime, {}).state;
+    }
+    if (t >= nextPoll) {
+      nextPoll = t + POLL;
+      snap = homeView(s, srvTime, {}).her;
+    }
+    if (!snap || !snap.motion) continue;
+    const m = motionAt(snap.motion, t, snap.motion.pos);
+    oldElev.push(snap.elev);
+    newElev.push(m.elev);
+  }
+
+  const maxStep = (arr) => {
+    let m = 0;
+    for (let i = 1; i < arr.length; i += 1) m = Math.max(m, Math.abs(arr[i] - arr[i - 1]));
+    return m;
+  };
+  const distinct = (arr) => new Set(arr.map((v) => v.toFixed(4))).size;
+
+  assert.ok(maxStep(oldElev) > 0.15,
+    `离散 her.elev 应该有明显阶梯（实测单帧跳 ${maxStep(oldElev).toFixed(3)} 米）`);
+  assert.ok(maxStep(newElev) < 0.03,
+    `motionAt 的 elev 应该平滑（实测单帧跳 ${maxStep(newElev).toFixed(3)} 米）`);
+  assert.ok(distinct(newElev) > distinct(oldElev) * 3,
+    `平滑值应比离散值细得多（${distinct(newElev)} vs ${distinct(oldElev)}）`);
+});
+
+test('app.js 的 drawElev 走 motionAt，不走 displayElevFor', () => {
+  const appSrc = fs.readFileSync(path.join(ROOT, 'public/room/app.js'), 'utf8');
+  // 只允许 PREVIEW/PIN_TEST（seatOverride）沿用 displayElevFor
+  assert.ok(/let drawElev = seatOverride \? bubbleAnchorElev : displayElev;/.test(appSrc),
+    'drawElev 应该是「seatOverride 时用 bubbleAnchorElev，否则用 motionAt 的 displayElev」');
 });
 
 console.log(`\n位置一致性测试全部通过（${passed} 项）`);

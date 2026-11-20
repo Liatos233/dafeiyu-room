@@ -4532,7 +4532,18 @@ function frame(now) {
     // ── 显示：完全跟随服务端状态（位置 / 高度），不做任何几何修正 ──────────
     // 上/下座由服务端两段式完成：原地升降 + 沿座面平移，服务端每帧都有插值。
     const drawPos = seatOverride ? shownHer.pos : displayPos;
-    let drawElev = bubbleAnchorElev;
+    // 高度必须和位置用**同一个平滑来源**（motionAt）。
+    //
+    // 原来这里用的是 bubbleAnchorElev = displayElevFor(her)，而它读的是 her.elev ——
+    // 那是服务端轮询快照里的**离散值**，最长 250ms 才更新一次。于是同一帧里
+    // 「位置每帧都在平滑插值、高度却 250ms 才跳一格」，观感正是用户反复说的
+    // 「平移丝滑，但上沙发/上床时一顿一顿」。
+    //
+    // displayElev 是 motionAt 在同一帧算出来的：走路时恒为 0、上/下座时是两段式
+    // 连续插值、静止时等于落点高度 —— 已经包含了所有需要的信息，不需要再猜。
+    // 只有 PREVIEW/PIN_TEST 这种「人为覆盖姿态」的调试模式才沿用 displayElevFor，
+    // 因为那时 her.motion 描述的不是屏幕上那个人。
+    let drawElev = seatOverride ? bubbleAnchorElev : displayElev;
     // onFurniture 里刻意**不含 transitioning**：上/下座期间要让它走缓动，
     // 否则这一条会把上面去掉的 snap 又加回来（onFurniture 是 snap 的条件之一）。
     const onFurniture = !walkingNow && (
