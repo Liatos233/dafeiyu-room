@@ -102,7 +102,11 @@ export const HOME_LAYOUT = Object.freeze({
     pool: {
       lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.38, 10.58] },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
-      deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' }
+      deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' },
+      // 泳池水面：走到这里就等于下水，到了之后由 startSwim 接管来回游。
+      // 单独给一个 spot 而不是复用 deck_w，是因为「泳池边站着」和「在水里游」
+      // 是两件不同的事——面板上要能分开点，职责也不该混在一个站位里。
+      swim: { pos: [SWIM_LANE.x0 + 0.6, SWIM_LANE.z], pose: 'stand', facing: 180, label: '泳池里', access: 'pk_nw', swim: true }
     },
     garden: {
       gate: { pos: [.72, -3.6], pose: 'stand', facing: 90, label: '菜园门口', access: 'g_gate' },
@@ -370,10 +374,13 @@ const EVENT_COOLDOWN = Object.freeze({
   need_bladder: 25 * MIN
 });
 
-// 进入泳池水面来回游（点播和自主抽中「游泳」都走这里）
+// 进入泳池水面来回游（点播、面板「来游泳」、自主抽中都会走这里）
 function startSwim(state, now, ms = SWIM_LANE.totalMs) {
   state.room = 'pool';
-  state.spot = 'deck_w';
+  // spot 保留「本来就是泳池水面」的那个（pool.swim），否则写 deck_w。
+  // 早期只有 deck_w 一个站位，用游泳动作借住在那儿；现在有了独立的 swim 站位，
+  // 覆盖回去会让「她明明在水里，spot 却写着泳池边」自相矛盾。
+  if (state.spot !== 'swim') state.spot = 'deck_w';
   state.freePos = null;
   state.kind = 'swim';
   state.clip = '游泳';
@@ -1504,6 +1511,15 @@ function arrive(state, now) {
   setActivity(state, t.kind, t.actText, t.pose, t.elev, t.facing);
   state.clip = t.clip || null;
   if (t.clip === '游泳') startSwim(state, now);
+  // 走到泳池水面 = 下水。swim 是 spot 上的标记（见 HOME_LAYOUT.spots.pool.swim），
+  // 这样面板上「来游泳」只要发一条普通 command，到了自动接管来回游，
+  // 不用在客户端另写一套「先走过去再瞬移下水」的流程。
+  if (HOME_LAYOUT.spots[t.room]?.[t.spot]?.swim) {
+    startSwim(state, now);
+    state.dwell = { until: now + SWIM_LANE.totalMs, target: { ...t, kind: 'swim', clip: '游泳', actText: '在泳池里游来游去', effect: null } };
+    emit(state, 'swim', '下水游了一会儿', now, { room: 'pool', spot: t.spot });
+    return;
+  }
   state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
   // 详细日志：到了、开始做什么
   {
@@ -2061,6 +2077,14 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     const doneAt = state.dwell.until;
     state.dwell = null;
     applyEffect(state, target, doneAt, env);
+    // 游完了要真的「从水里出来」，不能只是让 swim 描述过期。
+    // 之前这里什么都不做，于是 kind 一直是 swim、activity 还写着「在泳池里游来游去」，
+    // 而人已经站在水面上发呆——状态和画面对不上。
+    if (target?.kind === 'swim' || state.kind === 'swim') {
+      state.swim = null;
+      setActivity(state, 'idle', '游够了，扒着池边喘了口气', 'stand', 0, state.facing);
+      emit(state, 'swim', '游够了，从泳池里上来', doneAt, { room: 'pool', spot: state.spot });
+    }
     if (target?.effect === 'sleep') {
       state.asleep = true;
       state.lamp = false;

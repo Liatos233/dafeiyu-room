@@ -621,6 +621,37 @@ test('上座过渡明显长于客户端轮询间隔，否则会「停下→闪�
     'homeView().her.elev 在上座期间必须是插值后的值，不能一直是 0');
 });
 
+test('泳池可以从面板点「来游泳」：走到水面自动下水，游完复位', () => {
+  // 以前游泳只能靠「点播动画 → 游泳」触发，而 startSwim 直接把她瞬移到水里，
+  // 观感是「点一下人就不见了」。现在 pool 有独立的 swim 站位：
+  // 发普通 command 走过去，到达水面由 arrive() 自动接管来回游。
+  assert.ok(HOME_LAYOUT.spots.pool.swim, 'pool 应该有 swim 站位');
+  assert.equal(HOME_LAYOUT.spots.pool.swim.swim, true, 'swim 站位要带 swim 标记');
+  // 和 deck_w 分开：站在泳池边 ≠ 在水里游
+  assert.ok(HOME_LAYOUT.spots.pool.deck_w, 'deck_w 仍要保留');
+
+  let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  s = applyHomeAction(s, { action: 'command', room: 'pool', spot: 'swim', at: T0 }).state;
+
+  let t = T0;
+  let sawWalk = false;
+  let swamAt = 0;
+  for (let i = 0; i < 4000; i += 1) {
+    t += 100;
+    s = advanceHomeState(s, t, {}).state;
+    if (s.kind === 'walk') sawWalk = true;
+    if (s.kind === 'swim' && s.swim) { if (!swamAt) swamAt = t; }
+    if (swamAt && s.kind !== 'swim') break;
+  }
+  assert.ok(sawWalk, '应该是走过去，而不是瞬移');
+  assert.ok(swamAt > 0, '到了水面应该自动开始游');
+  assert.equal(s.spot, 'swim', '游泳时 spot 应该留在 swim，不能被 startSwim 改回 deck_w');
+  // 游完必须真的从水里出来：kind/activity/swim 都要复位
+  assert.equal(s.swim, null, '游完应该清掉 swim 描述');
+  assert.notEqual(s.kind, 'swim', '游完不应该还挂着 swim 的 kind');
+  assert.match(s.activity, /游够|上来|池边/, `游完的活动文案不对：${s.activity}`);
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {

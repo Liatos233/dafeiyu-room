@@ -2492,7 +2492,7 @@ function buildPoolDeck(world, M) {
   addHotspot(world, 10.4, 8.3, 0.2, { title: '露台入口', sub: '从阳台出来这里铺了同款地砖', room: 'pool', spot: 'deck_e', label: '露台入口' });
   addHotspot(world, 3.2, 9.4, 0.2, { title: '泳池边', sub: '瓷砖被晒得温热，脚踩上去有点烫', room: 'pool', spot: 'deck_w', label: '泳池边' });
   addHotspot(world, 12.7, 11.0, 0.2, { title: '休息区', sub: '躺椅、遮阳伞，还有一点柠檬水的味道', room: 'pool', spot: 'deck_e', label: '休息区' });
-  addHotspot(world, 5.8, 11.3, 0.2, { title: '泳池', sub: '整池浅蓝瓷砖，水是温的，池底晃着一条一条的光', room: 'pool', spot: 'deck_w', label: '泳池里' });
+  addHotspot(world, 5.8, 11.3, 0.2, { title: '泳池', sub: '整池浅蓝瓷砖，水是温的，池底晃着一条一条的光', room: 'pool', spot: 'swim', label: '泳池里' });
   addHotspot(world, 12.42, 10.58, 0.6, { title: '沙滩躺椅', sub: '躺椅侧对着泳池，扶手上搭着毛巾', room: 'pool', spot: 'lounger', label: '躺椅上' });
   addHotspot(world, 9.0, 9.85, 0.6, { title: '泳池梯', sub: '不锈钢扶手被太阳晒得温热，踏板伸进水里', room: 'pool', spot: 'deck_w', label: '泳池梯旁' });
 }
