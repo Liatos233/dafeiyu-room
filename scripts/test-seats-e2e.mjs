@@ -71,6 +71,25 @@ function analyze(rows) {
   const maxElev = Math.max(...elevs);
   const minElev = Math.min(...elevs);
   const mids = elevs.filter((v) => v > minElev + 0.05 && v < maxElev - 0.05).length;
+
+  // 上升/下降过程中的**高度速度**连续性：
+  // 只看真正在升降的帧（增量为正的），算相邻两帧的速度变化。
+  // 如果高度上还有残留的指数平滑，这里会出现「忽快忽慢」的锯齿。
+  const riseSteps = [];
+  for (let i = 1; i < rows.length; i += 1) {
+    riseSteps.push(rows[i].elev - rows[i - 1].elev);
+  }
+  const moving = riseSteps.filter((v) => v > 0.0005);
+  let elevJerk = 0;
+  if (moving.length >= 3) {
+    // 相邻增量的差值，归一化到最大增量
+    let maxDiff = 0;
+    for (let i = 1; i < riseSteps.length; i += 1) {
+      if (riseSteps[i] <= 0.0005 || riseSteps[i - 1] <= 0.0005) continue;
+      maxDiff = Math.max(maxDiff, Math.abs(riseSteps[i] - riseSteps[i - 1]));
+    }
+    elevJerk = maxDiff / Math.max(...moving);
+  }
   return {
     frames: rows.length,
     maxPosJump: posJumps.length ? Math.max(...posJumps) : 0,
@@ -78,7 +97,8 @@ function analyze(rows) {
     midValues: mids,
     frozen,
     flips,
-    elevRange: [minElev, maxElev]
+    elevRange: [minElev, maxElev],
+    elevJerk
   };
 }
 
@@ -110,6 +130,8 @@ for (const c of CASES) {
     ok('高度有多个中间值', a.midValues >= 3, `${a.midValues} 个`);
     ok('没有僵住帧', a.frozen === 0, `${a.frozen} 帧`);
     ok('walking 不翻转', a.flips === 0, `${a.flips} 次`);
+    // 高度速度连续性：残留指数平滑会让相邻帧的增高量忽大忽小
+    ok('上升速度平滑', a.elevJerk < 0.6, `相邻增量跳变比 ${a.elevJerk.toFixed(2)}`);
   }
 
   // ── 下座 ────────────────────────────────────────────────

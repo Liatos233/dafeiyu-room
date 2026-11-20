@@ -845,7 +845,14 @@ export class SpriteActor {
       this._elev = elev;
       this._lift = lieLift;
     } else {
-      this._elev += (this._targetElev - this._elev) * Math.min(1, dt * 4.5);
+      // 高度也**不做二次平滑**，理由和上面位置那条完全一样。
+      //
+      // 这里原来是 this._elev += (target - _elev) * min(1, dt * 4.5)：
+      // 上座时服务端给的是一条 smoothstep 上升曲线（每帧都在变），
+      // 再套一层指数追赶就会① 始终慢一截、② 追赶速度随 dt 变化。
+      // 上升过程总共才 1.3 秒左右，这一层滞后 + 抖就表现为「上升时卡顿」。
+      // 位置改成直接跟随之后，高度成了唯一还在被滤的量，所以只有上升段看得出来。
+      this._elev = elev;
       this._lift += (lieLift - this._lift) * Math.min(1, dt * 7);
     }
     this._walking = walking;
