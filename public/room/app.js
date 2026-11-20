@@ -2050,7 +2050,7 @@ function clipFor(her) {
     && !/^react_|^wake$|^play$/.test(k);
   if (seated) {
     if (her.pose === 'lie') return her.asleep ? 'sleep_loop' : 'nap';
-    // 有专用坐姿素材就用（打游戏/玩手机/写代码/沙发打瞌睡），没有就用通用坐姿兜底，
+    // 有专用坐姿素材就用（打游戏/玩手机/写代码/打盹），没有就用通用坐姿兜底，
     // 而不是继续用站姿帧——宁可动作不贴切，也不要人站在坐垫里。
     return actionSeatedClip(k, her, { night: (state?.hour ?? 12) >= 19 || (state?.hour ?? 12) < 7 })
       || SEATED_FALLBACK;

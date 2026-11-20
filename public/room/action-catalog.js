@@ -55,7 +55,6 @@ export const CATALOG = [
   { clip: '收纳行李箱', group: '起居', spots: ['bed', 'bathroom', 'anywhere'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
   { clip: '整理鞋柜', group: '起居', spots: ['desk'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
   { clip: '梳理鲸鱼尾巴', group: '起居', spots: ['bathroom'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
-  { clip: '沙发打瞌睡', group: '起居', spots: ['bed'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
   { clip: '洗碗', group: '起居', spots: ['bed', 'bathroom', 'anywhere'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
   { clip: '洗脸', group: '起居', spots: ['bathroom'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },
   { clip: '熨衣服', group: '起居', spots: ['bed', 'bathroom', 'anywhere'], pose: 'stand', win: [[6, 23]], weight: 1.0, effect: 'rest' },

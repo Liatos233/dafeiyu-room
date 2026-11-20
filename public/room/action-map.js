@@ -38,7 +38,11 @@ export const ACTION_MAP = Object.freeze({
     // 刷牙洗脸用洗脸。以前一律播「晨间刷牙」，所以冲澡时在演刷牙。
     clip: (her) => /洗澡|冲澡|淋浴|热水澡/.test(her?.activity || '') ? '换装浴袍' : '洗脸',
     bubble: '本鱼洗香香～'
-  },  nap: { clip: 'nap', bubble: '本鱼打个盹…', seated: '沙发打瞌睡' },
+  },
+  // 打盹：坐具上也用同一个 nap（原地小憩沉眠）。
+  // 以前的 seated 是「沙发打瞌睡」，那段素材画面里自带一把扶手椅，
+  // 叠在真实沙发上就是两把椅子（app/docs/HANDOVER-clipping.md 阶段九记过）。
+  nap: { clip: 'nap', bubble: '本鱼打个盹…', seated: 'nap' },
   sleep: { clip: 'sleep_loop', bubble: '本鱼睡一会儿…' },
   wake: { clip: 'stretch', bubble: '唔…本鱼醒啦' },
   laundry: { clip: '叠衣服', bubble: '本鱼把衣服叠整齐～' },
