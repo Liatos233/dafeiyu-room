@@ -102,7 +102,7 @@ function classifyClip(name) {
 const CSS_TEXT = `
 clip-graph{position:fixed;inset:0;z-index:80;display:none;pointer-events:none}
 clip-graph.on{display:block;pointer-events:auto}
-clip-graph .cg-root{position:absolute;inset:0 270px 0 0;background:rgba(7,11,17,.88);backdrop-filter:blur(6px)}
+clip-graph .cg-root{position:absolute;inset:0 270px 0 0;background:rgba(7,11,17,.88)}
 clip-graph .cg-topbar{position:absolute;left:0;top:0;right:0;height:44px;display:flex;align-items:center;gap:10px;
   padding:0 14px;border-bottom:1px solid rgba(143,193,255,.16);background:rgba(11,16,24,.92)}
 clip-graph .cg-title{font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8fc1ff;letter-spacing:.08em}
