@@ -2602,9 +2602,14 @@ async function act(action, extra = {}) {
       wake: '唔…本鱼醒啦', lamp: '灯…换了个状态？', command: '本鱼去那边',
       go: '本鱼过去啦', place: '本鱼落在这儿'
     }[action];
-    if (toastMsg) toast(toastMsg);
+    // 「去洗漱 / 去卫生间」都是 command，但对她来说是完全不同的两件事，
+    // 提示语不能都写成「你让她去那边」。
+    const named = extra.label ? { toast: `你让她去${extra.label}`, bubble: `本鱼去${extra.label}～` } : null;
+    if (named) toast(named.toast);
+    else if (toastMsg) toast(toastMsg);
     // 动作提示只活到下一次状态刷新：走到位后由 applyState 用真实 activity 覆盖。
-    if (bubbleMsg) setBubble(bubbleMsg, 2400, { kind: 'action' });
+    if (named) setBubble(named.bubble, 2400, { kind: 'action' });
+    else if (bubbleMsg) setBubble(bubbleMsg, 2400, { kind: 'action' });
   } catch (error) {
     toast(`没接上：${error.message}`);
   } finally {
@@ -2682,8 +2687,8 @@ document.querySelectorAll('[data-act]').forEach((btn) => {
     if (a === 'lamp') { act('lamp', { on: !(state?.env?.lamp) }); return; }
     // 洗漱/卫生间在服务端没有同名 action，是前端翻成「去某个站位」的 command。
     // 这两条以前藏在「现在可以」那排推荐里，推荐删掉后必须在这儿有正式入口。
-    if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink' }); return; }
-    if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet' }); return; }
+    if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink', label: '洗漱' }); return; }
+    if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet', label: '卫生间' }); return; }
     if (a === 'garden') { gardenController?.toggle?.(); return; }
     if (a === 'roomchat') { setRoomChatOpen(!chatOpen); return; }
     act(a);
