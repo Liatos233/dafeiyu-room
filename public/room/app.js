@@ -3017,7 +3017,9 @@ let devQuickEl = null;
 //
 // 用 LineLoop 画一个 1×1 的方框，每帧按当前 mesh 的 scale/position 缩放平移，
 // 所以只要 mesh 尺寸变了（换片段、缩放），框会跟着变，不需要重建几何。
-let animBoxOn = true;          // 默认开（用户要求：默认开启，可关闭）
+// 默认**关**：这只是调试辅助，正常游玩时不该在大肥鱼身上挂个绿框。
+// 需要时在开发模式菜单里点「动画框」打开。
+let animBoxOn = false;
 let animBoxMesh = null;
 let animBoxFoot = null;        // 脚底那条线（更亮，用来对地面）
 

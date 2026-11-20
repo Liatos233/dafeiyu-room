@@ -195,4 +195,21 @@ test('房间名标记不持久化，刷新后默认关闭', () => {
     '应该主动清掉历史遗留的 home-labels（旧浏览器里可能还存着 1）');
 });
 
+test('动画框默认关闭，只在开发模式里手动开', () => {
+  // 用户要求：默认状态下不要在她身上显示边框，开发模式下可以显示/关闭。
+  const appSrc = read('public/room/app.js');
+  assert.ok(/let animBoxOn = false;/.test(appSrc),
+    'animBoxOn 应该默认 false（正常游玩不该挂绿框）');
+  assert.ok(!/let animBoxOn = true;/.test(appSrc),
+    'animBoxOn 不该默认 true');
+  // 开发菜单里要有切换入口
+  assert.ok(/data-dev="hitbox"/.test(appSrc), '开发菜单应该有「动画框」按钮');
+  assert.ok(/setAnimBox\(!animBoxOn\)/.test(appSrc), '点击应该切换开关');
+  // 关开发模式时要收起框
+  const devFn = appSrc.slice(appSrc.indexOf('function setDevMode'));
+  const devBody = devFn.slice(0, devFn.indexOf('\n}') + 2);
+  assert.ok(/animBoxMesh\.visible = false/.test(devBody),
+    '关开发模式时应该把动画框藏起来');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
