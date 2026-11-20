@@ -1814,10 +1814,12 @@ function buildNeedTicks() {
       el.title = hint;
       row.appendChild(el);
     };
-    // 取反的条要把刻度镜像过来，否则刻度会画反（条是 1-x，刻度却是 x）
+    // 取反的条要把刻度镜像过来，否则刻度会画反（条是 1-x，刻度却是 x）。
+    // 镜像之后两个方向就统一了：**条掉到刻度左边**就意味着她该处理了，
+    // 所以提示语也统一写「低于这条」，不用再分「要满」还是「要空」。
     const label = NEED_THRESHOLDS[bar.key];
-    mk(pos.act, false, `过了这条她会自己处理（原始 ${label.act}）`);
-    mk(pos.urgent, true, `过了这条算紧急、会插队（原始 ${label.urgent}）`);
+    mk(pos.act, false, `掉到这条以下她会自己去处理（原始 ${label.act}）`);
+    mk(pos.urgent, true, `掉到这条以下算紧急、会插队（原始 ${label.urgent}）`);
   }
 }
 

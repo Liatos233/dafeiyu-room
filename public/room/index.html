@@ -99,7 +99,8 @@
   .mood{display:grid; gap:7px}
   .mood-row{display:grid; grid-template-columns:34px 1fr 76px; gap:8px; align-items:center; font-size:11.5px; color:var(--muted)}
   .mood-row .bar{position:relative}
-  /* 刻度：她自己的行为阈值。实心 = 到了会自己处理，空心红 = 到了算紧急。 */
+  /* 刻度：她自己的行为阈值。所有条都已统一成「满 = 好」，
+     所以「条掉到刻度左边」就是她该自己处理了——不用再分哪根要满、哪根要空。 */
   .bar .tick{
     position:absolute; top:-2px; bottom:-2px; width:1px; margin-left:-0.5px;
     background:rgba(199,214,232,.5); border-radius:1px; pointer-events:auto; cursor:help;
