@@ -513,7 +513,16 @@ const actor = {
   setClip(name, opts) {   // 调试：记录每次片段切换（window.__clipLog 最近 200 条）
     try {
       const log = window.__clipLog || (window.__clipLog = []);
-      if (actorWebm.current !== name) log.push({ t: Date.now(), from: actorWebm.current, to: name });
+      if (actorWebm.current !== name) {
+        // 记下当时的 kind/activity：排查「游泳中途被切走」时要看是被哪个状态抢的。
+        log.push({
+          t: Date.now(),
+          from: actorWebm.current,
+          to: name,
+          kind: state?.her?.kind || null,
+          activity: (state?.her?.activity || '').slice(0, 24) || null
+        });
+      }
       if (log.length > 200) log.splice(0, log.length - 200);
     } catch { /* 忽略 */ }
     return actorWebm.setClip(name, opts);
@@ -2218,6 +2227,21 @@ function syncCharacter() {
   if (motionWalking) {
     petActionOverride = null;
   }
+  // ── 游泳锁（客户端这一侧）─────────────────────────────────────────
+  // 服务端已经挡住了「指令换动作」，但客户端还有几个覆盖源能抢走片段：
+  // petActionOverride（点播动画）、opinionClip（电视弹幕）、以及 clipFor 里
+  // 各种按 kind/pose 的兜底分支。游泳期间它们一律不许生效。
+  //
+  // 这段放在 forceclip 之前只放行「强制调试」，其余全部拦在这一步。
+  {
+    const swimming = !!(her.swim && Date.now() < her.swim.until) || her.kind === 'swim';
+    if (swimming) {
+      petActionOverride = null;
+      opinionClip = '';
+      if (actor.current !== '游泳') actor.setClip('游泳');
+      return;
+    }
+  }
   // 喝水：现在 webm 里已经有「举杯敬酒」的完整动画，直接用视频素材，
   // 不再临时切精灵图（两套画风不一致会让画面跳一下）。
   {
@@ -3077,6 +3101,38 @@ function updateAnimBox() {
   window.__animBox = { w: +w.toFixed(3), h: +h.toFixed(3), footY: +footY.toFixed(3) };
 }
 
+// ── 动画日志面板（开发调试用）──────────────────────────────────────────
+// 把 window.__clipLog 里「什么时候从什么切成什么」显示在屏幕上。
+// 用途：排查「游泳/上座中途动画被切成别的」这类问题 —— 一眼能看出是哪个片段
+// 抢走了她，以及当时她在做什么（kind/activity）。
+//
+// 特别标红「本该锁住却被打断」的情况：在游泳/过渡期间切到非预期片段。
+let clipLogOn = false;
+function renderClipLog() {
+  let el = document.getElementById('__cliplog2');
+  if (!clipLogOn) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '__cliplog2';
+    el.style.cssText = 'position:fixed;right:12px;bottom:120px;z-index:99999;'
+      + 'max-width:380px;max-height:46vh;overflow:auto;background:rgba(0,0,0,.82);'
+      + 'color:#cfe0f0;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;'
+      + 'padding:8px 10px;border-radius:8px;white-space:pre-wrap;pointer-events:none';
+    document.body.appendChild(el);
+  }
+  const log = (window.__clipLog || []).slice(-24).reverse();
+  const her = state?.her;
+  const nowKind = her?.kind || '?';
+  const nowClip = actor?.current || '?';
+  const lines = [`动画日志（最新在上）  现在 kind=${nowKind} clip=${nowClip}`];
+  for (const e of log) {
+    const ago = ((Date.now() - e.t) / 1000).toFixed(1);
+    const bad = e.kind === 'swim' && e.to !== '游泳' ? '  ⚠被打断' : '';
+    lines.push(`+${ago}s  ${e.from} → ${e.to}${e.kind ? `  [${e.kind}]` : ''}${bad}`);
+  }
+  el.textContent = lines.join('\n');
+}
+
 function buildDevQuickMenu() {
   if (devQuickEl) return devQuickEl;
   const el = document.createElement('div');
@@ -3094,6 +3150,7 @@ function buildDevQuickMenu() {
     <button data-dev="hitbox" class="dq">动画框 <b></b></button>
     <button data-dev="anim" class="dq">动画状态 <b></b></button>
     <button data-dev="animgraph" class="dq">动画图 <b></b></button>
+    <button data-dev="cliplog" class="dq">动画日志 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
     <button data-dev="her" class="dq">状态卡 <b></b></button>
     <button data-dev="events" class="dq">事件卡 <b></b></button>
@@ -3149,6 +3206,14 @@ function buildDevQuickMenu() {
       toggleAnimGraph();
       mark('animgraph', isAnimGraphOpen());
     } catch (e) { console.warn('[anim-graph]', e); }
+  });
+  // 动画日志：把 window.__clipLog 的「什么时候从什么切成什么」贴到屏幕上。
+  // 排查「游泳中途动画变成别的」这类问题用它 —— 不用开 devtools，
+  // 也不怕刷新丢（每次切换都当场打，气泡一出现就看得见）。
+  el.querySelector('[data-dev="cliplog"]').addEventListener('click', () => {
+    clipLogOn = !clipLogOn;
+    renderClipLog();
+    mark('cliplog', clipLogOn);
   });
   el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
     const el2 = cardEls().actions;
@@ -4152,6 +4217,11 @@ function frame(now) {
   layoutSpotMenu();
   // 开发模式下画动画框（判断她占多大、脚底在哪）
   updateAnimBox();
+  // 开发模式下刷新动画切换日志
+  if (clipLogOn && (now - (window.__clipLogAt || 0) > 250)) {
+    window.__clipLogAt = now;
+    renderClipLog();
+  }
   updateCompass();
   watchLayers(now);
   maybeLightning(now, skyOptions().weather === 'storm' ? 'storm' : skyOptions().weather);

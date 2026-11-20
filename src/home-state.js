@@ -22,6 +22,8 @@ import { arcLengthAt, motionAt, pointAtArc, polylineLength, routeLengths } from 
 const MIN = 60_000;
 const HOUR = 3_600_000;
 // 泳池水面范围（与 world.js 的 POOL_X0..X1 / POOL_Z0..Z1 对齐，内缩 0.6m）
+// 这是「泳道能覆盖的最大范围」，具体一次游泳从哪游到哪由 startSwim 决定
+// （见下面的 from/to：从她实际下水的那个点开始，不把她瞬移过来）。
 const SWIM_LANE = Object.freeze({ z: 10.8, x0: 2.2, x1: 8.6, oneWayMs: 5_000, totalMs: 25_000 });
 const EVENT_TTL = 15 * MIN;
 const VIEW_EVENT_TTL = 6 * 60 * MIN;   // 「刚刚发生」面板最多回看 6 小时
@@ -101,12 +103,11 @@ export const HOME_LAYOUT = Object.freeze({
       },
     pool: {
       lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.38, 10.58] },
-      deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
-      deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' },
+      // deck_w / deck_e（S22 泳池边、S23 休息区）已删除：
+      // 「站在泳池边」这件事没有独立价值 —— 下水走泳池梯（swim 站位），
+      // 休息就是沙滩躺椅（lounger），留着它们只会多两个不知所谓的可点站位。
       // 泳池水面：从泳池梯（N68 = pk_ladder）下水，走到 pk_water 就等于入水，
-      // 到了之后由 startSwim 接管来回游；游完再沿原路爬回梯子上岸。
-      // 单独给一个 spot 而不是复用 deck_w，是因为「泳池边站着」和「在水里游」
-      // 是两件不同的事——面板上要能分开点，职责也不该混在一个站位里。
+      // 到了之后由 startSwim 接管来回游；游完上岸去沙滩躺椅上歇着。
       swim: { pos: [9.0, 10.55], pose: 'stand', facing: 180, label: '泳池里', access: 'pk_ladder', swim: true }
     },
     garden: {
@@ -389,7 +390,22 @@ function startSwim(state, now, ms = SWIM_LANE.totalMs) {
   // 「来游泳」是先 command 到 pool.swim，途中 spot 可能还是 deck_w（起点），
   // 用字面量判断会把已经在水面的状态又改回泳池边，自相矛盾。
   const def = state.spot && HOME_LAYOUT.spots.pool?.[state.spot];
-  if (!def?.swim) state.spot = 'deck_w';
+  // 不在泳池水面时（比如点播动画「游泳」），先落到泳池水里 —— 现在没有
+  // deck_w 这种「泳池边」站位了，下水点就是 swim 自己。
+  if (!def?.swim) state.spot = 'swim';
+  // 从她**实际所在的位置**开始游，不要瞬移到泳道起点。
+  //
+  // 之前 from 硬编码成 SWIM_LANE.x0（泳池最西边 2.2），而她是走到泳池梯
+  // （x≈9）才下水的 —— 于是到点那一刻人被凭空拽到泳池角落，再开始游。
+  // 现在：入水点就是当前 x，泳道朝东；如果已经太靠东（水浅/靠壁），就朝西游。
+  const cur = def?.swim ? currentPosition(state, now) : null;
+  const startX = Array.isArray(cur)
+    ? clamp(cur[0], SWIM_LANE.x0, SWIM_LANE.x1)
+    : SWIM_LANE.x0;
+  const startZ = Array.isArray(cur) ? clamp(cur[1], SWIM_LANE.z - 0.6, SWIM_LANE.z + 0.6) : SWIM_LANE.z;
+  // 往空间大的那一侧游，保证有足够的来回距离
+  const towardEast = (SWIM_LANE.x1 - startX) >= (startX - SWIM_LANE.x0);
+  const targetX = towardEast ? SWIM_LANE.x1 : SWIM_LANE.x0;
   state.freePos = null;
   state.kind = 'swim';
   state.clip = '游泳';
@@ -399,8 +415,8 @@ function startSwim(state, now, ms = SWIM_LANE.totalMs) {
   state.route = null;
   state.activity = '在泳池里游来游去';
   state.swim = {
-    from: [SWIM_LANE.x0, SWIM_LANE.z],
-    to: [SWIM_LANE.x1, SWIM_LANE.z],
+    from: [startX, startZ],
+    to: [targetX, startZ],
     startedAt: now,
     until: now + ms,
     oneWayMs: SWIM_LANE.oneWayMs
@@ -1523,12 +1539,19 @@ function arrive(state, now) {
   // 走到泳池水面 = 下水。swim 是 spot 上的标记（见 HOME_LAYOUT.spots.pool.swim），
   // 这样面板上「来游泳」只要发一条普通 command，到了自动接管来回游，
   // 不用在客户端另写一套「先走过去再瞬移下水」的流程。
-  if (HOME_LAYOUT.spots[t.room]?.[t.spot]?.swim) {
+  //
+  // 但**上岸途中不许再触发**：游完会设置 afterSwim 标记，那条路线的终点是躺椅，
+  // 中途 spot 可能短暂还是 swim，此时再 startSwim 就会「游完又下水」无限循环。
+  if (HOME_LAYOUT.spots[t.room]?.[t.spot]?.swim && !state.afterSwim) {
     startSwim(state, now);
     state.dwell = { until: now + SWIM_LANE.totalMs, target: { ...t, kind: 'swim', clip: '游泳', actText: '在泳池里游来游去', effect: null } };
     emit(state, 'swim', '下水游了一会儿', now, { room: 'pool', spot: t.spot });
     return;
   }
+  // 已经上岸（到达躺椅/其它目标）就清掉标记，恢复正常。
+  // 注意：清掉要放在「确实到达了躺椅」时，不能一进 arrive 就清 ——
+  // 上岸路线途中 spot 可能短暂还是 swim，那时清掉就会又触发下水。
+  if (state.afterSwim && t.room === 'pool' && t.spot === 'lounger') { state.afterSwim = null; state.afterSwimAt = 0; }
   state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
   // 详细日志：到了、开始做什么
   {
@@ -1720,6 +1743,11 @@ function decideTarget(state, now, env) {
   // 「去喝水」「去卫生间」叫走会很难看：人还在水里，动画却切成了别的。
   // dwell 到期后由 advanceHomeState 那边负责「上岸」，在那之前这里一律返回 null。
   if (state.kind === 'swim' || (state.swim && state.swim.until > now)) return null;
+
+  // 刚游完还没走回岸上：也不要再被选去游泳。
+  // afterSwim 存续期间她的终点是躺椅，此时若又选 swim 目标，
+  // arrive() 会被 afterSwim 挡住不下水 —— 人就会「站在水里发呆」。
+  if (state.afterSwim) return null;
 
   if (!state.asleep && state.sleepPending) {
     if (inBed) {
@@ -2057,6 +2085,14 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     }
   }
 
+  // 上岸标记的兜底清理：正常会在到达躺椅时清掉；万一中途被别的事打断
+  // （比如被指令叫走），两分钟后也得放开，不然后面就再也不能下水了。
+  if (state.afterSwim && now - (Number(state.afterSwimAt) || 0) > 2 * MIN) {
+    state.afterSwim = null;
+    state.afterSwimAt = 0;
+    changed = true;
+  }
+
   // 下座推进：落地后重新开始寻路
   if (state.dismounting) {
     const seg = seatLerp(state.dismounting, now);
@@ -2093,30 +2129,38 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     const doneAt = state.dwell.until;
     state.dwell = null;
     applyEffect(state, target, doneAt, env);
-    // 游完了要真的「从水里出来」：沿原路爬回泳池梯上岸。
+    // 游完了要真的「从水里出来」：爬回泳池梯，走去沙滩躺椅上歇着。
     // 不是原地变 idle —— 那样人还站在水面中央，下一帧就不知道该往哪走。
     if (target?.kind === 'swim' || state.kind === 'swim') {
       state.swim = null;
-      const bank = HOME_LAYOUT.spots.pool.deck_w;   // S22 泳池边：上下水的地方
+      // 上岸后去沙滩躺椅上瘫着（用户指定的去处）。
+      // 以前是回 deck_w（泳池边），那个站位已删除。
+      const bank = HOME_LAYOUT.spots.pool.lounger;
       emit(state, 'swim', '游够了，扒着梯子上来', doneAt, { room: 'pool', spot: state.spot });
-      // 走回岸边。beginRoute 会按路网从水面经 pk_ladder 绕回 deck_w。
+      // 上岸这一趟要防「又自己下水」：路线途中 state.spot 会短暂是 swim，
+      // 而 arrive() 看到 swim 站位的标记就会重新 startSwim —— 那样就会
+      // 「游完 → 走去躺椅 → 半路又下水」无限循环（实测循环了 3 次）。
+      // 用一个一次性标记把这条路线的终点锁死。
+      state.afterSwim = 'lounger';
+      state.afterSwimAt = doneAt;
+      // beginRoute 会按路网从水面经 pk_ladder、pk_ne 走到躺椅的座点再上座。
       beginRoute(state, {
         room: 'pool',
-        spot: 'deck_w',
-        pose: bank?.pose || 'stand',
+        spot: 'lounger',
+        pose: bank?.pose || 'sit',
         elev: 0,
-        facing: bank?.facing ?? 180,
+        facing: bank?.facing ?? -90,
         kind: 'idle',
-        walkText: '游够了，爬上池边',
-        actText: '游够了，坐在池边喘气',
-        dwellMs: 6000,
+        walkText: '游够了，去躺椅上歇会儿',
+        actText: '游完泳，摊在躺椅上晒太阳',
+        dwellMs: 20000,
         effect: null,
         eventType: null,
         eventText: '',
         urgent: false,
         awakeHold: true
       }, doneAt, env);
-      state.nextDecisionAt = doneAt + 6000;
+      state.nextDecisionAt = doneAt + 20000;
       return { state, changed: true };
     }
     if (target?.effect === 'sleep') {
@@ -2451,7 +2495,7 @@ export function applyHomeAction(state, input = {}) {
     if (clip === '游泳' || clip.toLowerCase() === 'swim') {
       // 游泳不是站着演：挪到泳池水面，交给状态里的 swim 描述做来回游
       startSwim(s, now);
-      s.dwell = { until: now + SWIM_LANE.totalMs, target: { room: 'pool', spot: 'deck_w', kind: 'swim', clip: '游泳', actText: '在泳池里游来游去', pose: 'stand', elev: 0, facing: s.facing, effect: null } };
+      s.dwell = { until: now + SWIM_LANE.totalMs, target: { room: 'pool', spot: 'swim', kind: 'swim', clip: '游泳', actText: '在泳池里游来游去', pose: 'stand', elev: 0, facing: s.facing, effect: null } };
       s.freestylePick = { by: '你点的', clip, group: '运动', travel: false, top: [] };
       event = { type: 'play', text: '你让她去游泳了' };
       emit(s, 'clip', '在泳池里游来游去', now);

@@ -628,8 +628,11 @@ test('泳池可以从面板点「来游泳」：走到水面自动下水，游�
   // 发普通 command 走过去，到达水面由 arrive() 自动接管来回游。
   assert.ok(HOME_LAYOUT.spots.pool.swim, 'pool 应该有 swim 站位');
   assert.equal(HOME_LAYOUT.spots.pool.swim.swim, true, 'swim 站位要带 swim 标记');
-  // 和 deck_w 分开：站在泳池边 ≠ 在水里游
-  assert.ok(HOME_LAYOUT.spots.pool.deck_w, 'deck_w 仍要保留');
+  // deck_w(S22 泳池边) / deck_e(S23 休息区) 已按用户要求删除：
+  // 下水走泳池梯，休息用沙滩躺椅，这两个「站在旁边」的站位没有独立价值。
+  assert.ok(!HOME_LAYOUT.spots.pool.deck_w, 'deck_w(S22) 应该已删除');
+  assert.ok(!HOME_LAYOUT.spots.pool.deck_e, 'deck_e(S23) 应该已删除');
+  assert.ok(HOME_LAYOUT.spots.pool.lounger, '沙滩躺椅要保留（游完上岸去那儿）');
 
   let s = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
   s = applyHomeAction(s, { action: 'command', room: 'pool', spot: 'swim', at: T0 }).state;
@@ -650,18 +653,18 @@ test('泳池可以从面板点「来游泳」：走到水面自动下水，游�
   }
   assert.ok(sawWalk, '应该是走过去，而不是瞬移');
   assert.ok(swamAt > 0, '到了水面应该自动开始游');
-  assert.equal(swimSpot, 'swim', '游泳期间 spot 应该留在 swim，不能被 startSwim 改回 deck_w');
+  assert.equal(swimSpot, 'swim', '游泳期间 spot 应该留在 swim');
   // 游完必须真的从水里出来：kind/activity/swim 都要复位
   assert.equal(s.swim, null, '游完应该清掉 swim 描述');
   assert.notEqual(s.kind, 'swim', '游完不应该还挂着 swim 的 kind');
   assert.match(s.activity, /游够|上来|池边/, `游完的活动文案不对：${s.activity}`);
 });
 
-test('泳池从泳池梯（N68）上下水，游完回 S22 上岸，中途不被打断', () => {
+test('泳池从泳池梯（N68）上下水，游完去沙滩躺椅上岸，中途不被打断', () => {
   // 用户的三个要求都在这条：
   //   1. 上下水点在泳池梯（N68 = pk_ladder），不在原来那个 deck_w
   //   2. N68 到水面要有一段路径（pk_water），到点后切游泳动画
-  //   3. 游泳期间不许被别的动画打断，游完走回 S22(deck_w) 上岸才继续别的
+  //   3. 游泳期间不许被别的动画打断，游完去沙滩躺椅上岸才继续别的
   assert.equal(HOME_LAYOUT.spots.pool.swim.access, 'pk_ladder',
     'swim 站位应该从泳池梯下水');
   // 水面下水点在水里（泳池 K 区范围内）
@@ -676,14 +679,16 @@ test('泳池从泳池梯（N68）上下水，游完回 S22 上岸，中途不被
     '路线应该经过泳池梯 N68');
 
   // 下水 → 游 → 上岸全流程，期间塞进各种打断压力
-  let s = atState({ room: 'pool', spot: 'deck_w', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  // 从客厅出发（真实场景），走到泳池下水游一圈，再上岸去躺椅
+  let s = atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.48, nextDecisionAt: T0 });
   s = applyHomeAction(s, { action: 'command', room: 'pool', spot: 'swim', at: T0 }).state;
   let t = T0;
   let swam = false;
   let violated = null;
   let banked = false;
   const pressureAt = new Map([[3000, 'thirst'], [6000, 'bladder'], [9000, 'hunger'], [12000, 'energy']]);
-  for (let i = 0; i < 600; i += 1) {
+  // 循环上限要够跑完整条链路：下水 ~5s + 游 25s + 走去躺椅并上座 ~6s。
+  for (let i = 0; i < 1200; i += 1) {
     t += 100;
     const key = pressureAt.get(t - T0);
     if (key === 'energy') s.needs.energy = 0.1;
@@ -696,12 +701,12 @@ test('泳池从泳池梯（N68）上下水，游完回 S22 上岸，中途不被
       // 游泳期间 kind 必须一直是 swim
       if (s.kind !== 'swim') violated = { at: t - T0, kind: s.kind };
     }
-    if (swam && !swimming && s.spot === 'deck_w' && !s.route && !s.walking) { banked = true; break; }
+    if (swam && !swimming && s.spot === 'lounger' && !s.route && !s.walking) { banked = true; break; }
   }
   assert.ok(swam, '应该真的下水游了');
   assert.equal(violated, null,
     `游泳被 ${violated?.kind} 打断了（${violated?.at}ms）—— 需求/菜园都不该抢走她`);
-  assert.ok(banked, '游完应该走回 S22(pool.deck_w) 上岸');
+  assert.ok(banked, '游完应该去沙滩躺椅(pool.lounger)上岸');
 });
 
 if (process.exitCode) {
