@@ -975,7 +975,9 @@ function beginCharDrag() {
   canvas.classList.remove('dragging');
   canvas.classList.add('grabbing');
   if (charMode === 'webm') {
-    try { actor.setClip('react_scare'); } catch { /* 忽略 */ }
+    // 拖拽悬空的反馈：不是「受惊」（react_scare），而是专门的「被鼠标拖拽悬空反馈」。
+    // 这个片段素材里自带四肢悬空乱蹬的样子，才符合「正被拎起来」的观感。
+    try { actor.setClip('被鼠标拖拽悬空反馈'); } catch { /* 忽略 */ }
   }
   showClickMarker(base);
   playPickup();
@@ -2229,6 +2231,14 @@ const ONCE = new Set(['react_happy', 'react_shy', 'react_scare', 'stretch', 'cur
 function syncCharacter() {
   const her = state?.her ? { ...state.her, walking: motionWalking } : null;
   if (!her) return;
+  // ── 拖拽锁（客户端这一侧）─────────────────────────────────────────
+  // 按住拖动大肥鱼期间，播「被鼠标拖拽悬空反馈」，且不许被 clipFor/行走/心情
+  // 之类切走。之前拖拽时只播一次 react_scare，但渲染循环里 derivedWalk 一变
+  // 就会 syncCharacter 把它切回待机，观感是「拎起来却还在播别的」。
+  if (charDrag?.active && charMode === 'webm') {
+    if (actor.current !== '被鼠标拖拽悬空反馈') actor.setClip('被鼠标拖拽悬空反馈');
+    return;
+  }
   // 硬规则：只要人在移动，所有“表演类”覆盖立刻作废，
   // 动画必须和位移对应（否则会出现边播动作边滑走）。
   if (motionWalking) {

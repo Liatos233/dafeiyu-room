@@ -232,4 +232,21 @@ test('开发模式卡片不遮挡：地图错开开发菜单，动画调试合�
   assert.ok(/切换日志（最新在上）/.test(appSrc), '动画调试卡应该含切换日志');
 });
 
+test('拖拽大肥鱼播「被鼠标拖拽悬空反馈」，且拖拽期间锁住不切走', () => {
+  const appSrc = read('public/room/app.js');
+  // beginCharDrag 里应该播悬空反馈，而不是 react_scare
+  assert.ok(/actor\.setClip\('被鼠标拖拽悬空反馈'\)/.test(appSrc),
+    '拖拽时应该播「被鼠标拖拽悬空反馈」');
+  assert.ok(!/setClip\('react_scare'\)/.test(appSrc),
+    '拖拽不应该再播 react_scare（受惊）');
+  // syncCharacter 里应该有拖拽锁：charDrag.active 时锁住悬空反馈并 return
+  const syncFn = appSrc.slice(appSrc.indexOf('function syncCharacter'));
+  const syncBody = syncFn.slice(0, syncFn.indexOf('function clipFor') < 0 ? syncFn.indexOf('\n\n') : syncFn.indexOf('function clipFor'));
+  assert.ok(/charDrag\?\.active/.test(syncBody),
+    'syncCharacter 里应该有拖拽锁（charDrag.active）');
+  // 素材注册表里要有这个片段
+  const actorSrc = read('public/room/actor.js');
+  assert.ok(/被鼠标拖拽悬空反馈/.test(actorSrc), 'actor.js 的 CLIPS 里应该有「被鼠标拖拽悬空反馈」');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
