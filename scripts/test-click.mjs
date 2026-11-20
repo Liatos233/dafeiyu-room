@@ -212,4 +212,24 @@ test('动画框默认关闭，只在开发模式里手动开', () => {
     '关开发模式时应该把动画框藏起来');
 });
 
+test('开发模式卡片不遮挡：地图错开开发菜单，动画调试合并', () => {
+  const appSrc = read('public/room/app.js');
+  // 开发菜单在 left:308px、width:176px（右缘 484px）；地图原来 left:324px 会叠上去。
+  // 现在地图应错到开发菜单右侧（left:500px）。
+  assert.ok(/left:500px/.test(appSrc), '非 big 地图应该错到开发菜单右侧(left:500px)');
+  // 地图尺寸应随内容宽高比自适应，而不是写死 300×210
+  assert.ok(/const aspect = bw \/ bh;/.test(appSrc), '地图应该按包围盒宽高比算尺寸');
+  assert.ok(!/const W = navMapBig \? Math\.min\(innerWidth - 80, 1200\) : 300;/.test(appSrc),
+    '地图不该再写死 300 宽');
+
+  // 动画状态 + 动画日志合并成「动画调试」，动画图单独保留
+  assert.ok(/data-dev="animdbg"/.test(appSrc), '开发菜单应该有「动画调试」按钮');
+  assert.ok(/data-dev="animgraph"/.test(appSrc), '动画图应该单独保留');
+  assert.ok(!/data-dev="anim" class/.test(appSrc), '不该再有单独的「动画状态」按钮');
+  assert.ok(!/data-dev="cliplog"/.test(appSrc), '不该再有单独的「动画日志」按钮');
+  // 动画调试卡的内容 = 当前状态 + 切换日志
+  assert.ok(/动画调试（当前）/.test(appSrc), '动画调试卡应该显示当前状态');
+  assert.ok(/切换日志（最新在上）/.test(appSrc), '动画调试卡应该含切换日志');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);

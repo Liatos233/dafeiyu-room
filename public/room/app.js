@@ -3110,30 +3110,37 @@ function updateAnimBox() {
   window.__animBox = { w: +w.toFixed(3), h: +h.toFixed(3), footY: +footY.toFixed(3) };
 }
 
-// ── 动画日志面板（开发调试用）──────────────────────────────────────────
-// 把 window.__clipLog 里「什么时候从什么切成什么」显示在屏幕上。
-// 用途：排查「游泳/上座中途动画被切成别的」这类问题 —— 一眼能看出是哪个片段
-// 抢走了她，以及当时她在做什么（kind/activity）。
-//
-// 特别标红「本该锁住却被打断」的情况：在游泳/过渡期间切到非预期片段。
+// ── 动画调试面板（开发调试用）──────────────────────────────────────────
+// 把「动画状态」和「动画日志」合并成一张卡：
+//   第一行：当前 kind / clip / activity（原来「动画状态」卡的内容）
+//   下面：window.__clipLog 的「什么时候从什么切成什么」（原来「动画日志」卡）
+// 用途：排查「游泳/上座中途动画被切成别的」—— 一眼能看出当前状态 + 是谁抢走了片段。
 let clipLogOn = false;
 function renderClipLog() {
-  let el = document.getElementById('__cliplog2');
+  let el = document.getElementById('__animdbg');
   if (!clipLogOn) { if (el) el.remove(); return; }
   if (!el) {
     el = document.createElement('div');
-    el.id = '__cliplog2';
-    el.style.cssText = 'position:fixed;right:12px;bottom:120px;z-index:99999;'
-      + 'max-width:380px;max-height:46vh;overflow:auto;background:rgba(0,0,0,.82);'
-      + 'color:#cfe0f0;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;'
+    el.id = '__animdbg';
+    el.style.cssText = 'position:fixed;left:16px;bottom:96px;z-index:99999;'
+      + 'min-width:280px;max-width:380px;max-height:46vh;overflow:auto;'
+      + 'background:rgba(0,0,0,.84);color:#cfe0f0;'
+      + 'font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;'
       + 'padding:8px 10px;border-radius:8px;white-space:pre-wrap;pointer-events:none';
     document.body.appendChild(el);
   }
-  const log = (window.__clipLog || []).slice(-24).reverse();
   const her = state?.her;
   const nowKind = her?.kind || '?';
   const nowClip = actor?.current || '?';
-  const lines = [`动画日志（最新在上）  现在 kind=${nowKind} clip=${nowClip}`];
+  const pick = her?.freestylePick;
+  const lines = [
+    `动画调试（当前）`,
+    `kind=${nowKind} clip=${nowClip}`,
+    `activity=${String(her?.activity || '').slice(0, 22)}`,
+    pick ? `触发=${pick.by}(${pick.group})` : '触发=需求/日程',
+    '— 切换日志（最新在上） —'
+  ];
+  const log = (window.__clipLog || []).slice(-20).reverse();
   for (const e of log) {
     const ago = ((Date.now() - e.t) / 1000).toFixed(1);
     const bad = e.kind === 'swim' && e.to !== '游泳' ? '  ⚠被打断' : '';
@@ -3157,9 +3164,8 @@ function buildDevQuickMenu() {
     <button data-dev="nav" class="dq">地图 <b></b></button>
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
     <button data-dev="hitbox" class="dq">动画框 <b></b></button>
-    <button data-dev="anim" class="dq">动画状态 <b></b></button>
+    <button data-dev="animdbg" class="dq">动画调试 <b></b></button>
     <button data-dev="animgraph" class="dq">动画图 <b></b></button>
-    <button data-dev="cliplog" class="dq">动画日志 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
     <button data-dev="her" class="dq">状态卡 <b></b></button>
     <button data-dev="events" class="dq">事件卡 <b></b></button>
@@ -3206,23 +3212,19 @@ function buildDevQuickMenu() {
     setAnimBox(!animBoxOn);
     mark('hitbox', animBoxOn);
   });
-  el.querySelector('[data-dev="anim"]').addEventListener('click', () => {
-    setDevMode(!devMode);
-    mark('anim', devMode);
+  // 「动画调试」= 原来分开的「动画状态」+「动画日志」合并成一张卡：
+  // 顶部是当前 kind/clip/activity，下面滚动切换日志。排查「游泳中途动画变了」
+  // 这一张卡就够，不用再开两张。
+  el.querySelector('[data-dev="animdbg"]').addEventListener('click', () => {
+    clipLogOn = !clipLogOn;
+    renderClipLog();
+    mark('animdbg', clipLogOn);
   });
   el.querySelector('[data-dev="animgraph"]').addEventListener('click', () => {
     try {
       toggleAnimGraph();
       mark('animgraph', isAnimGraphOpen());
     } catch (e) { console.warn('[anim-graph]', e); }
-  });
-  // 动画日志：把 window.__clipLog 的「什么时候从什么切成什么」贴到屏幕上。
-  // 排查「游泳中途动画变成别的」这类问题用它 —— 不用开 devtools，
-  // 也不怕刷新丢（每次切换都当场打，气泡一出现就看得见）。
-  el.querySelector('[data-dev="cliplog"]').addEventListener('click', () => {
-    clipLogOn = !clipLogOn;
-    renderClipLog();
-    mark('cliplog', clipLogOn);
   });
   el.querySelector('[data-dev="actions"]').addEventListener('click', () => {
     const el2 = cardEls().actions;
@@ -3289,8 +3291,8 @@ function setDevMode(on) {
   const q = buildDevQuickMenu();
   q.style.display = on || EDIT_MODE ? 'block' : 'none';
   devMode = !!on;
-  // 开发模式同时打开「动作触发」浮层（原来的 ?animdbg=1）
-  window.__ANIMDBG = devMode;
+  // 开发模式不再强制开「动画调试」卡：那是独立开关（clipLogOn），
+  // 由开发菜单里的「动画调试」按钮控制。关开发模式时统一收掉。
   if (!devMode) {
     const dbg = document.getElementById('__animdbg');
     if (dbg) dbg.remove();
@@ -3306,6 +3308,7 @@ function setDevMode(on) {
     if (typeof setRoomLabels === 'function' && roomLabelsOn) setRoomLabels(false);
     if (animBoxMesh) animBoxMesh.visible = false;
     if (animBoxFoot) animBoxFoot.visible = false;
+    clipLogOn = false;
   }
   const btn = document.getElementById('devModeBtn');
   if (btn) { btn.setAttribute('aria-pressed', String(devMode)); btn.textContent = devMode ? '开发模式：开' : '开发模式'; }
@@ -3372,8 +3375,12 @@ function showNavMap(bigMode = navMapBig) {
   const bw = Math.max(1, bounds.x1 - bounds.x0);
   const bh = Math.max(1, bounds.z1 - bounds.z0);
 
-  const W = navMapBig ? Math.min(innerWidth - 80, 1200) : 300;
-  const H = navMapBig ? Math.min(innerHeight - 120, 820) : 210;
+  // 地图尺寸自适应当前实际地图内容：按包围盒的宽高比定尺寸，而不是写死 300×210。
+  // 内容越宽地图越宽、越高越高，避免「地图框里大片留白」或「内容被裁掉」。
+  const aspect = bw / bh;
+  const baseW = navMapBig ? Math.min(innerWidth - 80, 1200) : Math.min(innerWidth - 540, 460);
+  const W = Math.max(220, Math.round(baseW));
+  const H = Math.max(150, Math.round(baseW / Math.max(0.3, aspect)));
   const pad = 12;
   const view = { zoom: 1, panX: 0, panY: 0 };
 
@@ -3387,7 +3394,8 @@ function showNavMap(bigMode = navMapBig) {
   const base = 'z-index:99999;background:rgba(10,16,26,.94);border:1px solid rgba(150,190,230,.35);border-radius:10px;';
   cv.style.cssText = navMapBig
     ? `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);${base}cursor:grab;`
-    : `position:fixed;left:324px;top:378px;${base}cursor:zoom-in;`;
+    // 非 big 模式：错到开发菜单（left:308,width:176 → 右缘 484）右侧，不再遮挡。
+    : `position:fixed;left:500px;top:96px;${base}cursor:zoom-in;`;
   const old = document.getElementById('navMap');
   if (old) old.remove();
   document.body.appendChild(cv);
@@ -3553,7 +3561,7 @@ applyRoomLabels();
 layoutSideCards();
 window.addEventListener('resize', () => { try { layoutSideCards(); } catch {} try { layoutSpotMenu(); } catch {} });
 if (params.get('skydebug') === '1') { window.__SKYDEBUG = true; }
-if (params.get('animdbg') === '1') { window.__ANIMDBG = true; }   // 调试快捷方式；日常用「开发模式」即可
+if (params.get('animdbg') === '1') { clipLogOn = true; }   // 调试快捷方式；日常用开发菜单里的「动画调试」即可
 if (params.get('walkdbg') === '1') { window.__WALKDBG = true; }
 if (params.get('nav') === '1') { setTimeout(() => setDevMode(true), 600); }
 if (params.get('dev') === '1') setTimeout(() => setDevMode(true), 600);
@@ -4296,31 +4304,8 @@ function frame(now) {
       lastMotionWalking = derivedWalk;
       syncCharacter();
     }
-    if (window.__ANIMDBG) {
-      let el = document.getElementById('__animdbg');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = '__animdbg';
-        document.body.appendChild(el);
-      }
-      el.style.cssText = [
-        'position:fixed', 'left:16px', 'bottom:96px', 'z-index:50', 'min-width:220px',
-        'max-width:300px', 'padding:9px 11px', 'border-radius:12px',
-        'background:rgba(18,22,28,.88)', 'border:1px solid rgba(143,193,255,.22)',
-        'box-shadow:0 8px 24px rgba(0,0,0,.35)', 'color:#cfe0f0',
-        'font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
-        'white-space:pre-wrap', 'pointer-events:none'
-      ].join(';');
-      const pick = her.freestylePick;
-      const lines = [
-        'animdbg',
-        `kind=${her.kind} clip=${actor.current}`,
-        `activity=${String(her.activity || '').slice(0, 20)}`,
-        pick ? `触发=${pick.by}(${pick.group}) 走到点位=${pick.travel}` : '触发=需求/日程',
-        pick ? `候选 ${pick.top.join('  ')}` : ''
-      ];
-      el.textContent = lines.filter(Boolean).join('\n');
-    }
+    // 「动画调试」卡已由 renderClipLog() 在开发菜单里开关；这里不再单独渲染
+    // 旧的 window.__ANIMDBG 块（和 renderClipLog 共用同一个 __animdbg 元素会打架）。
     if (window.__WALKDBG) {
       let el = document.getElementById('__walkdbg');
       if (!el) {
