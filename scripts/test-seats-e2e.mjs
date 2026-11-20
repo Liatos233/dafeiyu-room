@@ -152,5 +152,41 @@ for (const c of CASES) {
   console.log('');
 }
 
+// ── 离开坐具后不能闪现 ──────────────────────────────────────
+// 这是个独立的真实 bug：下座落地在座点，重新寻路时如果旧路线没清掉，
+// currentPosition 会沿那条过期路线算出「她已经走出去 1.2m」，新路线就从错位置起步，
+// 表现是「落地后停一会儿，然后突然闪现到远处」。
+console.log('离开坐具衔接');
+for (const c of CASES) {
+  await post('/api/home/act', { action: 'command', room: c.room, spot: c.spot });
+  await reachRoom(c.room, c.spot);
+  await new Promise((r) => setTimeout(r, 400));
+
+  await post('/api/home/act', { action: 'command', room: 'her_room', spot: 'desk' });
+  let lastDismount = null;
+  let firstWalk = null;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 30000) {
+    const s = await get('/api/home/state');
+    const h = s.her;
+    if (h.motion?.kind === 'dismount') lastDismount = h.pos.slice();
+    if (h.motion?.kind === 'walk') {
+      firstWalk = { pos: h.pos.slice(), start: h.motion.points?.[0] };
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  if (lastDismount && firstWalk) {
+    const jump = Math.hypot(firstWalk.pos[0] - lastDismount[0], firstWalk.pos[1] - lastDismount[1]);
+    const startGap = Math.hypot(firstWalk.start[0] - lastDismount[0], firstWalk.start[1] - lastDismount[1]);
+    ok(`${c.name} 离开后不闪现`, jump < 0.1, `落地→首帧 ${jump.toFixed(3)}m`);
+    ok(`${c.name} 新路线从座点起步`, startGap < 0.1, `偏差 ${startGap.toFixed(3)}m`);
+  } else {
+    fail += 1;
+    console.error(`  ✗ ${c.name} 离开：没采到下座/走路帧`);
+  }
+}
+
+console.log('');
 console.log(`${pass} 项通过，${fail} 项失败`);
 if (fail) process.exit(1);

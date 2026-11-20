@@ -2035,6 +2035,13 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
       state.elev = 0;
       state.spot = 'free';
       state.freePos = seg.pos.slice();
+      // 关键：先把旧路线清掉再重新寻路。
+      //
+      // 旧路线是「去坐具」的那条（departAt 早就过期）。如果留着它，
+      // 紧接着的 beginRoute 里 currentPosition(state, now) 会沿那条旧路线
+      // 算出「她已经走出去 1.2m」，于是新路线从错误的位置起步 ——
+      // 表现就是「下座落地后先停一会儿，然后突然闪现到远处」。
+      state.route = null;
       beginRoute(state, target, now, env);
     }
     changed = true;

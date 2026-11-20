@@ -3843,19 +3843,28 @@ async function poll() {
   }
 }
 
-// ── 轮询节拍：平时慢、上座/下座时快 ─────────────────────────────────────
-// 服务端的上座过渡（home-state.js 的 MOUNT_MS = 1.9s）是一段连续插值，客户端只能
-// 靠轮询采样它。之前固定 1200ms 轮询配 620ms 过渡，中间状态一帧都采不到，看到的
-// 就是「走到旁边停一下 → 闪现到座面上」。现在过渡期间拉到 250ms（约 8 帧），
-// 其余时间保持 1200ms，不白白增加请求。
+// ── 轮询节拍：平时慢，**走路/上下座时快** ───────────────────────────────
+// 服务端没有后台定时器：它的状态只在客户端请求进来时推进（homeTick 由请求触发）。
+// 所以轮询间隔直接决定了「她到站」这件事多久才被服务端发现。
+//
+// 之前只在 transitioning 时加速，走路期间仍是 1200ms —— 她走到座点了，
+// 服务端要等下一次请求才知道「到了」，于是出现「走到位 → 干等一秒多 → 才开始升起」。
+// 实测这段空转 1704ms，就是用户说的「上升之前的停顿有点久」。
+//
+// 现在走路期间也用快节拍：到站能被及时发现，升起紧接着开始。
+// 只有真正站着不动（still）时才回落到 1200ms，不白白增加请求。
 const POLL_IDLE_MS = 1200;
 const POLL_TRANSIT_MS = 250;
 let pollTimer = 0;
 let pollDelay = 0;
 
 function pollDelayFor() {
-  // transitioning 由服务端快照给出（mounting || dismounting），是最准的信号
-  return state?.her?.transitioning === true ? POLL_TRANSIT_MS : POLL_IDLE_MS;
+  const h = state?.her;
+  if (!h) return POLL_IDLE_MS;
+  // 过渡（上/下座）和走路都要快：两者都是「服务端算出来的连续过程」，
+  // 而且走路的终点就是下一次过渡的起点，慢一档就会在衔接处空转。
+  const busy = h.transitioning === true || h.walking === true || h.motion?.kind === 'walk';
+  return busy ? POLL_TRANSIT_MS : POLL_IDLE_MS;
 }
 
 function startPolling() {
