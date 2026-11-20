@@ -274,4 +274,24 @@ test('动画图背景无模糊、保留半透明深色底', () => {
   assert.ok(/\.cg-side\{[^}]*background:rgba\(11,16,24,\.96\)/.test(src), 'cg-side 背景应为半透明深色');
 });
 
+test('开发菜单：地图默认不显示、删「全部卡片」、动画转移图改名、气泡勾选跟随 bubbleOn', () => {
+  const appSrc = read('public/room/app.js');
+  // 1. 地图默认不显示：setDevMode 和初始化里都不该再 showNavMap
+  const setDevFn = appSrc.slice(appSrc.indexOf('function setDevMode'));
+  const setDevBody = setDevFn.slice(0, setDevFn.indexOf('\n}\n') + 3);
+  assert.ok(!/if \(!navMapEl \|\| !document\.body\.contains\(navMapEl\)\) showNavMap\(\)/.test(setDevBody),
+    'setDevMode 不该再自动弹出地图');
+  // 2. 删掉「全部卡片」按钮
+  assert.ok(!/data-dev="all"/.test(appSrc), '不该再有「全部卡片」按钮');
+  // 3. 动画图改名动画转移图
+  assert.ok(/动画转移图/.test(appSrc), '按钮应该叫「动画转移图」');
+  assert.ok(!/>动画图 </.test(appSrc), '不该再叫「动画图」');
+  // 4. 气泡勾选跟随 bubbleOn，不再用 showEl 改 display
+  const bubbleHandler = appSrc.slice(appSrc.indexOf('[data-dev="bubble"]'));
+  const bubbleBody = bubbleHandler.slice(0, bubbleHandler.indexOf('});') + 2);
+  assert.ok(/bubbleOn = !bubbleOn/.test(bubbleBody), '气泡开关应该切换 bubbleOn');
+  assert.ok(/applyBubblePref\(\)/.test(bubbleBody), '气泡开关应该调 applyBubblePref');
+  assert.ok(!/showEl\(el2, !isShown\(el2\)\)/.test(bubbleBody), '气泡不该再用 showEl 改 display');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);

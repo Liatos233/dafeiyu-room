@@ -3175,12 +3175,11 @@ function buildDevQuickMenu() {
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
     <button data-dev="hitbox" class="dq">动画框 <b></b></button>
     <button data-dev="animdbg" class="dq">动画调试 <b></b></button>
-    <button data-dev="animgraph" class="dq">动画图 <b></b></button>
+    <button data-dev="animgraph" class="dq">动画转移图 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
     <button data-dev="her" class="dq">状态卡 <b></b></button>
     <button data-dev="events" class="dq">事件卡 <b></b></button>
     <button data-dev="bubble" class="dq">头顶气泡 <b></b></button>
-    <button data-dev="all" class="dq">全部卡片 <b></b></button>
     <button data-dev="edit" class="dq">进入编辑模式</button>
   `;
   const st = document.createElement('style');
@@ -3198,8 +3197,9 @@ function buildDevQuickMenu() {
   const cardEls = () => ({
     her: document.querySelector('.her-panel'),
     events: document.querySelector('.events-panel'),
-    actions: document.getElementById('petActions'),
-    bubble: document.getElementById('bubble')
+    actions: document.getElementById('petActions')
+    // 注意：气泡（#bubble）不在这里 —— 它由 bubbleOn 控制显隐（opacity/.show），
+    // 不是 display，走 showEl 会既没效果又让勾选错位。
   });
 
   const showEl = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
@@ -3252,17 +3252,13 @@ function buildDevQuickMenu() {
     mark('events', isShown(el2));
   });
   el.querySelector('[data-dev="bubble"]').addEventListener('click', () => {
-    const el2 = cardEls().bubble;
-    showEl(el2, !isShown(el2));
-    mark('bubble', isShown(el2));
-  });
-  el.querySelector('[data-dev="all"]').addEventListener('click', () => {
-    const els = Object.values(cardEls()).filter(Boolean);
-    const anyShown = els.some((e) => isShown(e)) || !!navMapEl;
-    for (const e3 of els) showEl(e3, !anyShown);
-    if (navMapEl && !anyShown) { navMapEl.remove(); navMapEl = null; }
-    else if (anyShown === false && !navMapEl) showNavMap();
-    mark('all', !anyShown);
+    // 头顶气泡的显隐由 bubbleOn 控制（走 opacity/.show 类），不是 display。
+    // 之前这里用 showEl 改 display，既没效果又让勾选和实际显示永远对不上。
+    bubbleOn = !bubbleOn;
+    try { localStorage.setItem('home-bubble', bubbleOn ? '1' : '0'); } catch { /* 忽略 */ }
+    applyBubblePref();
+    if (bubbleOn && (state?.her?.speech || state?.her?.activity)) setBubble(state.her.speech || state.her.activity, 3600);
+    mark('bubble', bubbleOn);
   });
   el.querySelector('[data-dev="edit"]').addEventListener('click', () => {
     if (window.__devEditor) {
@@ -3280,7 +3276,7 @@ function buildDevQuickMenu() {
     // 「每次刷新都把各个地方的标记显示出来」的第二个来源
     // （第一处是 roomLabelsOn 从 localStorage 读初值，两处都堵了才干净）。
     if (!devMode) setDevMode(true);          // 动画状态 + 3D 导航层
-    if (!navMapEl) showNavMap();             // 小地图
+    // 地图默认不显示：需要时在开发菜单里点「地图」按钮打开。
     const els = Object.values(cardEls());
     for (const e3 of els) showEl(e3, true);
     mark('labels', roomLabelsOn);
@@ -3288,7 +3284,8 @@ function buildDevQuickMenu() {
     mark('her', true);
     mark('events', true);
     mark('actions', true);
-    mark('bubble', true);
+    // 头顶气泡由 bubbleOn 控制（不是 display），勾选跟随 bubbleOn 而非「全部显示」
+    mark('bubble', bubbleOn);
     mark('nav', !!navMapEl);
     mark('anim', devMode);
   }, 60);
@@ -3308,7 +3305,7 @@ function setDevMode(on) {
     if (dbg) dbg.remove();
   }
   if (devMode) {
-    if (!navMapEl || !document.body.contains(navMapEl)) showNavMap();
+    // 地图默认不自动弹出：需要时在开发菜单点「地图」按钮。这里只开 3D 导航层。
     setNav3D(true);
     setAnimBox(animBoxOn);
   } else {
