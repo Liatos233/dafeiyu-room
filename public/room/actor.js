@@ -827,18 +827,21 @@ export class SpriteActor {
   update(dt, camera, { pos, elev = 0, walking = false, flip = false, faceCamera = true, snap = false }) {
     this._time += dt;
     this._target.set(pos[0], pos[1]);
-    const d = this._pos.distanceTo(this._target);
-    if (d > 2.2) this._pos.copy(this._target);
-    else {
-      const k = 1 - Math.pow(0.001, dt);
-      this._pos.lerp(this._target, Math.min(1, k * 1.4));
-    }
+    // 位置直接跟随，**不做二次平滑**。
+    //
+    // 这里原来是「指数追赶」：this._pos.lerp(this._target, k*1.4)，k = 1-0.001^dt。
+    // 那是把一个「每帧都在匀速前进」的目标当静止目标去追，问题有两个：
+    //   1) 稳态滞后约 0.09m，显示永远比真实位置落后；
+    //   2) 追赶速度随 dt 剧烈变化 —— 60fps 时显示 1.01 m/s，掉到 30fps 变 1.11，
+    //      掉到 24fps 变 1.16。只要有一帧慢下来，显示速度就抖一下，
+    //      观感就是「走路一卡一卡」（实测服务端位置本身是连续的 1.05 m/s）。
+    // 位置已经由 app.js 的 walkPredict 逐帧外推算准了，再滤一遍只会引入抖动。
+    this._pos.copy(this._target);
     this._targetElev = elev;
     // 只有躺在抬高的床面上才抬升：地面上的 nap（elev≈0）保持原来的落脚。
     const lieLift = LIE_CLIPS.has(this.current) && elev > 0.2 ? LIE_SURFACE_LIFT : 0;
     if (snap) {
       // 截图模式只画一帧，缓动来不及收敛；直接吸附到目标值，画面才是真实姿态。
-      this._pos.copy(this._target);
       this._elev = elev;
       this._lift = lieLift;
     } else {

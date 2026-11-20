@@ -1740,10 +1740,17 @@ function applyState(next) {
     });
     world.setClock?.(next.hour || 0, 0);
     if (next.her.walking && Array.isArray(next.her.route) && next.her.route.length > 1) {
+      // 预测锚点要对齐「服务端算这个 pos 的时刻」，不是「收到快照的时刻」。
+      // 服务端 pos 是它最后一次 tick 时的位置，快照里带 now；如果拿收到的时间当锚点，
+      // 就会把 pos 当成「现在」的位置，于是每次轮询都把预测往回拽一点 —— 走路发顿。
+      // 用 now 和本地时钟对齐：elapsed = (服务端 now → 现在) + (收到后过了多久)。
+      const serverNow = Number(next.now) || Date.now();
+      const transit = Math.max(0, Math.min(400, Date.now() - serverNow)); // 只信 400ms 内的网络延迟
       walkPredict = {
         points: next.her.route,
         start: next.her.pos.slice(),
-        at: performance.now(),
+        // 锚点时间往前推 transit：等价于「这个 pos 是 transit 毫秒之前的位置」
+        at: performance.now() - transit,
         speed: Math.max(0.5, Number(next.her.speed) || 1.05)
       };
     } else {
@@ -4045,6 +4052,20 @@ function frame(now) {
       }
       el.textContent = `walkdbg\nchar=${charMode}\nmoving=${movingNow} derived=${derivedWalk}\nstateWalk=${her.walking} predict=${!!walkPredict}\nclip=${actor.current} kind=${her.kind} speed=${her.speed}`;
     }
+    if (window.__WALKDBG) {
+      // 走路速度统计：v = 每帧位移 / 每帧时长。均匀才算不卡。
+      let el = document.getElementById('__walkspeed');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = '__walkspeed';
+        el.style.cssText = 'position:fixed;left:12px;top:230px;z-index:99999;background:rgba(0,0,0,.78);color:#ffd479;font:12px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none';
+        document.body.appendChild(el);
+      }
+      const s = window.__walkStat;
+      el.textContent = s && s.n > 2
+        ? `walk speed\nmin=${s.min.toFixed(2)} max=${s.max.toFixed(2)}\navg=${(s.sum / s.n).toFixed(2)} n=${s.n}\n不匀=${(s.max / Math.max(1e-6, s.min)).toFixed(2)}x 停顿=${s.zero}`
+        : 'walk speed\n(停下时归零)';
+    }
     if (window.__PROBE) {
       window.__probe = {
         movingNow, derivedWalk, stateWalking: her.walking, hasPredict: !!walkPredict,
@@ -4207,6 +4228,26 @@ function frame(now) {
     );
 
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, kind: her.kind, activity: her.activity, clip: actor.current, walking: walkingNow };
+    // ── 诊断：走路时的帧间位移/速度（?walkdbg=1 时显示）──────────────────
+    // 判断「一卡一卡」用这个：走路中每帧位移应该接近 speed*dt，
+    // 出现忽大忽小（或 0）就是抖动源还在。
+    if (window.__WALKDBG) {
+      const nowMs = performance.now();
+      const dtS = Math.max(1e-6, (nowMs - (window.__walkPrevAt || nowMs)) / 1000);
+      const prev = window.__walkPrevPos;
+      const dist = prev ? Math.hypot(drawPos[0] - prev[0], drawPos[1] - prev[1]) : 0;
+      window.__walkPrevAt = nowMs;
+      window.__walkPrevPos = [drawPos[0], drawPos[1]];
+      if (walkingNow && dtS < 0.5) {
+        const s = window.__walkStat || (window.__walkStat = { min: Infinity, max: 0, sum: 0, n: 0, zero: 0 });
+        const v = dist / dtS;
+        s.min = Math.min(s.min, v); s.max = Math.max(s.max, v); s.sum += v; s.n += 1;
+        if (dist < 0.0005) s.zero += 1;
+        window.__walkStat = s;
+      } else if (!walkingNow) {
+        window.__walkStat = null;
+      }
+    }
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
       // 上/下座期间**不能再 snap**：snap 会把目标位置直接 copy 过去，等于把服务端
