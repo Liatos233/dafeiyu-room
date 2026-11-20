@@ -1510,6 +1510,15 @@ function arrive(state, now) {
   const t = route.target;
   state.room = t.room;
   state.spot = t.spot;
+  // 指令达成：到达指令指向的位置就把 command 清掉。
+  //
+  // 这里必须做，不能只靠 decideTarget 里那段检查 —— 因为 arrive() 有若干分支会
+  // 提前 return（游泳、上座、睡觉），根不走 decideTarget。command 的有效期是 5 分钟，
+  // 不清就会在接下来 5 分钟里每轮都被重新下发同一个目标。
+  // 实测症状：点「来游泳」→ 游完上岸躺椅子 → 20 秒后又被送回水里，无限循环。
+  if (state.command && state.command.room === t.room && state.command.spot === t.spot) {
+    state.command = null;
+  }
   if (t.spot === 'free' && Array.isArray(t.pos)) state.freePos = t.pos.slice();
   state.arrivedAt = now;
   // 睡眠只在「已经到床」这一帧生效；路上 sleeping=false，客户端不会播睡眠动画。

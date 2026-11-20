@@ -709,6 +709,31 @@ test('泳池从泳池梯（N68）上下水，游完去沙滩躺椅上岸，中�
   assert.ok(banked, '游完应该去沙滩躺椅(pool.lounger)上岸');
 });
 
+test('点一次「来游泳」只游一次：上岸后 command 必须清干净', () => {
+  // 这是个真 bug：arrive() 的游泳分支提前 return 了，没走 decideTarget 里
+  // 「到了就清 command」那段。command 有效期 5 分钟，于是游完上岸躺 20 秒后
+  // 又被同一条指令送回水里 —— 实测「游 → 躺椅 → 又下水」无限循环。
+  const T0 = Date.parse('2026-11-06T02:00:00+08:00');   // 凌晨：游泳不在 freestyle 时间窗
+  let s = emptyHomeState(T0);
+  s = applyHomeAction(s, { action: 'command', room: 'pool', spot: 'swim', at: T0 }).state;
+  assert.equal(s.command?.spot, 'swim', '发起时 command 应该指向 swim');
+
+  let t = T0;
+  let swimCount = 0;
+  let wasSwimming = false;
+  let cmdAfterArrive = 'unset';
+  for (let i = 0; i < 2400; i += 1) {   // 4 分钟
+    t += 100;
+    s = advanceHomeState(s, t, {}).state;
+    const swimming = !!(s.swim && s.swim.until > t);
+    if (swimming && !wasSwimming) swimCount += 1;
+    if (!swimming && wasSwimming) cmdAfterArrive = s.command ? s.command.spot : null;
+    wasSwimming = swimming;
+  }
+  assert.equal(swimCount, 1, `4 分钟内应该只游一次，实际 ${swimCount} 次`);
+  assert.equal(cmdAfterArrive, null, `游完 command 应该已清空，实际 ${cmdAfterArrive}`);
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {
