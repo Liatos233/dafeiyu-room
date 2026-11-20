@@ -2987,6 +2987,96 @@ document.getElementById('roomLabelBtn')?.addEventListener('click', () => setRoom
 
 // ── 开发者快捷菜单：地图 / 动画状态 / 动作 / 编辑模式 ──────────
 let devQuickEl = null;
+// ── 动画框（开发调试用）────────────────────────────────────────────────
+// 画出当前活动动画片的平面矩形：宽/高就是 SpriteActor 里 PlaneGeometry 的尺寸，
+// 底边是脚底基准线。调「她该多高、脚踩在哪」的时候看这个最直观。
+//
+// 用 LineLoop 画一个 1×1 的方框，每帧按当前 mesh 的 scale/position 缩放平移，
+// 所以只要 mesh 尺寸变了（换片段、缩放），框会跟着变，不需要重建几何。
+let animBoxOn = true;          // 默认开（用户要求：默认开启，可关闭）
+let animBoxMesh = null;
+let animBoxFoot = null;        // 脚底那条线（更亮，用来对地面）
+
+function ensureAnimBox() {
+  if (animBoxMesh || !world?.scene) return;
+  const boxGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.5, 0, 0), new THREE.Vector3(0.5, 0, 0),
+    new THREE.Vector3(0.5, 1, 0), new THREE.Vector3(-0.5, 1, 0),
+    new THREE.Vector3(-0.5, 0, 0)
+  ]);
+  animBoxMesh = new THREE.Line(boxGeo, new THREE.LineBasicMaterial({
+    color: 0x7dff9b, transparent: true, opacity: 0.95, depthTest: false
+  }));
+  animBoxMesh.renderOrder = 999;
+  animBoxMesh.frustumCulled = false;
+  animBoxMesh.visible = false;
+  world.scene.add(animBoxMesh);
+
+  const footGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.5, 0, 0), new THREE.Vector3(0.5, 0, 0)
+  ]);
+  animBoxFoot = new THREE.Line(footGeo, new THREE.LineBasicMaterial({
+    color: 0xffd23f, transparent: true, opacity: 0.95, depthTest: false
+  }));
+  animBoxFoot.renderOrder = 1000;
+  animBoxFoot.frustumCulled = false;
+  animBoxFoot.visible = false;
+  world.scene.add(animBoxFoot);
+}
+
+function setAnimBox(on) {
+  animBoxOn = !!on;
+  ensureAnimBox();
+  if (!animBoxOn) {
+    if (animBoxMesh) animBoxMesh.visible = false;
+    if (animBoxFoot) animBoxFoot.visible = false;
+  }
+}
+
+/** 每帧更新动画框：贴在当前活动 layer 的 mesh 上。 */
+function updateAnimBox() {
+  if (!animBoxOn) return;
+  ensureAnimBox();
+  if (!animBoxMesh) return;
+  // 立绘模式下取当前活动层的 mesh；3D 模式没有平面矩形，就框住整个角色组
+  const layer = actorWebm?.layers?.[actorWebm.active];
+  const mesh = layer?.mesh;
+  const useMesh = !!(mesh && mesh.visible !== false && (layer.material?.opacity || 0) > 0.02);
+  if (!useMesh && !model3d && !chibi) { animBoxMesh.visible = false; animBoxFoot.visible = false; return; }
+
+  const target = useMesh ? mesh : (model3d?.group || chibi?.group || null);
+  if (!target) { animBoxMesh.visible = false; animBoxFoot.visible = false; return; }
+
+  // 世界坐标 → 框的位置。平面是 1×1，所以 scale 直接就是宽高。
+  target.updateWorldMatrix(true, false);
+  const scale = useMesh
+    ? new THREE.Vector3(1, 1, 1).multiply(target.scale)   // PlaneGeometry(PLANE_W, PLANE_H) 已含尺寸
+    : new THREE.Box3().setFromObject(target).getSize(new THREE.Vector3());
+  const worldPos = new THREE.Vector3();
+  target.getWorldPosition(worldPos);
+  // mesh 的 position.y 是「脚底中心」偏移，mesh 本地 y=0 对应平面底部？
+  // 实际 PlaneGeometry 是以中心为原点，所以底边在 -H/2。
+  const h = useMesh ? target.geometry.parameters.height * target.scale.y
+    : scale.y;
+  const w = useMesh ? target.geometry.parameters.width * target.scale.x
+    : scale.x;
+  const footY = useMesh
+    ? worldPos.y - (target.geometry.parameters.height * target.scale.y) / 2
+    : worldPos.y;
+
+  animBoxMesh.position.set(worldPos.x, footY, worldPos.z + 0.02);
+  animBoxMesh.scale.set(w, h, 1);
+  animBoxMesh.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+  animBoxMesh.visible = true;
+
+  animBoxFoot.position.set(worldPos.x, footY, worldPos.z + 0.02);
+  animBoxFoot.scale.set(w, 1, 1);
+  animBoxFoot.quaternion.copy(animBoxMesh.quaternion);
+  animBoxFoot.visible = true;
+
+  window.__animBox = { w: +w.toFixed(3), h: +h.toFixed(3), footY: +footY.toFixed(3) };
+}
+
 function buildDevQuickMenu() {
   if (devQuickEl) return devQuickEl;
   const el = document.createElement('div');
@@ -3001,6 +3091,7 @@ function buildDevQuickMenu() {
     <div style="color:#8fc1ff;font-weight:700;margin:2px 4px 6px">开发菜单</div>
     <button data-dev="nav" class="dq">地图 <b></b></button>
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
+    <button data-dev="hitbox" class="dq">动画框 <b></b></button>
     <button data-dev="anim" class="dq">动画状态 <b></b></button>
     <button data-dev="animgraph" class="dq">动画图 <b></b></button>
     <button data-dev="actions" class="dq">动作面板 <b></b></button>
@@ -3043,6 +3134,11 @@ function buildDevQuickMenu() {
       setRoomLabels(next);
       mark('labels', next);
     }
+  });
+  // 动画框：把当前活动动画片的平面矩形画出来，用来判断「她占多大、脚底在哪」。
+  el.querySelector('[data-dev="hitbox"]').addEventListener('click', () => {
+    setAnimBox(!animBoxOn);
+    mark('hitbox', animBoxOn);
   });
   el.querySelector('[data-dev="anim"]').addEventListener('click', () => {
     setDevMode(!devMode);
@@ -3093,13 +3189,16 @@ function buildDevQuickMenu() {
 
   // 默认全开（编辑模式除外）
   setTimeout(() => {
-    // 开发模式下默认全开（编辑模式按钮除外）
-    if (typeof setRoomLabels === 'function' && !roomLabelsOn) setRoomLabels(true);
+    // 注意：这里**不要**强制打开房间标签。
+    // 房间名是调试辅助，默认应该是关的；之前这行 setRoomLabels(true) 是
+    // 「每次刷新都把各个地方的标记显示出来」的第二个来源
+    // （第一处是 roomLabelsOn 从 localStorage 读初值，两处都堵了才干净）。
     if (!devMode) setDevMode(true);          // 动画状态 + 3D 导航层
     if (!navMapEl) showNavMap();             // 小地图
     const els = Object.values(cardEls());
     for (const e3 of els) showEl(e3, true);
-    mark('labels', true);
+    mark('labels', roomLabelsOn);
+    mark('hitbox', animBoxOn);
     mark('her', true);
     mark('events', true);
     mark('actions', true);
@@ -3125,11 +3224,14 @@ function setDevMode(on) {
   if (devMode) {
     if (!navMapEl || !document.body.contains(navMapEl)) showNavMap();
     setNav3D(true);
+    setAnimBox(animBoxOn);
   } else {
     if (navMapEl) { navMapEl.remove(); navMapEl = null; }
     if (nav3dGroup) nav3dGroup.visible = false;
-    // 关开发模式时一并收掉房间名标记（它是开发调试用）
+    // 关开发模式时一并收掉房间名标记和动画框（都是开发调试用）
     if (typeof setRoomLabels === 'function' && roomLabelsOn) setRoomLabels(false);
+    if (animBoxMesh) animBoxMesh.visible = false;
+    if (animBoxFoot) animBoxFoot.visible = false;
   }
   const btn = document.getElementById('devModeBtn');
   if (btn) { btn.setAttribute('aria-pressed', String(devMode)); btn.textContent = devMode ? '开发模式：开' : '开发模式'; }
@@ -4048,6 +4150,8 @@ function frame(now) {
   updateCamera(dt);
   // 菜单贴在物件上方，相机一动就要重算屏幕位置（同一帧内算，不会滞后一帧）
   layoutSpotMenu();
+  // 开发模式下画动画框（判断她占多大、脚底在哪）
+  updateAnimBox();
   updateCompass();
   watchLayers(now);
   maybeLightning(now, skyOptions().weather === 'storm' ? 'storm' : skyOptions().weather);

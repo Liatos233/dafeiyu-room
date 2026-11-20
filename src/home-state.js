@@ -103,10 +103,11 @@ export const HOME_LAYOUT = Object.freeze({
       lounger: { pos: [12.30, 10.58], pose: 'sit', facing: -90, label: '沙滩躺椅上', access: 'pk_ne', support: 'pool_lounger', mount: [11.38, 10.58] },
       deck_w: { pos: [3.2, 9.5], pose: 'stand', facing: 180, label: '泳池边', access: 'pk_nw' },
       deck_e: { pos: [12.7, 11.0], pose: 'stand', facing: 180, label: '休息区', access: 'pk_ne' },
-      // 泳池水面：走到这里就等于下水，到了之后由 startSwim 接管来回游。
+      // 泳池水面：从泳池梯（N68 = pk_ladder）下水，走到 pk_water 就等于入水，
+      // 到了之后由 startSwim 接管来回游；游完再沿原路爬回梯子上岸。
       // 单独给一个 spot 而不是复用 deck_w，是因为「泳池边站着」和「在水里游」
       // 是两件不同的事——面板上要能分开点，职责也不该混在一个站位里。
-      swim: { pos: [SWIM_LANE.x0 + 0.6, SWIM_LANE.z], pose: 'stand', facing: 180, label: '泳池里', access: 'pk_nw', swim: true }
+      swim: { pos: [9.0, 10.55], pose: 'stand', facing: 180, label: '泳池里', access: 'pk_ladder', swim: true }
     },
     garden: {
       gate: { pos: [.72, -3.6], pose: 'stand', facing: 90, label: '菜园门口', access: 'g_gate' },
@@ -276,7 +277,11 @@ const NODES = Object.freeze({
   pk_ne: [10.6, 9.72],
   pk_se: [10.6, 12.88],
   pk_sw: [0.75, 12.88],
-  pk_ladder: [9.0, 9.72]
+  pk_ladder: [9.0, 9.72],
+  // 泳池水面·下水点：从泳池梯（N68 = pk_ladder）往南延伸一步，正对梯子下方。
+  // 走到这里就等于下了水，startSwim 从这里接管来回游。
+  // 这一段在水面 K 区里，靠「端点豁免」（endpointAllowedInRect）才连得通。
+  pk_water: [9.0, 10.55]
 });
 
 // 每条边都是「同一房间内直线可达」或「穿过门洞」。不写穿墙的捷径。
@@ -309,6 +314,8 @@ const EDGES = Object.freeze([
   ['bal_e', 'pool_gate'], ['pool_gate', 'pk_ne'],
   ['pk_nw', 'pk_ne'], ['pk_ne', 'pk_se'], ['pk_se', 'pk_sw'], ['pk_sw', 'pk_nw'],
   ['pk_nw', 'pk_ladder'], ['pk_ladder', 'pk_ne'], ['pk_ladder', 'pool_gate'],
+  // 泳池梯 → 水面下水点：上下水的这一段
+  ['pk_ladder', 'pk_water'],
   ['corridor', 'corridor_door'], ['corridor_door', 'bedroom_in'], ['bedroom_in', 'bedroom_c'],
   ['bedroom_c', 'beside'], ['bedroom_c', 'desk'], ['bedroom_c', 'wardrobe'], ['bedroom_c', 'window_n'],
   ['corridor', 'corridor_e'], ['corridor_e', 'bath_out'], ['bath_out', 'bath_in'], ['bath_in', 'bath_c'],
@@ -377,10 +384,12 @@ const EVENT_COOLDOWN = Object.freeze({
 // 进入泳池水面来回游（点播、面板「来游泳」、自主抽中都会走这里）
 function startSwim(state, now, ms = SWIM_LANE.totalMs) {
   state.room = 'pool';
-  // spot 保留「本来就是泳池水面」的那个（pool.swim），否则写 deck_w。
-  // 早期只有 deck_w 一个站位，用游泳动作借住在那儿；现在有了独立的 swim 站位，
-  // 覆盖回去会让「她明明在水里，spot 却写着泳池边」自相矛盾。
-  if (state.spot !== 'swim') state.spot = 'deck_w';
+  // spot 只在「本来就是泳池水面」时才保留，否则写 deck_w。
+  // 注意判断条件要用 spot 定义上的 swim 标记，而不是字面量 'swim'：
+  // 「来游泳」是先 command 到 pool.swim，途中 spot 可能还是 deck_w（起点），
+  // 用字面量判断会把已经在水面的状态又改回泳池边，自相矛盾。
+  const def = state.spot && HOME_LAYOUT.spots.pool?.[state.spot];
+  if (!def?.swim) state.spot = 'deck_w';
   state.freePos = null;
   state.kind = 'swim';
   state.clip = '游泳';
@@ -1705,6 +1714,13 @@ function decideTarget(state, now, env) {
   // 「别急着睡」保护期内不选任何睡觉/打盹目标。
   const canSleep = now >= sleepHoldUntil(state);
 
+  // 正在游泳：任何自主决策都不许打断，直到游完上岸。
+  //
+  // 游泳是一段有始有终的连续动作（下水 → 来回游 → 爬回梯子），中途被
+  // 「去喝水」「去卫生间」叫走会很难看：人还在水里，动画却切成了别的。
+  // dwell 到期后由 advanceHomeState 那边负责「上岸」，在那之前这里一律返回 null。
+  if (state.kind === 'swim' || (state.swim && state.swim.until > now)) return null;
+
   if (!state.asleep && state.sleepPending) {
     if (inBed) {
       state.sleepPending = false;
@@ -2077,13 +2093,31 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     const doneAt = state.dwell.until;
     state.dwell = null;
     applyEffect(state, target, doneAt, env);
-    // 游完了要真的「从水里出来」，不能只是让 swim 描述过期。
-    // 之前这里什么都不做，于是 kind 一直是 swim、activity 还写着「在泳池里游来游去」，
-    // 而人已经站在水面上发呆——状态和画面对不上。
+    // 游完了要真的「从水里出来」：沿原路爬回泳池梯上岸。
+    // 不是原地变 idle —— 那样人还站在水面中央，下一帧就不知道该往哪走。
     if (target?.kind === 'swim' || state.kind === 'swim') {
       state.swim = null;
-      setActivity(state, 'idle', '游够了，扒着池边喘了口气', 'stand', 0, state.facing);
-      emit(state, 'swim', '游够了，从泳池里上来', doneAt, { room: 'pool', spot: state.spot });
+      const bank = HOME_LAYOUT.spots.pool.deck_w;   // S22 泳池边：上下水的地方
+      emit(state, 'swim', '游够了，扒着梯子上来', doneAt, { room: 'pool', spot: state.spot });
+      // 走回岸边。beginRoute 会按路网从水面经 pk_ladder 绕回 deck_w。
+      beginRoute(state, {
+        room: 'pool',
+        spot: 'deck_w',
+        pose: bank?.pose || 'stand',
+        elev: 0,
+        facing: bank?.facing ?? 180,
+        kind: 'idle',
+        walkText: '游够了，爬上池边',
+        actText: '游够了，坐在池边喘气',
+        dwellMs: 6000,
+        effect: null,
+        eventType: null,
+        eventText: '',
+        urgent: false,
+        awakeHold: true
+      }, doneAt, env);
+      state.nextDecisionAt = doneAt + 6000;
+      return { state, changed: true };
     }
     if (target?.effect === 'sleep') {
       state.asleep = true;
@@ -2206,6 +2240,26 @@ export function applyHomeAction(state, input = {}) {
   const text = sanitizeText(input.text, 120);
   const inBed = s.room === 'her_room' && s.spot === 'bed' && !s.route && !s.walking;
   let event = null;
+
+  // ── 游泳锁 ──────────────────────────────────────────────────────────
+  // 在水里游的这段时间，不许被「换动作」的指令拉走：喂食、让她去哪、点播动画、
+  // 哄睡……都会把 kind 从 swim 换掉，画面就成了「人还在水里，却在吃东西」。
+  // decideTarget 那边也有一道守卫（防自主决策打断），这里是防用户/QQ 指令。
+  //
+  // 只放行「不改动作」的交互：摸摸头、留句话、开关灯、戳一下——这些用气泡或
+  // 表情回应就够了（pet 分支本身也只在 !walking 时才改动画）。
+  {
+    const swimming = (s.kind === 'swim' || (s.swim && s.swim.until > now))
+      && !(s.dwell && s.dwell.target?.kind !== 'swim' && s.dwell.until <= now);
+    const harmless = new Set(['pet', 'talk', 'lamp', 'poke', 'visit', 'say', 'heal']);
+    if (swimming && !harmless.has(action)) {
+      return {
+        state: s,
+        changed: false,
+        event: { type: 'swim', text: `她正在游泳，${action === 'feed' ? '吃东西' : '做别的'}等她上来再说` }
+      };
+    }
+  }
 
   if (action === 'visit') {
     if (now - s.lastVisitAt < 30 * MIN) return { state: s, changed: false, event: null };

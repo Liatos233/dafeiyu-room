@@ -11,6 +11,7 @@ import {
   advanceHomeState,
   beginGardenWork,
   buildHomePromptLine,
+  buildMapRoute,
   buildRoute,
   currentPosition,
   emptyHomeState,
@@ -636,20 +637,71 @@ test('泳池可以从面板点「来游泳」：走到水面自动下水，游�
   let t = T0;
   let sawWalk = false;
   let swamAt = 0;
+  let swimSpot = null;   // 游泳期间实际停留的 spot（不能等循环结束再读，那时已经上岸了）
   for (let i = 0; i < 4000; i += 1) {
     t += 100;
     s = advanceHomeState(s, t, {}).state;
     if (s.kind === 'walk') sawWalk = true;
-    if (s.kind === 'swim' && s.swim) { if (!swamAt) swamAt = t; }
+    if (s.kind === 'swim' && s.swim) {
+      if (!swamAt) swamAt = t;
+      if (!swimSpot) swimSpot = s.spot;
+    }
     if (swamAt && s.kind !== 'swim') break;
   }
   assert.ok(sawWalk, '应该是走过去，而不是瞬移');
   assert.ok(swamAt > 0, '到了水面应该自动开始游');
-  assert.equal(s.spot, 'swim', '游泳时 spot 应该留在 swim，不能被 startSwim 改回 deck_w');
+  assert.equal(swimSpot, 'swim', '游泳期间 spot 应该留在 swim，不能被 startSwim 改回 deck_w');
   // 游完必须真的从水里出来：kind/activity/swim 都要复位
   assert.equal(s.swim, null, '游完应该清掉 swim 描述');
   assert.notEqual(s.kind, 'swim', '游完不应该还挂着 swim 的 kind');
   assert.match(s.activity, /游够|上来|池边/, `游完的活动文案不对：${s.activity}`);
+});
+
+test('泳池从泳池梯（N68）上下水，游完回 S22 上岸，中途不被打断', () => {
+  // 用户的三个要求都在这条：
+  //   1. 上下水点在泳池梯（N68 = pk_ladder），不在原来那个 deck_w
+  //   2. N68 到水面要有一段路径（pk_water），到点后切游泳动画
+  //   3. 游泳期间不许被别的动画打断，游完走回 S22(deck_w) 上岸才继续别的
+  assert.equal(HOME_LAYOUT.spots.pool.swim.access, 'pk_ladder',
+    'swim 站位应该从泳池梯下水');
+  // 水面下水点在水里（泳池 K 区范围内）
+  const swimPos = HOME_LAYOUT.spots.pool.swim.pos;
+  assert.ok(swimPos[1] > 9.98 && swimPos[1] < 12.68,
+    `下水点应该在水面上，实际 ${swimPos}`);
+
+  // 从泳池梯到水面必须能规划出路线，且路线经过 pk_ladder
+  const route = buildMapRoute([9.0, 9.72], { room: 'pool', spot: 'swim', pos: swimPos }, T0, 1.05);
+  assert.ok(route, '从 N68 到水面应该能造出路线');
+  assert.ok(route.points.some((p) => Math.hypot(p[0] - 9.0, p[1] - 9.72) < 0.05),
+    '路线应该经过泳池梯 N68');
+
+  // 下水 → 游 → 上岸全流程，期间塞进各种打断压力
+  let s = atState({ room: 'pool', spot: 'deck_w', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  s = applyHomeAction(s, { action: 'command', room: 'pool', spot: 'swim', at: T0 }).state;
+  let t = T0;
+  let swam = false;
+  let violated = null;
+  let banked = false;
+  const pressureAt = new Map([[3000, 'thirst'], [6000, 'bladder'], [9000, 'hunger'], [12000, 'energy']]);
+  for (let i = 0; i < 600; i += 1) {
+    t += 100;
+    const key = pressureAt.get(t - T0);
+    if (key === 'energy') s.needs.energy = 0.1;
+    else if (key) s.needs[key] = 0.95;
+    // 菜园那边一直喊她
+    s = advanceHomeState(s, t, { gardenReady: true }).state;
+    const swimming = !!(s.swim && s.swim.until > t);
+    if (swimming) {
+      swam = true;
+      // 游泳期间 kind 必须一直是 swim
+      if (s.kind !== 'swim') violated = { at: t - T0, kind: s.kind };
+    }
+    if (swam && !swimming && s.spot === 'deck_w' && !s.route && !s.walking) { banked = true; break; }
+  }
+  assert.ok(swam, '应该真的下水游了');
+  assert.equal(violated, null,
+    `游泳被 ${violated?.kind} 打断了（${violated?.at}ms）—— 需求/菜园都不该抢走她`);
+  assert.ok(banked, '游完应该走回 S22(pool.deck_w) 上岸');
 });
 
 if (process.exitCode) {
