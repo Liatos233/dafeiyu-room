@@ -102,9 +102,9 @@ function classifyClip(name) {
 const CSS_TEXT = `
 clip-graph{position:fixed;inset:0;z-index:80;display:none;pointer-events:none}
 clip-graph.on{display:block;pointer-events:auto}
-clip-graph .cg-root{position:absolute;inset:0 270px 0 0;background:rgba(7,11,17,.88)}
+clip-graph .cg-root{position:absolute;inset:0 270px 0 0;background:transparent}
 clip-graph .cg-topbar{position:absolute;left:0;top:0;right:0;height:44px;display:flex;align-items:center;gap:10px;
-  padding:0 14px;border-bottom:1px solid rgba(143,193,255,.16);background:rgba(11,16,24,.92)}
+  padding:0 14px;border-bottom:1px solid rgba(143,193,255,.16);background:transparent}
 clip-graph .cg-title{font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8fc1ff;letter-spacing:.08em}
 clip-graph .cg-topbar .spacer{flex:1}
 clip-graph .cg-btn{border:1px solid rgba(143,193,255,.3);background:rgba(143,193,255,.12);color:#dfeeff;
@@ -119,7 +119,7 @@ clip-graph .cg-node.current .ring{animation:cg-pulse 1.2s ease-out infinite}
 clip-graph .cg-edge{cursor:pointer}
 clip-graph .cg-edge.flash path{stroke:#fff;stroke-opacity:.95}
 clip-graph .cg-side{position:absolute;right:0;top:0;bottom:0;width:270px;padding:12px 14px;overflow:auto;
-  border-left:1px solid rgba(143,193,255,.16);background:rgba(11,16,24,.96);
+  border-left:1px solid rgba(143,193,255,.16);background:transparent;
   font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9d8ea;
   scrollbar-width:thin;scrollbar-color:rgba(150,190,230,.35) transparent}
 clip-graph .cg-side h4{margin:10px 0 6px;font-size:11px;letter-spacing:.18em;color:#8fc1ff;font-weight:600}

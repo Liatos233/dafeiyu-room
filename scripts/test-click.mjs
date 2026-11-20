@@ -264,12 +264,14 @@ test('2D 小地图的 K/S/N 标记始终显示，S 带站位名', () => {
   assert.ok(/N=路点/.test(appSrc), '图例应该说明 N/S/PL/K 的含义');
 });
 
-test('动画图背景不再模糊', () => {
+test('动画图背景直接透明', () => {
   const src = read('public/room/clip-graph.js');
-  assert.ok(!/backdrop-filter/.test(src),
-    '动画图不该再有 backdrop-filter 背景模糊');
-  assert.ok(!/blur\(/.test(src),
-    '动画图不该再有 blur() 模糊滤镜');
+  assert.ok(!/backdrop-filter/.test(src), '不该有 backdrop-filter 背景模糊');
+  assert.ok(!/blur\(/.test(src), '不该有 blur() 模糊滤镜');
+  // 主体/顶栏/右侧栏背景都应为透明
+  assert.ok(/\.cg-root\{[^}]*background:transparent/.test(src), 'cg-root 背景应为透明');
+  assert.ok(/\.cg-topbar\{[^}]*background:transparent/.test(src), 'cg-topbar 背景应为透明');
+  assert.ok(/\.cg-side\{[^}]*background:transparent/.test(src), 'cg-side 背景应为透明');
 });
 
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
