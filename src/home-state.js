@@ -617,6 +617,26 @@ function initialState(now = Date.now()) {
   return s;
 }
 
+// 上/下座插值段的规范化：把 from/to/t0/dur/seatY/up 数字化，target 原样保留。
+// 坏数据（没 from/to 或已过期的）直接清掉，避免残留一段永远完不成的过渡卡死她。
+function normalizeSeatSeg(raw, now) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!Array.isArray(raw.from) || !Array.isArray(raw.to)) return null;
+  const t0 = Number(raw.t0) || 0;
+  const dur = Number(raw.dur) || 0;
+  if (t0 <= 0 || dur <= 0) return null;
+  return {
+    from: raw.from.map(Number),
+    to: raw.to.map(Number),
+    seatY: Number(raw.seatY) || 0,
+    t0,
+    dur,
+    up: raw.up === true,
+    target: raw.target && typeof raw.target === 'object' ? raw.target : null,
+    sleepAfter: raw.sleepAfter === true
+  };
+}
+
 export function normalizeHomeState(raw, now = Date.now()) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return initialState(now);
   if (!raw.createdAt) return initialState(now);
@@ -664,7 +684,18 @@ export function normalizeHomeState(raw, now = Date.now()) {
     ? { pos: normalizeFreePoint(raw.freeTarget.pos), until: Math.max(0, Number(raw.freeTarget.until) || 0) }
     : null;
   out.pose = ['stand', 'sit', 'lie'].includes(raw.pose) ? raw.pose : sp.pose;
-  out.elev = supportY(out);
+  // 上/下座（mounting/dismounting）是「连续插值」的中间态，必须原样保留，
+  // 否则 save → load 一趟就把它丢掉，人会「坐回躺椅」（实测：坐躺椅点去游泳，
+  // 服务端 advance 触发 dismounting，但 saveHomeState 走 normalize 时把 dismounting
+  // 丢了，下一次读档她还在躺椅上，于是 command 永远不生效）。
+  out.mounting = normalizeSeatSeg(raw.mounting, now);
+  out.dismounting = normalizeSeatSeg(raw.dismounting, now);
+  // 上/下座进行中：elev 是插值出来的中间高度，不能再用 supportY 按「站姿=0」重算，
+  // 否则下座落地前的高度会被抹成 0，画面里她突然贴地。
+  const inSeatTransition = !!(out.mounting || out.dismounting);
+  out.elev = inSeatTransition
+    ? clamp01(Number(raw.elev) || 0)
+    : supportY(out);
   out.facing = Number(raw.facing) || sp.facing || 0;
   out.kind = sanitizeText(raw.kind, 24) || 'idle';
   out.clip = sanitizeText(raw.clip, 40) || null;
@@ -2073,6 +2104,11 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
         state.elev = seg.elev;
         state.clip = t.clip || null;
         state.dwell = { until: now + Math.max(0, Number(t.dwellMs) || 0), target: t };
+        // 游完泳上岸到躺椅：真正「坐稳」这一刻才算上岸完成，此时才清 afterSwim。
+        // 不能在上座开始（arrive 坐具分支）就清 —— 那样 mounting 期间（route/dwell 都空）
+        // decideTarget 不再被 afterSwim 拦住，渴/憋等需求会把她又拉走，甚至「去喝水」
+        // 的路线经过 swim 水面又被 arrive 拉回游泳，无限循环。
+        if (state.afterSwim && t.room === 'pool' && t.spot === 'lounger') { state.afterSwim = null; state.afterSwimAt = 0; }
         // 座具方向必须有「到了」：arrive() 在坐具分支提前 return 了，
         // 不在这里补一条，右侧事件就会永远只有「去沙发」没有「坐上沙发」。
         {
