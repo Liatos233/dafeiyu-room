@@ -3591,7 +3591,7 @@ async function main() {
         if (thoughts.length) memoryLine += `${memoryLine ? '\n' : ''}【还没说出口的念头】${thoughts.join('；')}`;
       } catch { /* 记忆读不到不影响聊天 */ }
       return [
-        `【此刻】你在${view.her.roomName}·${view.her.spotLabel || ''}，${view.her.activity || '待着'}。${w.energy || ''}，${w.hunger || ''}，${w.thirst || ''}。${mood}。`,
+        `【此刻】你在${view.her.roomName}·${view.her.spotLabel || ''}，${view.her.activity || '待着'}。${w.fatigue || ''}，${w.hunger || ''}，${w.thirst || ''}。${mood}。`,
         view.her.asleep ? '（你现在睡着了；如果被叫醒，先迷糊一下再说话。）' : '',
         memoryLine
       ].filter(Boolean).join('\n');
@@ -4632,7 +4632,7 @@ async function main() {
           const recent = (view.events || []).slice(-3).map((e) => String(e.text || '').slice(0, 60)).filter(Boolean);
           const bits = [
             `她在${view.her.roomName}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}，${view.her.activity || '待着'}`,
-            `${w.energy || ''}`.trim(),
+            `${w.fatigue || ''}`.trim(),
             `${w.hunger || ''}`.trim(),
             `${w.thirst || ''}`.trim(),
             env.weatherLabel ? `天气：${env.weatherLabel}` : '',

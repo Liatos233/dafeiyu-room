@@ -361,7 +361,7 @@ const EVENT_COOLDOWN = Object.freeze({
   mood: 20 * MIN,
   need_hunger: 25 * MIN,
   need_thirst: 20 * MIN,
-  need_energy: 20 * MIN,
+  need_fatigue: 20 * MIN,
   need_hygiene: 40 * MIN,
   need_bladder: 25 * MIN
 });
@@ -445,12 +445,13 @@ export function skyOf(hour) {
 export function needsWords(needs) {
   const hunger = clamp01(needs?.hunger);
   const thirst = clamp01(needs?.thirst);
-  const energy = clamp01(needs?.energy);
+  // 全部需求统一「1 = 糟」：fatigue 越高越累，不再有 energy 这种反方向的字段。
+  const fatigue = clamp01(needs?.fatigue);
   const pain = clamp01(needs?.pain);
   return {
     hunger: hunger < 0.25 ? '不饿' : hunger < 0.5 ? '有点想吃东西' : hunger < 0.72 ? '饿了' : hunger < 0.9 ? '很饿' : '饿得不行',
     thirst: thirst < 0.25 ? '不渴' : thirst < 0.5 ? '有点渴' : thirst < 0.72 ? '渴了' : thirst < 0.9 ? '很渴' : '渴得嗓子发干',
-    energy: energy > 0.75 ? '精神不错' : energy > 0.5 ? '还行' : energy > 0.3 ? '有点累' : energy > 0.12 ? '很困' : '快撑不住了',
+    fatigue: fatigue < 0.25 ? '精神不错' : fatigue < 0.5 ? '还行' : fatigue < 0.7 ? '有点累' : fatigue < 0.88 ? '很困' : '快撑不住了',
     pain: pain < 0.15 ? '没有不舒服' : pain < 0.4 ? '有点不舒服' : pain < 0.7 ? '很难受' : '疼得动不了',
     // 邋遢度：越高越该洗。0.78 起她会自己去洗澡（见 decideTarget），所以文案阈值跟行为阈值对齐。
     hygiene: (needs?.hygiene ?? 0) > 0.78 ? '该洗澡了' : (needs?.hygiene ?? 0) > 0.45 ? '有点邋遢'
@@ -505,7 +506,7 @@ export function emptyHomeState(now = Date.now()) {
     updatedAt: now,
     lastTickAt: now,
     seed: hash(`home:${dayKey(now)}`),
-    needs: { hunger: 0.3, thirst: 0.32, energy: 0.7, bladder: 0.2, pain: 0, hygiene: 0.1 },
+    needs: { hunger: 0.3, thirst: 0.32, fatigue: 0.3, bladder: 0.2, pain: 0, hygiene: 0.1 },
     asleep: false,
     sleepPending: false,
     // 指令/互动后的「别急着睡」保护期（时间戳，ms）；0 = 无保护。旧存档缺省为 0。
@@ -545,7 +546,7 @@ function initialState(now = Date.now()) {
   s.needs = {
     hunger: clamp01(0.18 + Math.max(0, hour - 7) / 18 * 0.32),
     thirst: clamp01(0.2 + Math.max(0, hour - 7) / 18 * 0.3),
-    energy: hour >= 23 || hour < 7 ? 0.78 : 0.72,
+    fatigue: hour >= 23 || hour < 7 ? 0.22 : 0.28,
     bladder: 0.2,
     pain: 0
   };
@@ -595,7 +596,9 @@ export function normalizeHomeState(raw, now = Date.now()) {
     hygiene: clamp01(needs.hygiene ?? base.needs.hygiene ?? 0.1),
     hunger: clamp01(needs.hunger ?? base.needs.hunger),
     thirst: clamp01(needs.thirst ?? base.needs.thirst),
-    energy: clamp01(needs.energy ?? base.needs.energy),
+    // 旧存档里是 energy（1 = 精神好），已经统一成 fatigue（1 = 很累）。
+    // 读档时翻一下，否则老状态会把「精神 0.7」读成「疲劳 0.7」，她一上来就累瘫。
+    fatigue: clamp01(needs.fatigue ?? (needs.energy !== undefined ? 1 - Number(needs.energy) : base.needs.fatigue)),
     bladder: clamp01(needs.bladder ?? base.needs.bladder),
     pain: clamp01(needs.pain ?? 0)
   };
@@ -1487,23 +1490,29 @@ function applyEffect(state, target, now, env) {
     if (state.asleep || state.walking || state.route) return;
     setActivity(state, 'idle', '把杯子放下，站着发会儿呆', 'stand', 0, state.facing);
   };
-  if (effect === 'drink') { n.thirst = clamp01(n.thirst - 0.55); settleToIdle(); }
-  else if (effect === 'eat') { n.hunger = clamp01(n.hunger - 0.52); settleToIdle(); }
-  else if (effect === 'snack') { n.hunger = clamp01(n.hunger - 0.28); settleToIdle(); }
-  else if (effect === 'toilet') n.bladder = clamp01(0.06);
-  else if (effect === 'brush') { n.energy = clamp01(n.energy + 0.06); n.hygiene = 0.15; }
-  else if (effect === 'shower') { n.energy = clamp01(n.energy + 0.06); n.hygiene = 0.03; }
-  else if (effect === 'balcony') n.energy = clamp01(n.energy + 0.02);
-  else if (effect === 'tv') n.energy = clamp01(n.energy - 0.02);
-  else if (effect === 'desk') n.energy = clamp01(n.energy - 0.03);
-  else if (effect === 'phone') { n.energy = clamp01(n.energy - 0.01); state.lastPhoneAt = now; }
-  else if (effect === 'nap') n.energy = clamp01(n.energy + 0.09);
+  // 结算统一成「相对量 + 保底」：越糟降得越多，好到一定程度就不再降。
+  // 之前是两套口径混着用（喝水和吃饭减相对量，上厕所/洗脸/洗澡直接写死 0.06/0.15/0.03），
+  // 那几个魔数既不解释自己在干嘛，也让「脏到 0.9 洗一次」和「干净时洗一次」差得莫名其妙。
+  const relieve = (v, amount, floor = 0) => clamp01(Math.max(floor, v - amount));
+  // fatigue 是「越高越累」，所以累活写 +、休息写 −。
+  const tired = (v) => clamp01((n.fatigue ?? 0) + v);
+  if (effect === 'drink') { n.thirst = relieve(n.thirst, 0.45); settleToIdle(); }
+  else if (effect === 'eat') { n.hunger = relieve(n.hunger, 0.45); settleToIdle(); }
+  else if (effect === 'snack') { n.hunger = relieve(n.hunger, 0.28); settleToIdle(); }
+  else if (effect === 'toilet') n.bladder = relieve(n.bladder, 0.85, 0.05);
+  else if (effect === 'brush') { n.fatigue = tired(-0.06); n.hygiene = relieve(n.hygiene ?? 0, 0.45, 0.10); }
+  else if (effect === 'shower') { n.fatigue = tired(-0.16); n.hygiene = relieve(n.hygiene ?? 0, 0.90, 0); }
+  else if (effect === 'balcony') n.fatigue = tired(-0.02);
+  else if (effect === 'tv') n.fatigue = tired(0.02);
+  else if (effect === 'desk') n.fatigue = tired(0.03);
+  else if (effect === 'phone') { n.fatigue = tired(0.01); state.lastPhoneAt = now; }
+  else if (effect === 'nap') n.fatigue = tired(-0.18);
   else if (effect === 'laundry') { /* 只是过日子 */ }
   else if (effect === 'window') { /* 发呆 */ }
   else if (effect === 'sick') { /* 不动 */ }
   else if (effect === 'freestyle_snack') { n.hunger = clamp01(n.hunger - 0.05); settleToIdle(); }
-  else if (effect === 'freestyle_move') { n.energy = clamp01(n.energy - 0.02); n.hunger = clamp01(n.hunger + 0.02); settleToIdle(); }
-  else if (effect === 'freestyle_rest') { n.energy = clamp01(n.energy + 0.01); settleToIdle(); }
+  else if (effect === 'freestyle_move') { n.fatigue = tired(0.02); n.hunger = clamp01(n.hunger + 0.02); settleToIdle(); }
+  else if (effect === 'freestyle_rest') { n.fatigue = tired(-0.01); settleToIdle(); }
   // 没有专门事件类型的动作，也留一条「做完了」的日志
   const DONE_TEXT = {
     drink: '喝完了一杯水', eat: '吃了点东西', snack: '吃完了零食',
@@ -1696,7 +1705,7 @@ function decideTarget(state, now, env) {
   // 指标条上「会自己动」的刻度必须有对应的行为，否则那根条是在说谎。
   if (n.hygiene >= 0.78) return { ...TRIPS.shower(now), urgent: n.hygiene >= 0.92 };
 
-  if (n.energy < 0.28 && canSleep) {
+  if (n.fatigue >= 0.72 && canSleep) {
     if (inBed) return null;
     if (hour >= 21 || hour < 8) return { ...TRIPS.sickBed(now), kind: 'nap', pose: 'lie', elev: 0.52, actText: '困得不行，爬上床躺一会儿', walkText: '困得睁不开眼，往卧室走', eventType: 'nap', eventText: '困得不行，回床上躺了一会儿', dwellMs: 0, effect: 'sleep' };
     return TRIPS.nap(now);
@@ -1705,7 +1714,7 @@ function decideTarget(state, now, env) {
   // 昼夜节律：夜里准备睡；白天按时间段轮换。
   if (night) {
     // 保护期内、或精力还很足时不主动上床：先待在原地清醒着，等条件满足再判睡。
-    if (!canSleep || n.energy >= 0.45) return null;
+    if (!canSleep || n.fatigue < 0.55) return null;
     if (inBed) {
       state.asleep = true;
       state.lamp = false;
@@ -1757,7 +1766,7 @@ function decideTarget(state, now, env) {
     state.lastDefaultSpot = key;
     if (rotation[1] === 'desk') return TRIPS.desk(now);
     if (rotation[1] === 'sofa') {
-      if (n.energy < 0.34 && canSleep) return TRIPS.nap(now);
+      if (n.fatigue >= 0.66 && canSleep) return TRIPS.nap(now);
       return hour >= 19.5 ? TRIPS.tv(now) : TRIPS.balcony(now);
     }
     if (rotation[1] === 'dining') return n.hunger > 0.42 ? TRIPS.dinner(now) : TRIPS.snack(now);
@@ -1767,7 +1776,7 @@ function decideTarget(state, now, env) {
   }
 
   // 同一个时段待够了，就在几个「打发时间」里换一个，避免像钉在椅子上。
-  const options = n.energy < 0.34 && canSleep
+  const options = n.fatigue >= 0.66 && canSleep
     ? [TRIPS.nap(now), TRIPS.tv(now), TRIPS.balcony(now)]
     : hour < 15
       ? [TRIPS.balcony(now), TRIPS.tv(now), TRIPS.desk(now)]
@@ -1823,23 +1832,26 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     const h = elapsed / HOUR;
     const prevNeeds = { ...state.needs };
     const n = state.needs;
-    n.hunger = clamp01(n.hunger + 0.055 * h);
-    n.hygiene = clamp01((n.hygiene ?? 0.1) + 0.06 * h);
-    n.thirst = clamp01(n.thirst + 0.085 * h);
-    n.bladder = clamp01(n.bladder + 0.095 * h);
+    // 增速按「一天几轮」定，而不是随手取的每小数：
+    // 饿 0.09/时 → 7 小时一轮，一天 3 顿；渴 0.13 → 5 小时一轮，一天 4 次；
+    // 憋 0.13 → 5.5 小时一轮；邋遢 0.10 → 8 小时一轮，一天洗两次。
+    // 之前清爽 0.06/时（13 小时一轮）条几乎不动，用户看不出变化。
+    n.hunger = clamp01(n.hunger + 0.09 * h);
+    n.hygiene = clamp01((n.hygiene ?? 0.1) + 0.10 * h);
+    n.thirst = clamp01(n.thirst + 0.13 * h);
+    n.bladder = clamp01(n.bladder + 0.13 * h);
     if (state.asleep) {
-      // 睡觉回精力：原来 0.12/小时太慢（睡一晚才回满），改成 0.9/小时，
-      // 约 1 小时能从见底回到 0.9，观感上「睡一觉就缓过来」。
-      n.energy = clamp01(n.energy + 2.0 * h);
+      // 睡觉回体力（fatigue 往下走）：睡满一小时基本就缓过来了。
+      n.fatigue = clamp01(n.fatigue - 2.0 * h);
       // 睡着时饥饿/口渴/如厕都放慢，醒来才不至于崩溃
       n.hunger = clamp01(n.hunger - 0.02 * h);
       n.thirst = clamp01(n.thirst - 0.02 * h);
       n.bladder = clamp01(n.bladder - 0.01 * h);
     } else {
-      n.energy = clamp01(n.energy - 0.042 * h);
+      n.fatigue = clamp01(n.fatigue + 0.055 * h);
     }
     if (n.pain > 0) n.pain = clamp01(n.pain - 0.055 * h);
-    if (n.energy < 0.05 && n.pain < 0.28) n.pain = 0.28;
+    if (n.fatigue > 0.95 && n.pain < 0.28) n.pain = 0.28;
     // 需求越线日志（只记「变糟」的那一次）
     const bucketOf = (v) => (v < 0.4 ? 0 : v < 0.6 ? 1 : v < 0.78 ? 2 : 3);
     const NEED_TEXT = {
@@ -1853,8 +1865,8 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
         emit(state, `need_${key}`, NEED_TEXT[key][b1 - 1], now);
       }
     }
-    if (bucketOf(1 - state.needs.energy) > bucketOf(1 - prevNeeds.energy) && state.needs.energy < 0.35) {
-      emit(state, 'need_energy', '累了，快撑不住了', now);
+    if (bucketOf(state.needs.fatigue) > bucketOf(prevNeeds.fatigue) && state.needs.fatigue > 0.65) {
+      emit(state, 'need_fatigue', '累了，快撑不住了', now);
     }
     if ((state.needs.hygiene ?? 0) >= 0.6 && (prevNeeds.hygiene ?? 0) < 0.6) {
       emit(state, 'need_hygiene', '身上有点黏，该洗洗了', now);
@@ -1885,7 +1897,7 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
   // 收紧判定：深夜 + 精力确实很低 + 过了「别急着睡」保护期，才自己上床睡。
   // 被主人指到某处后至少清醒活动 9 分钟（awakeUntil），交互后 10 分钟内也不睡。
   if (!state.asleep && !state.sleepPending && now >= sleepHoldUntil(state)
-    && (hour >= 23.5 || hour < 6) && n.energy < 0.45) {
+    && (hour >= 23.5 || hour < 6) && n.fatigue >= 0.55) {
     state.command = null;
     state.nextDecisionAt = 0;
     changed = true;
@@ -1903,7 +1915,7 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
   }
   if (state.asleep) {
     const inBed = state.room === 'her_room' && state.spot === 'bed';
-    if (hour >= 6.8 && hour < 10 && n.energy >= 0.5) {
+    if (hour >= 6.8 && hour < 10 && n.fatigue <= 0.5) {
       state.asleep = false;
       state.lamp = true;
       state.nextDecisionAt = now + 2 * MIN;
@@ -2066,7 +2078,7 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
   const critical = n.bladder >= 0.93 || n.thirst >= 0.9 || n.hunger >= 0.93 || n.pain >= 0.7 || n.hygiene >= 0.92;
   // The caretaker may claim idle time, never sleep, commands, or bodily needs.
   if (env.gardenReady && !(state.command && now < state.command.until) && !state.sleepPending && !critical
-    && n.thirst < .62 && n.hunger < .66 && n.bladder < .7 && n.energy >= .35 && n.pain < .28 && n.hygiene < .78) return { state, changed };
+    && n.thirst < .62 && n.hunger < .66 && n.bladder < .7 && n.fatigue < .65 && n.pain < .28 && n.hygiene < .78) return { state, changed };
   if (now < state.nextDecisionAt && !critical) return { state, changed };
 
   const target = decideTarget(state, now, env);
@@ -2140,7 +2152,7 @@ export function applyHomeAction(state, input = {}) {
     s.counts.pet += 1;
     s.lastInteractionAt = now;
     s.reactionUntil = now + 9_000;
-    s.needs.energy = clamp01(s.needs.energy + 0.01);
+    s.needs.fatigue = clamp01(s.needs.fatigue - 0.01);
     const reaction = choosePetReaction(s, input.emotion);
     const reactionText = pickText(`${s.seed}:pet:${reaction.kind}`, reaction.texts);
     if (s.asleep) {
@@ -2204,7 +2216,7 @@ export function applyHomeAction(state, input = {}) {
     }
   } else if (action === 'play') {
     s.counts.play += 1;
-    s.needs.energy = clamp01(s.needs.energy + 0.02);
+    s.needs.fatigue = clamp01(s.needs.fatigue - 0.02);
     s.lastInteractionAt = now;
     s.reactionUntil = now + 10_000;
     if (!s.walking && !s.dwell) setActivity(s, 'play', '被人拉着玩了一会儿，笑出了声', s.pose, s.elev, s.facing);
@@ -2297,7 +2309,7 @@ export function applyHomeAction(state, input = {}) {
     } else {
       setActivity(s, 'wake', '被叫醒，揉着眼睛赖床', 'lie', 0.52, 180);
     }
-    s.needs.energy = clamp01(s.needs.energy + 0.04);
+    s.needs.fatigue = clamp01(s.needs.fatigue - 0.04);
     emit(s, 'wake', '被叫醒，迷迷糊糊坐起来', now);
     event = { type: 'wake', text: '你把她叫醒了' };
   } else if (action === 'clip') {
@@ -2360,7 +2372,7 @@ export function applyHomeAction(state, input = {}) {
     event = { type: 'command', text: `你让她去${HOME_LAYOUT.spots[room][spot].label}` };
   } else if (action === 'sick') {
     s.needs.pain = 0.82;
-    s.needs.energy = Math.min(s.needs.energy, 0.2);
+    s.needs.fatigue = Math.max(s.needs.fatigue, 0.8);
     s.command = null;
     s.nextDecisionAt = 0;
     emit(s, 'sick', '突然发起了烧，浑身没力气', now);
@@ -2516,7 +2528,7 @@ export function homeView(state, now = Date.now(), env = {}) {
     body: {
       hunger: round(s.needs.hunger),
       thirst: round(s.needs.thirst),
-      energy: round(s.needs.energy),
+      fatigue: round(s.needs.fatigue),
       bladder: round(s.needs.bladder),
       pain: round(s.needs.pain),
       hygiene: round(s.needs.hygiene ?? 0.1),
@@ -2579,7 +2591,7 @@ export function buildHomePromptLine(state, options = {}) {
   } else if (s.needs.pain >= 0.7) {
     lines.push(`你现在躺在床上起不来（${ROOM_NAMES[s.room] || s.room}），${words.pain}；${words.hunger}、${words.thirst}。你只能等好一点，渴了饿了会喊人，不要写自己下床去拿。`);
   } else {
-    lines.push(`你现在在${describeSpot(s.room, s.spot)}，${s.activity}。${words.energy}，${words.hunger}，${words.thirst}。`);
+    lines.push(`你现在在${describeSpot(s.room, s.spot)}，${s.activity}。${words.fatigue}，${words.hunger}，${words.thirst}。`);
   }
   if (events.length) {
     lines.push(`刚才：${events.slice(-3).map((e) => `${e.text}（${Math.max(1, Math.round((now - e.at) / MIN))} 分钟前）`).join('；')}。`);
@@ -2652,7 +2664,7 @@ export function endGardenWork(input, job, now, message, completed = false) {
   }
   state.nextDecisionAt = completed ? now + 30_000 : 0;
   if (completed) {
-    state.needs.energy = clamp01(state.needs.energy - .002);
+    state.needs.fatigue = clamp01(state.needs.fatigue + .002);
     state.needs.thirst = clamp01(state.needs.thirst + .0015);
     // Each committed job emits once; save receipt in garden before saving this state.
     const action = job.action || {};

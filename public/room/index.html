@@ -94,6 +94,12 @@
   .emotion{font-size:10.5px; color:var(--accent-2); opacity:.9; white-space:nowrap}
   .emotion.low{color:var(--rose)}
   .emotion.high{color:var(--ok)}
+  /* 生病：从「舒适」指标条挪到头部。疼痛平时恒为 0，一根永远满格的条没有信息量；
+     真正需要一眼看到的是「她现在病了」，这本来就是状态而不是连续量。 */
+  .emotion.sick{
+    color:#fff; background:rgba(224,125,125,.92); border-radius:999px;
+    padding:1px 7px; opacity:1; font-weight:600; letter-spacing:.04em;
+  }
   .activity{margin:0; font-size:15px; line-height:1.55; min-height:44px}
   .activity .spot{color:var(--accent-2); font-size:12px; display:block; margin-bottom:2px; letter-spacing:.08em}
   .mood{display:grid; gap:7px}
@@ -633,17 +639,18 @@
   </div>
 
   <aside class="panel her-panel">
-    <div class="panel-head"><span class="room" id="roomName">客厅</span><span class="head-right"><span class="emotion" id="emotionChip"></span><span class="clock" id="clock">--:--</span></span></div>
+    <div class="panel-head"><span class="room" id="roomName">客厅</span><span class="head-right"><span class="emotion sick" id="sickChip" hidden>生病</span><span class="emotion" id="emotionChip"></span><span class="clock" id="clock">--:--</span></span></div>
     <p class="activity" id="activity"><span class="spot" id="spotLabel"></span><span id="activityText">正在推门进去…</span></p>
     <div class="mood" id="mood">
-      <!-- 六根条统一「满 = 好」。刻度由 need-bars.js 的 tickPercents() 在启动时画上去，
+      <!-- 五根条统一「满 = 好」。刻度由 need-bars.js 的 tickPercents() 在启动时画上去，
            标的是她自己的行为阈值（普通 = 到了会自己处理，红色 = 到了算紧急）。
-           数字不许写死在这里：写死就会和 src/home-state.js 的 decideTarget 漂移。 -->
+           数字不许写死在这里：写死就会和 src/home-state.js 的 decideTarget 漂移。
+           「舒适」那根删掉了：pain 平时恒为 0（只有「生病」命令会推上去），
+           一根长期满格的条没有信息量；生病改成头部显眼的标签。 -->
       <div class="mood-row" data-need="energy"><span>体力</span><div class="bar energy"><i id="barEnergy" style="width:70%"></i></div><span class="word" id="wordEnergy"></span></div>
       <div class="mood-row" data-need="hunger"><span>饱腹</span><div class="bar hunger"><i id="barHunger" style="width:70%"></i></div><span class="word" id="wordHunger"></span></div>
       <div class="mood-row" data-need="thirst"><span>水分</span><div class="bar thirst"><i id="barThirst" style="width:70%"></i></div><span class="word" id="wordThirst"></span></div>
       <div class="mood-row" data-need="hygiene"><span>清爽</span><div class="bar hygiene"><i id="barHygiene" style="width:90%"></i></div><span class="word" id="wordHygiene"></span></div>
-      <div class="mood-row" data-need="pain"><span>舒适</span><div class="bar comfort"><i id="barPain" style="width:100%"></i></div><span class="word" id="wordPain"></span></div>
       <div class="mood-row" data-need="bladder"><span>轻松</span><div class="bar bladder"><i id="barBladder" style="width:80%"></i></div><span class="word" id="wordBladder"></span></div>
     </div>
     <div class="act-group">
@@ -651,7 +658,8 @@
       <div class="actions">
         <button class="act" data-act="feed">喂小鱼干</button>
         <button class="act" data-act="water">去喝水</button>
-        <button class="act" data-act="wash">去洗漱</button>
+        <button class="act" data-act="wash">洗脸刷牙</button>
+        <button class="act" data-act="shower">洗澡</button>
         <button class="act" data-act="toilet">去卫生间</button>
         <button class="act" id="sleep" data-act="sleep">哄她睡</button>
         <button class="act" id="lamp" data-act="lamp">关灯</button>

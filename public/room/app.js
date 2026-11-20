@@ -1833,7 +1833,7 @@ function syncActionHints(body) {
     const a = btn.dataset.act;
     btn.classList.toggle('glow', glow.has(a));
     // 睡着或疼得动不了时，这些「要她自己动」的指令发出去也不会执行
-    const needsHer = a === 'water' || a === 'wash' || a === 'toilet' || a === 'play' || a === 'poke';
+    const needsHer = a === 'water' || a === 'wash' || a === 'shower' || a === 'toilet' || a === 'play' || a === 'poke';
     const disabled = (asleep || immobile) && needsHer;
     if (btn.disabled !== disabled) btn.disabled = disabled;
     // 原始提示语（title 在 HTML 里写的）留一份，置灰解除后要还原回去
@@ -1861,16 +1861,21 @@ function renderHUD() {
   $('barHunger').style.width = `${Math.round(pct.hunger * 100)}%`;
   $('barThirst').style.width = `${Math.round(pct.thirst * 100)}%`;
   $('barHygiene').style.width = `${Math.round(pct.hygiene * 100)}%`;
-  $('barPain').style.width = `${Math.round(pct.comfort * 100)}%`;
   $('barBladder').style.width = `${Math.round(pct.bladder * 100)}%`;
 
-  $('wordEnergy').textContent = body.words?.energy || '';
+  $('wordEnergy').textContent = body.words?.fatigue || '';
   $('wordHunger').textContent = body.words?.hunger || '';
   $('wordThirst').textContent = body.words?.thirst || '';
   $('wordHygiene').textContent = body.words?.hygiene || '';
-  $('wordPain').textContent = body.words?.pain || '';
   $('wordBladder').textContent = body.words?.bladder || '';
   syncActionHints(body);
+
+  // 生病：疼痛没有自然增长源，做成连续条等于长期满格，所以改成头部一个显眼标签。
+  const sickChip = $('sickChip');
+  if (sickChip) {
+    sickChip.hidden = !her.immobile;
+    if (her.immobile) sickChip.title = body.words?.pain || '她病得起不来床';
+  }
 
   const emo = state.emotion;
   const emoChip = $('emotionChip');
@@ -2687,9 +2692,11 @@ document.querySelectorAll('[data-act]').forEach((btn) => {
     if (a === 'talk') { openTalk(); return; }
     if (a === 'sleep') { act(lastSleep ? 'wake' : 'sleep'); return; }
     if (a === 'lamp') { act('lamp', { on: !(state?.env?.lamp) }); return; }
-    // 洗漱/卫生间在服务端没有同名 action，是前端翻成「去某个站位」的 command。
-    // 这两条以前藏在「现在可以」那排推荐里，推荐删掉后必须在这儿有正式入口。
-    if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink', label: '洗漱' }); return; }
+    // 洗漱/卫生间/洗澡在服务端没有同名 action，是前端翻成「去某个站位」的 command。
+    // 这三条以前藏在「现在可以」那排推荐里，推荐删掉后必须在这儿有正式入口。
+    // 洗脸刷牙和洗澡力度不同（−0.45 保底 0.10 / −0.90），脏透了要点后者。
+    if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink', label: '洗脸刷牙' }); return; }
+    if (a === 'shower') { act('command', { room: 'bathroom', spot: 'shower', label: '洗澡' }); return; }
     if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet', label: '卫生间' }); return; }
     if (a === 'garden') { gardenController?.toggle?.(); return; }
     if (a === 'roomchat') { setRoomChatOpen(!chatOpen); return; }

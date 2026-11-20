@@ -8,16 +8,16 @@ import { loadHomeState, saveHomeState, advanceHomeState, beginGardenWork, endGar
 
 const ACTIONS = ['till','plant','water','fertilize','harvest','sell','buySeed','buyCompost'];
 
-// 各种菜园动作的体力消耗（energy 越低越累；同时会稍微变饿变渴）
+// 各种菜园动作的体力消耗（fatigue 越高越累；同时会稍微变饿变渴）
 const GARDEN_ENERGY_COST = {
   till: 0.045, harvest: 0.035, water: 0.025, plant: 0.022, fertilize: 0.018,
   sell: 0.01, buySeed: 0.008, buyCompost: 0.008, visit: 0.005
 };
 // 去菜园的路程也要消耗（出发时扣一次）
-const GARDEN_TRAVEL_COST = { energy: 0.008, hunger: 0.006, thirst: 0.007 };
-function applyGardenCost(h, energy, hunger, thirst) {
+const GARDEN_TRAVEL_COST = { fatigue: 0.008, hunger: 0.006, thirst: 0.007 };
+function applyGardenCost(h, fatigue, hunger, thirst) {
   if (!h?.needs) return;
-  h.needs.energy = clamp01(h.needs.energy - energy);
+  h.needs.fatigue = clamp01(h.needs.fatigue + fatigue);
   h.needs.hunger = clamp01(h.needs.hunger + hunger);
   h.needs.thirst = clamp01(h.needs.thirst + thirst);
 }
@@ -32,7 +32,7 @@ function restReason(home, now, env = {}) {
   if (home.asleep || home.sleepPending) return '先睡觉，醒来再照料菜园';
   if (hour < 7 || hour >= 18) return '天黑了，菜园明天再说';
   const n=home.needs;
-  if (n.pain >= .28 || n.energy < .22) return '先恢复体力，菜园稍后再照料';
+  if (n.pain >= .28 || n.fatigue > .78) return '先恢复体力，菜园稍后再照料';
   if (n.thirst >= .62 || n.hunger >= .66 || n.bladder >= .7) return '先照顾身体，稍后回来继续';
   if ((home.command && now < home.command.until) || (home.freeTarget && now < home.freeTarget.until) || now < home.reactionUntil || now < home.lastInteractionAt + 20_000) return '先回应你的安排，之后再来菜园';
   if ((env.unread || 0)>0 && now-(home.lastPhoneAt||0)>20*60_000) return '先看看消息，稍后再照料菜园';
@@ -265,7 +265,7 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
           else{
             g.care.task=next;next.startedAt=now;next.phase='walking';
             h=beginGardenWork(h,next,now);
-            applyGardenCost(h, GARDEN_TRAVEL_COST.energy, GARDEN_TRAVEL_COST.hunger, GARDEN_TRAVEL_COST.thirst);
+            applyGardenCost(h, GARDEN_TRAVEL_COST.fatigue, GARDEN_TRAVEL_COST.hunger, GARDEN_TRAVEL_COST.thirst);
             g.care.status=`出发去${labels[next.action.type]}`;homeTransition=true;
           }
         }else{g.care.status=g.care.autoEnabled?'菜园照料好了，等作物慢慢长大':'自主照料已暂停，你仍可请小蓝鱼完成指定操作';g.care.nextPlanAt=now+15_000;}

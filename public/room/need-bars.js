@@ -9,46 +9,51 @@
 
 /**
  * 每根条的取值口径（0~1，1 = 满 = 好）。
+ * 后端 needs 现在全部统一「1 = 糟」（fatigue/hunger/thirst/hygiene/bladder/pain），
+ * 所以这里**每一根都要取反**，没有例外——以前 energy 是唯一一个反方向的，容易记错。
  * @param {object} body homeView().body
  * @param {object} [state] homeView()（心情是只读快照，只有这里用到）
- * @returns {{energy:number,hunger:number,thirst:number,hygiene:number,comfort:number,bladder:number,mood:number}}
+ * @returns {{energy:number,hunger:number,thirst:number,hygiene:number,bladder:number,mood:number}}
  */
 export function barPercents(body, state) {
   const b = body || {};
   const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
   const mood = Number(state?.emotion?.mood);
   return {
-    energy: clamp01(b.energy ?? 1),
+    energy: 1 - clamp01(b.fatigue),     // 体力 = 1 - 疲劳
     hunger: 1 - clamp01(b.hunger),      // 饱腹 = 1 - 饿
     thirst: 1 - clamp01(b.thirst),      // 水分 = 1 - 渴
     hygiene: 1 - clamp01(b.hygiene),    // 清爽 = 1 - 邋遢
-    comfort: 1 - clamp01(b.pain),       // 舒适 = 1 - 不舒服
     bladder: 1 - clamp01(b.bladder),    // 轻松 = 1 - 憋
     mood: Number.isFinite(mood) ? Math.max(0, Math.min(100, mood)) : 70
   };
 }
 
 /**
- * 她自己的行动阈值（**原始 needs 口径**，即「越高越糟」的那一侧）。
+ * 她自己的行动阈值（**原始 needs 口径**，现在全部「越高越糟」）。
  * act    = 到了这个点她会自己处理（decideTarget 的普通分支）
  * urgent = 到了这个点算紧急（插队；也是 caretaker 不能占用她时间的下限）
+ *
+ * 注意这里**没有 pain**：疼痛没有自然增长源（只有「生病」命令会推上去），
+ * 所以它不做成指标条（长期满格没有信息量），改成头部一个「生病」标签。
  */
 export const NEED_THRESHOLDS = Object.freeze({
-  energy: Object.freeze({ act: 0.28, urgent: 0.05 }),
+  energy: Object.freeze({ act: 0.72, urgent: 0.95 }),
   hunger: Object.freeze({ act: 0.66, urgent: 0.88 }),
   thirst: Object.freeze({ act: 0.62, urgent: 0.86 }),
   hygiene: Object.freeze({ act: 0.78, urgent: 0.92 }),
-  pain: Object.freeze({ act: 0.28, urgent: 0.7 }),
   bladder: Object.freeze({ act: 0.7, urgent: 0.93 })
 });
 
-/** 条的展示配置：顺序、中文名、对应 homeView().body 的字段名。 */
+/**
+ * 条的展示配置：顺序、中文名、对应 homeView().body 的字段名。
+ * 五根根条都有真实来源（自己会涨、动作会降），没有一根是摆设。
+ */
 export const NEED_BARS = Object.freeze([
-  { key: 'energy', label: '体力', field: 'energy', direction: 'high-good' },
+  { key: 'energy', label: '体力', field: 'fatigue', direction: 'low-good' },
   { key: 'hunger', label: '饱腹', field: 'hunger', direction: 'low-good' },
   { key: 'thirst', label: '水分', field: 'thirst', direction: 'low-good' },
   { key: 'hygiene', label: '清爽', field: 'hygiene', direction: 'low-good' },
-  { key: 'pain', label: '舒适', field: 'pain', direction: 'low-good' },
   { key: 'bladder', label: '轻松', field: 'bladder', direction: 'low-good' }
 ]);
 
@@ -80,10 +85,14 @@ export function glowActions(body, state) {
   const n = (k) => Number(b[k]) || 0;
   if (n('hunger') >= NEED_THRESHOLDS.hunger.act) out.add('feed');
   if (n('thirst') >= NEED_THRESHOLDS.thirst.act) out.add('water');
-  if (n('hygiene') >= NEED_THRESHOLDS.hygiene.act) out.add('wash');
+  if (n('hygiene') >= NEED_THRESHOLDS.hygiene.act) {
+    // 洗脸刷牙只到「干净一点」，脏透了要点洗澡，所以两只都亮：
+    // 轻清洁永远够用，但邋遢到极限时洗澡才是那个正确答案。
+    out.add('wash');
+    out.add('shower');
+  }
   if (n('bladder') >= NEED_THRESHOLDS.bladder.act) out.add('toilet');
-  if ((Number(b.energy) || 1) <= NEED_THRESHOLDS.energy.act) out.add('sleep');
-  if (n('pain') >= NEED_THRESHOLDS.pain.act) out.add('lamp');
+  if (n('fatigue') >= NEED_THRESHOLDS.energy.act) out.add('sleep');
   const mood = Number(state?.emotion?.mood);
   if (Number.isFinite(mood) && mood < 50) out.add('pet');
   return out;
