@@ -715,7 +715,9 @@ function applyRoomLabels() {
 }
 function setRoomLabels(on) {
   roomLabelsOn = !!on;
-  try { localStorage.setItem('home-labels', roomLabelsOn ? '1' : '0'); } catch {}
+  // 不写 localStorage：这是调试开关，记住它只会让下次刷新「莫名其妙又有标记」。
+  // 顺手清掉以前存下的值，免得旧浏览器残留继续生效。
+  try { localStorage.removeItem('home-labels'); } catch {}
   applyRoomLabels();
 }
 
@@ -1495,7 +1497,10 @@ if (!Number.isFinite(weatherIntensity)) weatherIntensity = 0.6;
 
 const SKY_FROM_URL = params.get('sky');
 // 地板上的房间名：默认关闭，用户可在「设置 → 房间名」打开
-let roomLabelsOn = localStorage.getItem('home-labels') === '1';
+// 房间名是**调试辅助**（开发模式里的开关），不该被记住。
+// 以前存在 localStorage 里：只要你开过一次，之后每次刷新都会重新显示，
+// 看起来像「默认打开了」。现在每次进页面都是关的，需要时手动开。
+let roomLabelsOn = false;
 
 let skyMode = SKY_FROM_URL || localStorage.getItem('home-sky') || 'day';
 if (skyMode === 'auto' || !SKY_PRESETS[skyMode]) skyMode = 'day';
@@ -2543,23 +2548,39 @@ async function sendTalk() {
 
 /**
  * 点中家具 → 在那件家具上方弹菜单。
- * 锚点优先用命中物件自己在世界里的位置（hotspot 是贴在物件上的透明柱），
- * 这样菜单永远指着你点的那个东西；落到屏幕上的位置由 layoutSpotMenu 每帧重算。
+ *
+ * 锚点用**命中的那个 hotspot 自己的世界坐标**，不用 raycast 的落点。
+ * 原因：家具现在按整块矩形命中（点边缘也算），而 hotspot 圆柱很小 ——
+ * 点在矩形边缘时射线根本没打到圆柱，hit 为空，锚点会掉到世界原点，
+ * 菜单就跑到离物件很远的地方。用 hotspot 自身位置则永远贴在它上头。
  */
 function showSpotMenuFor(hs, ev) {
-  ndc.x = (ev.clientX / innerWidth) * 2 - 1;
-  ndc.y = -(ev.clientY / innerHeight) * 2 + 1;
-  raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObjects(world.hotspots, false)[0];
-  let at;
-  if (hit?.point) {
-    // 取命中点上方一点：正好压在物件顶面往下看的位置，视觉上「从物件上冒出来」
-    at = { x: hit.point.x, y: hit.point.y + 0.35, z: hit.point.z };
-  } else if (hit?.object) {
-    const p = hit.object.position;
-    at = { x: p.x, y: p.y + 0.35, z: p.z };
-  } else {
-    at = { x: 0, y: 0.6, z: 0 };
+  // 先在场景里找到这个 hotspot 对应的 mesh，取它的位置当锚点
+  let at = null;
+  for (const m of world.hotspots || []) {
+    const h = m.userData?.hotspot;
+    if (!h || h !== hs) continue;
+    at = { x: m.position.x, y: m.position.y + 0.35, z: m.position.z };
+    break;
+  }
+  // 兜底：按 room+spot 再找一次（hotspot 对象可能是重建过的副本）
+  if (!at) {
+    for (const m of world.hotspots || []) {
+      const h = m.userData?.hotspot;
+      if (!h || h.room !== hs.room || h.spot !== hs.spot) continue;
+      at = { x: m.position.x, y: m.position.y + 0.35, z: m.position.z };
+      break;
+    }
+  }
+  // 最后兜底才是射线落点（理论上到不了这里）
+  if (!at) {
+    ndc.x = (ev.clientX / innerWidth) * 2 - 1;
+    ndc.y = -(ev.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObjects(world.hotspots, false)[0];
+    at = hit?.point
+      ? { x: hit.point.x, y: hit.point.y + 0.35, z: hit.point.z }
+      : { x: 0, y: 0.6, z: 0 };
   }
   openSpotMenu(hs, at);
 }
@@ -3347,6 +3368,11 @@ function showNavMap(bigMode = navMapBig) {
 
 bindTimeBar();
 updateTimeUI();
+// 启动时强制关掉房间名标记，并清掉历史遗留的 localStorage 值。
+// 用户反馈「每次刷新都会显示出各个地方的标记」——根源就是它以前被持久化了，
+// 开过一次就永久开着。房间名是调试辅助，默认应该是关的。
+roomLabelsOn = false;
+try { localStorage.removeItem('home-labels'); } catch {}
 applyRoomLabels();
 layoutSideCards();
 window.addEventListener('resize', () => { try { layoutSideCards(); } catch {} try { layoutSpotMenu(); } catch {} });

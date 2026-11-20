@@ -166,4 +166,33 @@ test('K 区里没有 hotspot 的区域返回 null（不误弹菜单）', () => {
   assert.equal(hit, null, `电视柜应该没有菜单，实际 ${hit?.room}.${hit?.spot}`);
 });
 
+test('菜单锚点用 hotspot 自身坐标，不用射线落点', () => {
+  // 家具按整块矩形命中后，点在矩形边缘时射线根本打不到那个小圆柱 ——
+  // 如果锚点还用 hit.point，hit 为空就会掉到世界原点，菜单跑到离物件很远的地方。
+  // 所以必须用命中的那个 hotspot 自己的世界坐标当锚点。
+  const appSrc = read('public/room/app.js');
+  const fn = appSrc.slice(appSrc.indexOf('function showSpotMenuFor'));
+  const body = fn.slice(0, fn.indexOf('\n}') + 2);
+  assert.ok(/m\.position\.x/.test(body), 'showSpotMenuFor 应该用 hotspot mesh 的 position 当锚点');
+  // 射线兜底应该排在后面（先找 mesh，找不到才用射线）
+  const meshIdx = body.indexOf('m.position.x');
+  const rayIdx = body.indexOf('raycaster.setFromCamera');
+  assert.ok(meshIdx >= 0 && rayIdx > meshIdx,
+    '应该先按 hotspot mesh 取锚点，射线落点只作为最后的兜底');
+});
+
+test('房间名标记不持久化，刷新后默认关闭', () => {
+  // 用户反馈「每次刷新之后会把各个地方的标记显示出来」——
+  // 根源是 roomLabelsOn 以前从 localStorage 读，开过一次就永久开着。
+  const appSrc = read('public/room/app.js');
+  assert.ok(!/roomLabelsOn\s*=\s*localStorage\.getItem\('home-labels'\)/.test(appSrc),
+    'roomLabelsOn 不该再从 localStorage 读初值');
+  assert.ok(/let roomLabelsOn = false;/.test(appSrc),
+    'roomLabelsOn 应该默认 false');
+  assert.ok(!/localStorage\.setItem\('home-labels'/.test(appSrc),
+    '不该再把 home-labels 写进 localStorage');
+  assert.ok(/localStorage\.removeItem\('home-labels'\)/.test(appSrc),
+    '应该主动清掉历史遗留的 home-labels（旧浏览器里可能还存着 1）');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
