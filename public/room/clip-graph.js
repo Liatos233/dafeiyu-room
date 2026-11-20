@@ -163,7 +163,6 @@ const view = { x: 0, y: 0, k: 1 };
 let viewInited = false;   // 首次打开时把图坐标原点放到画布中心
 let dragNode = null;
 let dragPan = null;
-let physicsOn = true;
 let lastNow = 0;
 let currentClip = null;
 let currentSince = 0;
@@ -172,8 +171,10 @@ let sideNext = 0;          // 侧栏节流
 function nodeFor(name) {
   if (!nodes.has(name)) {
     const i = nodes.size;
-    const ang = (i * 137.5) * Math.PI / 180;   // 黄金角撒开，物理会自己整理
-    const r = 60 + (i % 7) * 26;
+    const ang = (i * 137.5) * Math.PI / 180;   // 黄金角撒开
+    // 螺旋外扩：clip 可能有三百多个，全挤在几百像素里物理要很久才散得开。
+    // 按 sqrt(i) 铺到更大范围，物理预热几十帧就能稳定。
+    const r = 70 + 55 * Math.sqrt(i);
     nodes.set(name, {
       name, cls: classifyClip(name),
       x: Math.cos(ang) * r, y: Math.sin(ang) * r,
@@ -217,10 +218,16 @@ function stepPhysics(dt) {
   const list = [...nodes.values()];
   const n = list.length;
   if (!n) return;
-  const REPUL = 5200;      // 节点间斥力
-  const SPRING = 0.035;    // 边引力
-  const CENTER = 0.15;     // 向心力
+  // 这套参数是为「几十上百个节点、要能摊开看清」调的：
+  //   斥力大 + 向心力弱 → 节点会真正散开，不会挤成一团；
+  //   边更长 → 有转移关系的两个片段之间留出放标签的余地；
+  //   SOFT_R 是软边界，防止几个孤立节点被斥力推到天边。
+  const REPUL = 26000;     // 节点间斥力（原来 5200，太小 → 挤一堆）
+  const SPRING = 0.02;     // 边引力
+  const CENTER = 0.012;    // 向心力（原来 0.15，太大 → 全被吸到原点）
   const DAMP = 0.86;
+  const MAX_D2 = 900 * 900;
+  const SOFT_R = 900;      // 软边界半径
 
   for (let i = 0; i < n; i++) {
     const a = list[i];
@@ -230,7 +237,7 @@ function stepPhysics(dt) {
       let dx = a.x - b.x, dy = a.y - b.y;
       let d2 = dx * dx + dy * dy;
       if (d2 < 1e-4) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = dx * dx + dy * dy; }
-      if (d2 > 360 * 360) continue;   // 太远不斥（省 CPU）
+      if (d2 > MAX_D2) continue;   // 太远不斥（省 CPU）
       const d = Math.sqrt(d2);
       const f = REPUL / d2;
       const fx = (dx / d) * f, fy = (dy / d) * f;
@@ -243,7 +250,7 @@ function stepPhysics(dt) {
     if (!a || !b) continue;
     const dx = b.x - a.x, dy = b.y - a.y;
     const d = Math.hypot(dx, dy) || 1;
-    const want = 95 + Math.min(60, ed.count * 9);   // 常走的边更松弛
+    const want = 150 + Math.min(90, ed.count * 12);   // 常走的边更松弛
     const f = (d - want) * SPRING;
     const fx = (dx / d) * f, fy = (dy / d) * f;
     a.vx += fx * dt; a.vy += fy * dt;
@@ -252,6 +259,14 @@ function stepPhysics(dt) {
   for (const nd of list) {
     nd.vx -= nd.x * CENTER * dt;
     nd.vy -= nd.y * CENTER * dt;
+    // 软边界：超出 SOFT_R 就拉回来（系数不能太小，否则斥力会把节点推到很远，
+    // 图幅一大，fitView 只能缩到 0.4 倍，节点和标签就糊成一片了）
+    const rr = Math.hypot(nd.x, nd.y);
+    if (rr > SOFT_R) {
+      const pull = (rr - SOFT_R) * 0.9 * dt;
+      nd.vx -= (nd.x / rr) * pull;
+      nd.vy -= (nd.y / rr) * pull;
+    }
     if (dragNode?.node === nd) { nd.x = dragNode.x; nd.y = dragNode.y; nd.vx = nd.vy = 0; continue; }
     nd.x += nd.vx * dt; nd.y += nd.vy * dt;
     const sp = Math.hypot(nd.vx, nd.vy);
@@ -292,9 +307,11 @@ function edgePath(x1, y1, x2, y2, r1, r2) {
   const ux = dx / d, uy = dy / d;
   const a1x = x1 + ux * (r1 + 3), a1y = y1 + uy * (r1 + 3);
   const a2x = x2 - ux * (r2 + 1), a2y = y2 - uy * (r2 + 1);   // 箭头 refX=8，贴到节点边
-  // 轻微弓形：双向边（A→B 与 B→A）在视觉上分开
-  const mx = (a1x + a2x) / 2 - uy * d * 0.07;
-  const my = (a1y + a2y) / 2 + ux * d * 0.07;
+  // 轻微弓形：双向边（A→B 与 B→A）在视觉上分开。
+  // 弓高按距离比例，但设上限 —— 边变长之后大弓会互相穿插，看着更乱。
+  const bow = Math.min(26, d * 0.045);
+  const mx = (a1x + a2x) / 2 - uy * bow;
+  const my = (a1y + a2y) / 2 + ux * bow;
   return `M ${a1x.toFixed(1)} ${a1y.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${a2x.toFixed(1)} ${a2y.toFixed(1)}`;
 }
 
@@ -377,9 +394,23 @@ function render() {
   }
 
   const seenL = new Set();
+  // 节点多的时候只给「活跃度高」的节点画标签：几十上百个标签叠在一起看不清，
+  // 留着节点形状 + 颜色（类别）已经足够看出结构。当前片段永远显示标签。
+  const labelLimit = (() => {
+    const n = nodes.size;
+    if (n <= 60) return -1;   // 数量不多，全显示
+    const acts = [...nodes.values()].map((d) => d.inN + d.outN).sort((a, b) => b - a);
+    return acts[Math.min(acts.length - 1, Math.round(acts.length * 0.5))] || 0;
+  })();
   for (const nd of nodes.values()) {
     seenL.add(nd);
+    const isCur = currentClip === nd.name;
+    const showLabel = labelLimit < 0 || isCur || (nd.inN + nd.outN) >= labelLimit;
     let t = svg.__label.get(nd);
+    if (!showLabel) {
+      if (t) t.style.display = 'none';
+      continue;
+    }
     if (!t) {
       t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       t.setAttribute('text-anchor', 'middle');
@@ -392,10 +423,11 @@ function render() {
       svg.__label.set(nd, t);
       gLabels.appendChild(t);
     }
+    if (t.style.display === 'none') t.style.display = '';
     t.setAttribute('x', nd.x);
     t.setAttribute('y', nd.y + nd.r + 11);
-    t.setAttribute('fill', currentClip === nd.name ? '#fff' : '#cfe0f2');
-    t.setAttribute('font-weight', currentClip === nd.name ? '700' : '500');
+    t.setAttribute('fill', isCur ? '#fff' : '#cfe0f2');
+    t.setAttribute('font-weight', isCur ? '700' : '500');
   }
   for (const [nd, t] of svg.__label) {
     if (!seenL.has(nd)) { t.remove(); svg.__label.delete(nd); }
@@ -522,22 +554,63 @@ function tick(now) {
     currentClip = window.__drawState.clip;
     currentSince = performance.now();
   }
-  if (physicsOn) stepPhysics(dt);
+  stepPhysics(dt);
   render();
   renderSide();
   applyView();
   rafId = requestAnimationFrame(tick);
 }
+/** 把整张图整体缩放到目标半径（力导向的平衡半径不可控，预热后归一化最稳）。 */
+function normalizeLayout(targetR) {
+  const list = [...nodes.values()];
+  let maxR = 0;
+  for (const nd of list) maxR = Math.max(maxR, Math.hypot(nd.x, nd.y));
+  if (maxR < 1) return;
+  const s = targetR / maxR;
+  if (Math.abs(s - 1) < 0.02) return;
+  for (const nd of list) {
+    nd.x *= s; nd.y *= s;
+    nd.vx = 0; nd.vy = 0;
+  }
+}
+
+/** 把整张图缩放到刚好放进画布（居中）。 */
+function fitView(w, h, padding = 70) {
+  const list = [...nodes.values()];
+  if (!w || !h || !list.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const nd of list) {
+    // 节点圆 + 下方标签都要算进去，否则标签会被裁掉
+    minX = Math.min(minX, nd.x - nd.r - 40);
+    maxX = Math.max(maxX, nd.x + nd.r + 40);
+    minY = Math.min(minY, nd.y - nd.r - 24);
+    maxY = Math.max(maxY, nd.y + nd.r + 46);
+  }
+  const gw = Math.max(1, maxX - minX);
+  const gh = Math.max(1, maxY - minY);
+  const k = Math.min(2, Math.max(0.25, Math.min((w - padding * 2) / gw, (h - padding * 2) / gh)));
+  view.k = k;
+  // 图坐标 cx 映射到画布中心：px = gx*k + view.x  →  view.x = w/2 - cx*k
+  view.x = w / 2 - ((minX + maxX) / 2) * k;
+  view.y = h / 2 - ((minY + maxY) / 2) * k;
+}
+
 function applyView() {
   if (!svg) return;
   const rect = svg.getBoundingClientRect();
-  const w = rect.width || 800, h = rect.height || 500;
-  // 首帧把图坐标原点平移到画布中心：view.x/y 是「图原点在画布上的像素位置」，
-  // viewBox 原点 = -view（左上角），svgPoint 的反算与 wheel 缩放都按这一套推导。
+  const w = rect.width, h = rect.height;
+  // 容器刚 display:block 时可能还量到 0 —— 等下一帧再算，别用一个假尺寸去居中
+  // （这正是「打开后图跑到左上角」的原因：首帧拿到 0，view.x/y 被设成兜底值）。
+  if (!(w > 50 && h > 50)) return;
   if (!viewInited) {
+    if (!nodes.size) return;   // 还没有节点，等 ingest 之后再做
     viewInited = true;
-    view.x = w / 2;
-    view.y = h / 2;
+    // 先让物理跑几百步把布局摊开，再归一化到目标半径，最后居中等比适配。
+    // 否则第一眼看到的是所有节点还挤在原点附近的一坨。
+    for (let i = 0; i < 260; i += 1) stepPhysics(1 / 60);
+    // 节点越多，需要的半径越大；但也不能太大，否则 fitView 缩放后节点糊成一片。
+    normalizeLayout(150 + 14.5 * Math.sqrt(nodes.size));
+    fitView(w, h);
   }
   svg.setAttribute('viewBox', `${(-view.x / view.k).toFixed(2)} ${(-view.y / view.k).toFixed(2)} ${(w / view.k).toFixed(2)} ${(h / view.k).toFixed(2)}`);
 }
@@ -551,9 +624,9 @@ function build() {
       <div class="cg-topbar">
         <span class="cg-title">ANIM GRAPH · 动画转移图</span>
         <span class="spacer"></span>
-        <button class="cg-btn on" data-cg="physics">物理:开</button>
         <button class="cg-btn" data-cg="reset">重置数据</button>
         <button class="cg-btn" data-cg="cluster">按类收拢</button>
+        <button class="cg-btn" data-cg="fit">居中适配</button>
         <button class="cg-btn" data-cg="close">✕ 关闭</button>
       </div>
     </div>
@@ -579,11 +652,10 @@ function build() {
   selInfo = rootEl.querySelector('.cg-selinfo');
 
   rootEl.querySelector('[data-cg="close"]').addEventListener('click', () => setAnimGraphOpen(false));
-  const physicsBtn = rootEl.querySelector('[data-cg="physics"]');
-  physicsBtn.addEventListener('click', () => {
-    physicsOn = !physicsOn;
-    physicsBtn.classList.toggle('on', physicsOn);
-    physicsBtn.textContent = physicsOn ? '物理:开' : '物理:关';
+  // 「居中适配」：手动把整张图缩放到刚好放进画布（滚轮缩放/拖动之后想回到全景时用）
+  rootEl.querySelector('[data-cg="fit"]').addEventListener('click', () => {
+    viewInited = false;   // 让 applyView 重新算一次
+    applyView();
   });
   rootEl.querySelector('[data-cg="reset"]').addEventListener('click', () => {
     nodes.clear(); edges.clear();
@@ -593,7 +665,7 @@ function build() {
     svg.__label?.forEach((t) => t.remove()); svg.__label?.clear();
     currentClip = null;
     ingest(window.__clipLog);
-    // 重建后立刻刷一帧（physicsOn 关闭时也要出图）
+    // 重建后立刻刷一帧
     render();
   });
   rootEl.querySelector('[data-cg="cluster"]').addEventListener('click', () => {
@@ -626,6 +698,9 @@ export function setAnimGraphOpen(on) {
       opened = true;
       rootEl.classList.add('on');
       lastNow = performance.now();
+      // 每次打开都重新做「居中适配」：上次可能拖过/缩过，再打开还留在那个视角
+      // 会让人以为「图跑到左上角去了」。用户也可以随时点「居中适配」手动回全景。
+      viewInited = false;
       ingest(window.__clipLog);
       rafId = requestAnimationFrame(tick);
     }

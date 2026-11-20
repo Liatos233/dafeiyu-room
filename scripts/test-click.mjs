@@ -310,4 +310,29 @@ test('关开发模式时把打开过的调试层全部收掉', () => {
     'app.js 应该 import setAnimGraphOpen');
 });
 
+test('动画转移图：无物理开关、打开即居中、布局不挤', () => {
+  const src = read('public/room/clip-graph.js');
+  // 1. 物理开关已移除
+  assert.ok(!/data-cg="physics"/.test(src), '不该再有「物理」开关按钮');
+  assert.ok(!/physicsOn/.test(src), '不该再有 physicsOn 变量');
+  // 2. 新增「居中适配」按钮，且打开时强制重新适配
+  assert.ok(/data-cg="fit"/.test(src), '应该有「居中适配」按钮');
+  assert.ok(/居中适配/.test(src), '按钮文案应该是「居中适配」');
+  const openFn = src.slice(src.indexOf('export function setAnimGraphOpen'));
+  const openBody = openFn.slice(0, openFn.indexOf('\n}\n') + 3);
+  assert.ok(/viewInited = false/.test(openBody), '每次打开都应重置 viewInited（重新居中）');
+  // 3. 尺寸没就绪时不能拿兜底值去居中（这是「跑到左上角」的原因）
+  const viewFn = src.slice(src.indexOf('function applyView'));
+  const viewBody = viewFn.slice(0, viewFn.indexOf('\n}\n') + 3);
+  assert.ok(/if \(!\(w > 50 && h > 50\)\) return/.test(viewBody),
+    'applyView 应该在容器尺寸有效时才初始化视图');
+  assert.ok(/normalizeLayout\(/.test(viewBody), '初始化时应归一化布局半径');
+  assert.ok(/fitView\(/.test(viewBody), '初始化时应做居中适配');
+  // 4. 布局归一化函数存在
+  assert.ok(/function normalizeLayout/.test(src), '应该有 normalizeLayout');
+  assert.ok(/function fitView/.test(src), '应该有 fitView');
+  // 5. 节点多时简化标签
+  assert.ok(/labelLimit/.test(src), '节点多时应该只给活跃节点画标签');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
