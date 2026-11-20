@@ -16,8 +16,11 @@ MAP = {
     "run_happy": ("dsh", "原地左转奔跑"),
     "run_hurry": ("dsh", "原地左转奔跑"),
     "back_idle": ("dsh", "待机呼吸休闲"),
-    "sleep_in": ("dsh1", "沙发打瞌睡"),
-    "sleep_loop": ("dsh1", "沙发打瞌睡"),
+    # 原来映射的是 dsh1 的「沙发打瞌睡」，那段素材画面里自带一把扶手椅，
+    # 叠在房间真实的沙发/床上就是两把椅子（见 docs/HANDOVER-clipping.md 阶段九）。
+    # 上游没有不自带家具的睡姿动作，退一步用「站着晃神打瞌睡」，与 nap 保持一致。
+    "sleep_in": ("dsh1", "站着晃神打瞌睡"),
+    "sleep_loop": ("dsh1", "站着晃神打瞌睡"),
     "sleep_out": ("dsh", "打瞌睡被惊醒"),
     "eat_rice": ("dsh", "吃午餐"),
     "eat_snack": ("dsh", "大口吃零食"),
