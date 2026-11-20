@@ -249,4 +249,19 @@ test('拖拽大肥鱼播「被鼠标拖拽悬空反馈」，且拖拽期间锁�
   assert.ok(/被鼠标拖拽悬空反馈/.test(actorSrc), 'actor.js 的 CLIPS 里应该有「被鼠标拖拽悬空反馈」');
 });
 
+test('2D 小地图的 K/S/N 标记始终显示，S 带站位名', () => {
+  const appSrc = read('public/room/app.js');
+  // K 编号不再被 navMapBig 挡住
+  assert.ok(/ctx\.fillText\('K' \+ \(i \+ 1\)/.test(appSrc),
+    'K 编号应该始终显示，不再被 navMapBig 挡住');
+  // S 编号带 label，且始终显示
+  assert.ok(/S\$\{i \+ 1\}·\$\{sp\.label/.test(appSrc),
+    'S 站位应该显示「S1·冰箱前」这种带名字的格式');
+  // N 编号始终显示
+  assert.ok(/ctx\.fillText\('N' \+ \(i \+ 1\)/.test(appSrc),
+    'N 编号应该始终显示');
+  // 地图图例（只在大图显示）里仍要说明这些字母含义
+  assert.ok(/N=路点/.test(appSrc), '图例应该说明 N/S/PL/K 的含义');
+});
+
 console.log(`\n点击命中测试全部通过（${passed} 项）`);

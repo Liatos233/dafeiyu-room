@@ -3475,10 +3475,9 @@ function showNavMap(bigMode = navMapBig) {
       ctx.fillRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
       ctx.strokeStyle = 'rgba(240,90,90,.5)';
       ctx.strokeRect(px(x0), pz(z0), (x1 - x0) * sc, (z1 - z0) * sc);
-      if (navMapBig) {
-        ctx.fillStyle = 'rgba(255,150,140,.9)';
-        ctx.fillText('K' + (i + 1), px(x0) + 2, pz(z0) + 9);
-      }
+      // K 编号始终显示，和 3D 导航层一致（之前被 navMapBig 挡住，小地图看不到）
+      ctx.fillStyle = 'rgba(255,150,140,.9)';
+      ctx.fillText('K' + (i + 1), px(x0) + 2, pz(z0) + 9);
     });
 
     // 可走边
@@ -3500,10 +3499,10 @@ function showNavMap(bigMode = navMapBig) {
       ctx.beginPath();
       ctx.arc(px(sp.pos[0]), pz(sp.pos[1]), 2.6, 0, Math.PI * 2);
       ctx.fill();
-      if (navMapBig) {
-        ctx.fillStyle = 'rgba(160,250,195,.9)';
-        ctx.fillText(`S${i + 1}`, px(sp.pos[0]) + 4, pz(sp.pos[1]) + 3);
-      }
+      // S 编号 + 站位名始终显示，和 3D 导航层的「S1·冰箱前」一致。
+      // 之前小地图只显示 S{i+1} 没有名字，而且还要 navMapBig 才显示。
+      ctx.fillStyle = 'rgba(160,250,195,.9)';
+      ctx.fillText(`S${i + 1}·${sp.label || sp.id}`, px(sp.pos[0]) + 4, pz(sp.pos[1]) + 3);
     });
     Object.keys(data.nodes || {}).forEach((id, i) => {
       const p2 = data.nodes[id];
@@ -3511,10 +3510,9 @@ function showNavMap(bigMode = navMapBig) {
       ctx.beginPath();
       ctx.arc(px(p2[0]), pz(p2[1]), 2, 0, Math.PI * 2);
       ctx.fill();
-      if (navMapBig && view.zoom > 0.85) {
-        ctx.fillStyle = 'rgba(255,230,180,.8)';
-        ctx.fillText('N' + (i + 1), px(p2[0]) + 3, pz(p2[1]) - 2);
-      }
+      // N 编号始终显示，和 3D 导航层一致（之前要 navMapBig 且放大才显示）
+      ctx.fillStyle = 'rgba(255,230,180,.8)';
+      ctx.fillText('N' + (i + 1), px(p2[0]) + 3, pz(p2[1]) - 2);
     });
 
     if (navMapBig) {
