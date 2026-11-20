@@ -3081,31 +3081,45 @@ function updateAnimBox() {
   if (!animBoxOn) return;
   ensureAnimBox();
   if (!animBoxMesh) return;
-  // 立绘模式下取当前活动层的 mesh；3D 模式没有平面矩形，就框住整个角色组
-  const layer = actorWebm?.layers?.[actorWebm.active];
-  const mesh = layer?.mesh;
-  const useMesh = !!(mesh && mesh.visible !== false && (layer.material?.opacity || 0) > 0.02);
+  // 立绘模式：取「当前最显眼」的那一层（opacity 最大的可见层）。
+  //
+  // 之前只看 actorWebm.active —— 淡入淡出期间主体还在旧层上、active 已经指向新层，
+  // 框就跟着新层（尺寸/位置都还没稳）去算，看起来正是「框没把角色框住」。
+  let mesh = null;
+  let bestOpacity = 0;
+  for (const layer of actorWebm?.layers || []) {
+    const m = layer?.mesh;
+    if (!m || m.visible === false) continue;
+    const op = layer.material?.opacity || 0;
+    if (op > bestOpacity) { bestOpacity = op; mesh = m; }
+  }
+  const useMesh = !!(mesh && bestOpacity > 0.02);
   if (!useMesh && !model3d && !chibi) { animBoxMesh.visible = false; animBoxFoot.visible = false; return; }
 
   const target = useMesh ? mesh : (model3d?.group || chibi?.group || null);
   if (!target) { animBoxMesh.visible = false; animBoxFoot.visible = false; return; }
 
-  // 世界坐标 → 框的位置。平面是 1×1，所以 scale 直接就是宽高。
   target.updateWorldMatrix(true, false);
-  const scale = useMesh
-    ? new THREE.Vector3(1, 1, 1).multiply(target.scale)   // PlaneGeometry(PLANE_W, PLANE_H) 已含尺寸
-    : new THREE.Box3().setFromObject(target).getSize(new THREE.Vector3());
   const worldPos = new THREE.Vector3();
   target.getWorldPosition(worldPos);
-  // mesh 的 position.y 是「脚底中心」偏移，mesh 本地 y=0 对应平面底部？
-  // 实际 PlaneGeometry 是以中心为原点，所以底边在 -H/2。
-  const h = useMesh ? target.geometry.parameters.height * target.scale.y
-    : scale.y;
-  const w = useMesh ? target.geometry.parameters.width * target.scale.x
-    : scale.x;
-  const footY = useMesh
-    ? worldPos.y - (target.geometry.parameters.height * target.scale.y) / 2
-    : worldPos.y;
+  // 尺寸必须用**世界缩放**：弹跳时 charWrap.scale.y 会变（1 → 0.9），
+  // 只看 target.scale 会让框在弹跳瞬间偏大。
+  const ws = target.getWorldScale(new THREE.Vector3());
+  let w;
+  let h;
+  let footY;
+  if (useMesh) {
+    // PlaneGeometry 以中心为原点，所以底边 = 中心 - 半高。
+    w = target.geometry.parameters.width * Math.abs(ws.x);
+    h = target.geometry.parameters.height * Math.abs(ws.y);
+    footY = worldPos.y - h / 2;
+  } else {
+    const box = new THREE.Box3().setFromObject(target);
+    const size = box.getSize(new THREE.Vector3());
+    w = size.x;
+    h = size.y;
+    footY = box.min.y;
+  }
 
   animBoxMesh.position.set(worldPos.x, footY, worldPos.z + 0.02);
   animBoxMesh.scale.set(w, h, 1);

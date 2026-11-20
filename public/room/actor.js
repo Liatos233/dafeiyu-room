@@ -524,7 +524,9 @@ class Layer {
 
     this._bboxDone = true;
     const fracH = (box.maxY - box.minY + 1) / sh;
-    const fracFeet = box.maxY / sh;
+    // 脚底比例必须和 alignFeet() 用同一套算法（都 +1），否则两处算出的脚底差一个像素，
+    // 换片段时就会看到「脚底轻微跳动」。
+    const fracFeet = (box.maxY + 1) / sh;
     const fracCx = (box.minX + box.maxX) / 2 / sw;
     const groupScale = this.mesh.parent ? this.mesh.parent.scale.y || 1 : 1;
     const quadH = TARGET_H / Math.max(0.25, fracH) / groupScale;
@@ -533,6 +535,10 @@ class Layer {
     this.mesh.geometry = new THREE.PlaneGeometry(quadW, quadH);
     this.mesh.position.y = (fracFeet - 0.5) * quadH;
     this.mesh.position.x = (0.5 - fracCx) * quadW;
+    // 缓存比例，供 alignFeet() 复用（同一份素材用同一个脚底比例）
+    const srcKey = this.src;
+    if (srcKey) CLIP_FOOT.set(srcKey, Math.max(0.3, Math.min(0.995, fracFeet)));
+    this.footFrac = fracFeet;
     return true;
   }
 
@@ -542,11 +548,20 @@ class Layer {
     if (this._footDone) return;
     const key = this.src;
     if (!key) return;
-    if (CLIP_FOOT.has(key)) {
-      this.mesh.position.y = CLIP_FOOT.get(key);
+    // 缓存的是「脚底在画面里的相对比例 fracFeet」，**不是绝对 position.y**。
+    //
+    // 之前缓存绝对位置（用 PLANE_H 算 + clamp 到 FEET_CENTER_Y±0.18），而
+    // applyBbox() 是按首帧内容把 geometry 重设成 quadH 的 —— 躺姿素材（sleep_loop）
+    // 内容只占画面一小条，quadH 会远大于 PLANE_H。两套基准打架，后跑的那个覆盖前一个，
+    // 结果就是「睡觉循环悬空很远，别的动画正常」。
+    // 现在统一：位置永远用**当前 geometry 的实际高度**算，缓存只存比例。
+    const applyFoot = (frac) => {
+      const quadH = Number(this.mesh.geometry?.parameters?.height) || PLANE_H;
+      this.mesh.position.y = (frac - 0.5) * quadH;
+      this.footFrac = frac;
       this._footDone = true;
-      return;
-    }
+    };
+    if (CLIP_FOOT.has(key)) { applyFoot(CLIP_FOOT.get(key)); return; }
     const v = this.video;
     if (!v.videoWidth || !v.videoHeight) return;
     let fracFeet = null;
@@ -570,13 +585,12 @@ class Layer {
       if (maxY > 0) fracFeet = (maxY + 1) / sh;
     } catch { fracFeet = null; }
     if (!fracFeet) return;
-    // 脚底 y=0 对应的 mesh.position.y
-    const ideal = (fracFeet - 0.5) * PLANE_H;
-    const clamped = Math.max(FEET_CENTER_Y - 0.18, Math.min(FEET_CENTER_Y + 0.18, ideal));
-    CLIP_FOOT.set(key, clamped);
-    this.mesh.position.y = clamped;
-    this.footFrac = fracFeet;
-    this._footDone = true;
+    // 只做「比例合理性」保护（脚底不可能在画面最顶端，也不会超出最底端），
+    // 不再用固定的 FEET_CENTER_Y±0.18 去夹绝对位置 —— 那个夹法是按 1.6 米平面设计的，
+    // 对 quadH 完全不同的素材会系统性地把角色推高或压低。
+    const frac = Math.max(0.3, Math.min(0.995, fracFeet));
+    CLIP_FOOT.set(key, frac);
+    applyFoot(frac);
   }
 
   play() {
