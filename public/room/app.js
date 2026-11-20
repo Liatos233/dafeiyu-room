@@ -1145,7 +1145,7 @@ function onClick(e) {
     return;
   }
   if (clickMoveOn) {
-    $('info').classList.add('hide');
+    closeSpotMenu();
     const p = floorPointAt(e);
     if (!p) { toast('点地面，别点墙或家具'); return; }
     if (blockedByFurniture(p)) { toast('去不了这里'); return; }
@@ -1155,8 +1155,8 @@ function onClick(e) {
     return;
   }
   const hs = hotspotAt(e);
-  if (hs) { showInfo(hs); return; }
-  $('info').classList.add('hide');
+  if (hs) { showSpotMenuFor(hs, e); return; }
+  closeSpotMenu();
 }
 
 // ── 数据 / 表现 ───────────────────────────────────────────────────────────
@@ -2488,25 +2488,135 @@ async function sendTalk() {
   await act('talk', { text });
 }
 
-function showInfo(hs) {
-  $('infoTitle').textContent = hs.title || '房间';
-  $('infoKind').textContent = hs.label || '';
-  $('infoSub').textContent = hs.sub || '';
-  $('info').dataset.room = hs.room || '';
-  $('info').dataset.spot = hs.spot || '';
-  $('info').classList.remove('hide');
+/**
+ * 点中家具 → 在那件家具上方弹菜单。
+ * 锚点优先用命中物件自己在世界里的位置（hotspot 是贴在物件上的透明柱），
+ * 这样菜单永远指着你点的那个东西；落到屏幕上的位置由 layoutSpotMenu 每帧重算。
+ */
+function showSpotMenuFor(hs, ev) {
+  ndc.x = (ev.clientX / innerWidth) * 2 - 1;
+  ndc.y = -(ev.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObjects(world.hotspots, false)[0];
+  let at;
+  if (hit?.point) {
+    // 取命中点上方一点：正好压在物件顶面往下看的位置，视觉上「从物件上冒出来」
+    at = { x: hit.point.x, y: hit.point.y + 0.35, z: hit.point.z };
+  } else if (hit?.object) {
+    const p = hit.object.position;
+    at = { x: p.x, y: p.y + 0.35, z: p.z };
+  } else {
+    at = { x: 0, y: 0.6, z: 0 };
+  }
+  openSpotMenu(hs, at);
 }
-$('infoGo').addEventListener('click', () => {
-  const room = $('info').dataset.room;
-  const spot = $('info').dataset.spot;
-  $('info').classList.add('hide');
-  if (!room || !spot) return;
-  // 「来这里玩」一律交给服务端 spot：服务端按 support/mount 做两段式上座
-  //（原地升到座面 → 沿座面平移到落点），客户端只负责画。
-  // 以前沙发/躺椅/床在这里走客户端自己那套假上座，坐标和服务端会漂，
-  // 而且绕过了 mounting——坐着的十几秒里只要有个需求把她叫走，画面就把人锁进家具里。
-  act('command', { room, spot });
-});
+
+// 以前是左下角一张固定卡片（#info），离家具很远，看菜单时视线得离开刚点的地方。
+// 现在菜单跟着物件走：每帧把锚点（物件在世界里的位置）用 project(camera) 投成屏幕
+// 坐标，再把菜单摆在锚点上方。相机怎么转、菜单都贴在原地。
+//
+// 还有一个坑要避开：菜单是 DOM，点在它上面时事件会穿到 canvas 上去，
+// 结果「点菜单」被当成「点了空白地面」把菜单关掉。所以菜单上的 pointerdown/
+// pointerup 一律 stopPropagation。
+let spotMenuAnchor = null;   // THREE.Vector3，当前菜单指向的世界坐标（物件上方）
+let spotMenuHit = null;      // 当前菜单对应的 hotspot 数据
+
+function spotMenuHost() { return $('spotMenu'); }
+
+/**
+ * 打开某件家具的菜单。
+ * 按钮按**真实站位数据**生成，不是无脑给两个：`state.layout.spots[room][spot]`
+ * 存在才算能去（池子/梯子/露台入口这些 hotspot 在服务端没有对应站位，
+ * 发 command 会被 commandTarget 直接拒掉，菜单里就不该装作能去）。
+ * @param {object} hs world.js addHotspot 里存的那份 {room, spot, title, sub, ...}
+ * @param {{x:number,y:number,z:number}} at 菜单锚点的世界坐标（一般取物件中心上方）
+ */
+function openSpotMenu(hs, at) {
+  const menu = spotMenuHost();
+  if (!menu) return;
+  spotMenuHit = hs;
+  spotMenuAnchor = new THREE.Vector3(at.x, at.y, at.z);
+  $('spotTitle').textContent = hs.title || '这里';
+  $('spotKind').textContent = hs.label || '';
+  $('spotSub').textContent = hs.sub || '';
+  menu.dataset.room = hs.room || '';
+  menu.dataset.spot = hs.spot || '';
+
+  // 站位定义：坐具（pose sit/lie）才有「坐上去」，站着的地方只让别人过去。
+  const spotDef = state?.layout?.spots?.[hs.room]?.[hs.spot] || null;
+  const seatable = !!spotDef && (spotDef.pose === 'sit' || spotDef.pose === 'lie');
+
+  const box = $('spotActions');
+  box.innerHTML = '';
+  const add = (text, primary, onClick, { disabled = false, hint = '' } = {}) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    if (primary) b.className = 'primary';
+    if (disabled) { b.disabled = true; b.title = hint; }
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (b.disabled) return;
+      closeSpotMenu();
+      onClick();
+    });
+    box.appendChild(b);
+    return b;
+  };
+
+  if (!spotDef) {
+    // 服务端没有这个站位：老实说去不了，别给一个点了没反应的按钮。
+    add('去不了这里', false, () => {}, { disabled: true, hint: '这个位置没有对应的站位，只能看看' });
+    menu.classList.remove('hide');
+    layoutSpotMenu();
+    return;
+  }
+
+  // 坐具：「坐上去玩」（服务端按 support/mount 做两段式上座）。
+  // 站着的地方：「来这里」就是走过去；文案跟着对象说，不硬套「玩」。
+  // 只给一条——多一条就会是「两个按钮干同一件事」，那种菜单比没有还糟。
+  add(seatable ? '来这里玩' : '来这里', true, () => {
+    void act('command', { room: hs.room, spot: hs.spot });
+  });
+  menu.classList.remove('hide');
+  layoutSpotMenu();
+}
+
+function closeSpotMenu() {
+  spotMenuAnchor = null;
+  spotMenuHit = null;
+  spotMenuHost()?.classList.add('hide');
+}
+
+/** 把菜单摆到锚点上方。每帧调用（相机可能一直在转）。 */
+function layoutSpotMenu() {
+  const menu = spotMenuHost();
+  if (!menu || !spotMenuAnchor || menu.classList.contains('hide')) return;
+  const p = spotMenuAnchor.clone().project(camera);
+  // 在相机背后：直接收起来，别在屏幕上乱飘
+  if (p.z > 1) { menu.style.opacity = '0'; menu.style.pointerEvents = 'none'; return; }
+  menu.style.opacity = '';
+  menu.style.pointerEvents = '';
+  const w = menu.offsetWidth || 196;
+  const h = menu.offsetHeight || 90;
+  let x = (p.x * 0.5 + 0.5) * innerWidth - w / 2;
+  let y = (-p.y * 0.5 + 0.5) * innerHeight - h - 14;   // 抬起一个身位，别糊在物件上
+  // 贴边收进来，保证整块菜单都在屏幕里（手机上尤其重要）
+  const pad = 8;
+  x = Math.max(pad, Math.min(innerWidth - w - pad, x));
+  y = Math.max(pad + 54, Math.min(innerHeight - h - pad, y));
+  menu.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+
+// 菜单自身的事件一律截停：否则 pointerup 会落到 canvas，被当成「点了空地」把菜单关掉。
+{
+  const menu = spotMenuHost();
+  if (menu) {
+    for (const ev of ['pointerdown', 'pointerup', 'click', 'wheel', 'dblclick']) {
+      menu.addEventListener(ev, (e) => e.stopPropagation(), { passive: false });
+    }
+  }
+}
 
 function toast(text) {
   const el = $('toast');
@@ -3166,7 +3276,7 @@ bindTimeBar();
 updateTimeUI();
 applyRoomLabels();
 layoutSideCards();
-window.addEventListener('resize', () => { try { layoutSideCards(); } catch {} });
+window.addEventListener('resize', () => { try { layoutSideCards(); } catch {} try { layoutSpotMenu(); } catch {} });
 if (params.get('skydebug') === '1') { window.__SKYDEBUG = true; }
 if (params.get('animdbg') === '1') { window.__ANIMDBG = true; }   // 调试快捷方式；日常用「开发模式」即可
 if (params.get('walkdbg') === '1') { window.__WALKDBG = true; }
@@ -3222,7 +3332,7 @@ $('clickMoveChip')?.addEventListener('click', () => {
   clickMoveOn = !clickMoveOn;
   localStorage.setItem('home-click-move', clickMoveOn ? '1' : '0');
   applyClickMovePref(true);
-  if (!clickMoveOn) $('info').classList.add('hide');
+  if (!clickMoveOn) closeSpotMenu();
 });
 
 $('viewChip')?.addEventListener('click', () => {
@@ -3799,6 +3909,8 @@ function frame(now) {
   gardenController?.tick(now);
   updateOpenView(dt);
   updateCamera(dt);
+  // 菜单贴在物件上方，相机一动就要重算屏幕位置（同一帧内算，不会滞后一帧）
+  layoutSpotMenu();
   updateCompass();
   watchLayers(now);
   maybeLightning(now, skyOptions().weather === 'storm' ? 'storm' : skyOptions().weather);
@@ -4250,7 +4362,7 @@ function focusGarden() {
   setMode('overview');VIEW.follow=false;VIEW.az=framing.az;VIEW.elev=framing.elev;VIEW.radius=framing.radius;
   VIEW.target.set(...framing.target);world.setLabelsVisible(false);world.setCeilingVisible(false);
   camera.fov=framing.fov;camera.setViewOffset(innerWidth,innerHeight,framing.offsetX,framing.offsetY,innerWidth,innerHeight);
-  $('info').classList.add('hide');
+  closeSpotMenu();
 }
 function gardenHomeAction(action) {
   if (action === 'talk') {

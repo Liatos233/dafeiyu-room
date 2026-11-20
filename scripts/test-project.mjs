@@ -121,5 +121,31 @@ test('视觉性能探针存在（window.__renderer / __frames）', () => {
   assert.ok(appSource.includes('window.__frames'), '缺少帧时间采样');
 });
 
+test('家具菜单只给真实能去的站位，且不残留左下角卡片', () => {
+  // 菜单按钮必须按 state.layout.spots 生成：hotspot 里有些 spot 服务端根本没有
+  // （pool.gate / pool.water / pool.ladder），发 command 会被直接拒掉。
+  assert.ok(appSource.includes('state?.layout?.spots?.'), '菜单应该按 layout.spots 判断能不能去');
+  assert.ok(appSource.includes("'去不了这里'"), '没有站位时应该明说去不了，而不是给个点了没反应的按钮');
+  // 每个 addHotspot 的 spot 必须在 home-state 里有对应站位，否则菜单会露出「去不了」。
+  // 注意 addHotspot(...) 里含嵌套括号/逗号，不能用「匹配到第一个 ) 」那种偷懒正则
+  // （之前就漏掉了 pool.gate / pool.water）。
+  const world = read('public/room/world.js');
+  const homeState = read('src/home-state.js');
+  const pairs = [...world.matchAll(/addHotspot\(world,[\s\S]*?room:\s*'([^']+)',\s*spot:\s*'([^']+)'/g)];
+  assert.ok(pairs.length > 20, `hotspot 数量异常：${pairs.length}`);
+  const missing = pairs.filter(([, room, spot]) => {
+    // 站位在 home-state 的 spots 表里以 `spot: { pos: ...` 出现；菜畦这类动态 spot 用 plotN 生成
+    const re = new RegExp(`\\b${spot}:\\s*\\{`);
+    return !re.test(homeState);
+  }).map(([, room, spot]) => `${room}.${spot}`);
+  assert.equal(missing.length, 0,
+    `这些 hotspot 在 home-state 里没有站位（菜单会显示「去不了」）：${missing.join(', ')}`);
+  // 旧卡片必须彻底删掉
+  for (const gone of ['id="info"', 'id="infoGo"', 'id="infoTitle"', 'showInfo(']) {
+    assert.ok(!html.includes(gone) && !appSource.includes(gone), `还在引用旧的左下角卡片：${gone}`);
+  }
+  assert.ok(html.includes('id="spotMenu"'), '缺少新的家具菜单 #spotMenu');
+});
+
 console.log(`\n${pass} 项通过，${fail} 项失败`);
 if (fail) process.exit(1);
