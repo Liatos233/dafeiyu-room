@@ -264,14 +264,14 @@ test('2D 小地图的 K/S/N 标记始终显示，S 带站位名', () => {
   assert.ok(/N=路点/.test(appSrc), '图例应该说明 N/S/PL/K 的含义');
 });
 
-test('动画图背景直接透明', () => {
+test('动画图背景无模糊、保留半透明深色底', () => {
   const src = read('public/room/clip-graph.js');
   assert.ok(!/backdrop-filter/.test(src), '不该有 backdrop-filter 背景模糊');
   assert.ok(!/blur\(/.test(src), '不该有 blur() 模糊滤镜');
-  // 主体/顶栏/右侧栏背景都应为透明
-  assert.ok(/\.cg-root\{[^}]*background:transparent/.test(src), 'cg-root 背景应为透明');
-  assert.ok(/\.cg-topbar\{[^}]*background:transparent/.test(src), 'cg-topbar 背景应为透明');
-  assert.ok(/\.cg-side\{[^}]*background:transparent/.test(src), 'cg-side 背景应为透明');
+  // 背景回到半透明深色（不是透明，也不是模糊）
+  assert.ok(/\.cg-root\{[^}]*background:rgba\(7,11,17,\.88\)/.test(src), 'cg-root 背景应为半透明深色');
+  assert.ok(/\.cg-topbar\{[^}]*background:rgba\(11,16,24,\.92\)/.test(src), 'cg-topbar 背景应为半透明深色');
+  assert.ok(/\.cg-side\{[^}]*background:rgba\(11,16,24,\.96\)/.test(src), 'cg-side 背景应为半透明深色');
 });
 
 console.log(`\n点击命中测试全部通过（${passed} 项）`);
