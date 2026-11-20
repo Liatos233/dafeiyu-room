@@ -176,6 +176,13 @@ test('页面代码不再自己算一套：无 chaisePlay、无硬编码阈值', 
   for (const gone of ['chaisePhase', 'chaisePlay', 'CHAISE_POINT', 'CHAISE_STAGE', 'chaiseEase', 'chaiseT0']) {
     assert.ok(!app.includes(gone), `app.js 里还有躺椅假上座的残留：${gone}`);
   }
+  // 客户端假上座全族都已删除：座具只能走服务端 mounting。
+  // 这些名字一旦回来，就意味着又有一套「自己算坐标 + act('go') 绕过 mounting」的实现，
+  // 也就是「点家具来这里玩偶尔穿模」那个 bug 的来源（seatPlay 缺 walking 守卫）。
+  for (const gone of ['seatPlay', 'sofaPlay', 'seatPhase', 'sofaPhase', 'SOFA_POINT',
+    'SOFA_STAGE', 'SEAT_PHASES', 'seatEase', 'seatCfg', 'sofaPlayUntil']) {
+    assert.ok(!app.includes(gone), `app.js 里还有客户端假上座的残留：${gone}`);
+  }
   assert.ok(/from '\.\/need-bars\.js'/.test(app), 'app.js 应该从 need-bars.js 取指标条口径');
   assert.ok(app.includes('buildNeedTicks()'), 'app.js 应该在启动时画刻度');
   assert.ok(app.includes('syncActionHints('), 'app.js 应该有按钮微光/置灰逻辑');

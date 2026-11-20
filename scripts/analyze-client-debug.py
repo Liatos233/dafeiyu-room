@@ -22,7 +22,7 @@ def fmt(d):
     return (
         f'{d.get("clip")} | {d.get("spot")} {d.get("pose")}/{d.get("kind")} | '
         f'server={d.get("elev")} shown={d.get("shownElev")} display={d.get("displayElev")} '
-        f'walk={d.get("walking")} sofa={d.get("sofa")} seat={d.get("seatOverride")}'
+        f'walk={d.get("walking")} seat={d.get("seatOverride")}'
     )
 
 print("--- 最后 15 条 ---")

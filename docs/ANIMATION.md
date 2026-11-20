@@ -20,8 +20,11 @@
 | `her.walking` | 是否在移动（客户端用位移再判一次） | 行走动画最高优先 |
 | `her.clip` | 仅 `freestyle` 用：服务端抽好的片段名 | 自主动作具体播什么 |
 
-客户端另有几个**本地状态**（不来自服务端）：`seatPhase` / `sofaPhase`（座位小流程）、
-`petActionOverride`（宠物动作）、`opinionClip`（电视弹幕吐槽）、`sleepPhase`。
+客户端另有几个**本地状态**（不来自服务端）：`petActionOverride`（宠物动作）、
+`opinionClip`（电视弹幕吐槽）、`sleepPhase`。
+
+> 座位不再有本地状态：`seatPhase` / `sofaPhase` / `chaisePhase` 三套客户端假上座已全部删除，
+> 座具一律走服务端 `mounting/dismounting`（详见第 2 节的说明）。
 
 ---
 
@@ -34,17 +37,16 @@
 | 1 | 强制调试 | `?forceclip=` | 指定片段 |
 | 2 | 钉住测试 | `?pintest=1` | `idle` |
 | 3 | **在移动** | `motionWalking`（位移 > 0.0035/帧） | `run_happy` / `run_hurry`；并清空所有表演类覆盖 |
-| 4 | 座位玩（server 流程） | `seatPhase === 'play'` | `dance`；`up/down` → `mutter` |
-| 5 | 沙发玩（本地流程） | `sofaPhase === 'play'` | `dance`；`rise/enter/exit/lower` → `mutter` |
-| 6 | 沙发玩冷却 | `sofaPlayUntil` 未到期且距沙发 ≤0.5m | `dance` |
-| 7 | 预览 | `?preview=sit/lie` | `mutter` / `sleep_loop` |
-| 8 | **睡眠** | `her.asleep` | 未到床 → `idle/run`；到床 → `sleep_in`（一次）→ `sleep_loop`；醒来 → `sleep_out`（一次）→ 回到 `clipFor` |
-| 9 | 普通决策 | `clipFor(her)` | 见下表 |
+| 4 | 预览 | `?preview=sit/lie` | `mutter` / `sleep_loop` |
+| 5 | **睡眠** | `her.asleep` | 未到床 → `idle/run`；到床 → `sleep_in`（一次）→ `sleep_loop`；醒来 → `sleep_out`（一次）→ 回到 `clipFor` |
+| 6 | 普通决策 | `clipFor(her)` | 见下表 |
 
-> 曾经还有一层「躺椅玩（本地流程）」（`chaisePhase`），已经删掉：它自己算了一套坐标
-> （离服务端 `chair.pos` 差 0.37 米），又用 `act('go')` 绕过了服务端 `mounting/dismounting`，
-> 违反交接文档里「坐具上下必须走 mounting/dismounting」的不变量。躺椅现在只走
-> 「点场景物件 → 来这里玩」→ 服务端 `command` 流程。
+> 这里原本还有 3 层客户端假上座（`chaisePhase` / `sofaPhase` / `seatPhase`，各自把
+> `play` 阶段强制成 `dance`、上下座阶段强制成 `mutter`），已经全部删掉。它们的共同毛病：
+> 自己算一套坐标（躺椅曾和服务端 `chair.pos` 差 0.37 米）、用 `act('go')` 绕过了服务端的
+> `mounting/dismounting`、并且 `seatPlay` 漏了另外两个都有的「被服务端带走就立刻收手」守卫
+> ——坐着的十几秒里一旦有需求把她叫走，画面就把人锁在座面上，也就是「点家具来这里玩
+> 偶尔穿模」。现在点家具统一发 `command`，服务端做两段式上座，客户端只负责画。
 
 `clipFor()` 的决策表（第 10 层）：
 
@@ -119,8 +121,9 @@ urgent = next ∈ {run_happy, run_hurry, walk, sleep_in, sleep_loop, sleep_out}
    现在有 350ms + 1200ms 防抖挡着，但更稳的做法是给 mood 分桶（如每 20 点一档）。
 2. **坐姿素材缺失**：`sit` 用 `dance`（站姿）兜底，所以坐在沙发上看起来是站着的；这是素材问题，不是逻辑问题。
 3. **`freestyle` 的 clip 名字是中文**，和 `CLIPS` 的 key 一致；拼错会 fallback 到 `idle_look`。
-4. **本地座位流程**（`sofaPlay` / `seatPlay`）会覆盖服务端 kind，直到流程结束；
-   如果中途被走动打断，`syncCharacter` 顶部的 `motionWalking` 分支会强制清零这些 phase。
+4. **座位没有本地流程**（`sofaPlay` / `seatPlay` / `chaisePlay` 已全部删除）：
+   上座由服务端两段式完成，客户端只画；`syncCharacter` 的 `motionWalking` 分支
+   只需要清掉表演类覆盖（`petActionOverride`），不再需要归零任何座位相位。
 5. **切换日志**：`window.__clipLog`（最近 200 条 `{t, from, to}`）记录每次 `actor.setClip`；
    `window.__drawState` 带 `kind/activity/pose/spot/clip`，排查时先看这两个。
 

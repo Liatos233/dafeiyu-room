@@ -2075,142 +2075,19 @@ function clipFor(her) {
 
 // 调试预览：?preview=sit 或 ?preview=lie 直接把她的显示位置放在沙发/床上，
 // 用来调坐姿下沉/躺姿高度，不改服务端状态。
-// ── 沙发玩：走到沙发，到了就坐上去玩一会儿 ─────────────────────────────
-// 只由「点场景里的沙发 → 来这里玩」触发。躺椅那套客户端假上座（chaisePlay）
-// 已经删掉：它自己算了一套坐标（离服务端 chair.pos 差 0.37 米）、又用 act('go')
-// 绕过了服务端 mounting/dismounting，是交接文档里点名的违规做法。
-const SOFA_POINT = [5.84, 4.95];   // 坐垫中心（与 home-state sofa.pos 保持一致）
-let sofaPlayUntil = 0;
+//
+// ── 座具：一律走服务端 mounting，客户端不再自己模拟上座 ──────────────────
+// 这里原先有三套客户端假上座（chaisePlay / sofaPlay / seatPlay）。它们的共同毛病：
+//   1. 自己算一套坐标，和服务端 HOME_LAYOUT.spots[*].pos 会漂（躺椅曾经差 0.37 米）；
+//   2. 用 act('go') 把落点指到座前，再自己插值抬高，绕过了服务端的
+//      mounting/dismounting 两段式——服务端还以为她站在地上；
+//   3. sofaPlay/chaisePlay 有「被服务端带走就立刻收手」的守卫，seatPlay 漏了。
+//      于是坐着的 15 秒里只要有个需求把她叫走，画面仍然把她锁在座面上，
+//      人就穿进家具里——这就是「点了来这里玩偶尔会穿模」的真正原因。
+//
+// 现在点家具统一发 act('command', { room, spot })，由服务端按 support/mount
+// 做原地升起 + 沿座面平移，客户端只负责画。少一套实现，也就少一处不一致。
 
-function seatEase(t) {
-  return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); // smoothstep
-}
-const SEAT_PHASES = ['rise', 'enter', 'play', 'exit', 'lower'];
-
-// ── 通用「上座玩」：走到座点 → 抬到座面 → 跳一会儿 → 落回地面 ──────
-let seatPhase = 'idle';     // idle | walk | up | play | down
-let seatT0 = 0;
-let seatCfg = null;
-
-function seatPlay(cfg) {
-  if (!state?.her) { toast('她还没出来'); return; }
-  if (state.her.asleep) { toast('她睡着了，先叫醒'); return; }
-  seatCfg = cfg;
-  seatPhase = 'walk';
-  seatT0 = Date.now();
-  toast(`${PET_NAME}${cfg.toast || '去玩'}`);
-  void act('go', { pos: cfg.mount });
-}
-
-function seatPlayHer(her) {
-  if (!her || seatPhase === 'idle' || !seatCfg) return her;
-  const now = Date.now();
-  const ease = (t) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
-
-  if (seatPhase === 'walk') {
-    if (now - seatT0 > 20000) { seatPhase = 'idle'; return her; }
-    if (her.walking) return her;
-    const d = Math.hypot((her.pos?.[0] || 0) - seatCfg.mount[0], (her.pos?.[1] || 0) - seatCfg.mount[1]);
-    if (d < 0.8) { seatPhase = 'up'; seatT0 = now; }
-    return her;
-  }
-  if (seatPhase === 'up') {
-    const t = Math.min(1, (now - seatT0) / 520);
-    const e = ease(t);
-    const pos = [
-      seatCfg.mount[0] + (seatCfg.seat[0] - seatCfg.mount[0]) * e,
-      seatCfg.mount[1] + (seatCfg.seat[1] - seatCfg.mount[1]) * e
-    ];
-    if (t >= 1) { seatPhase = 'play'; seatT0 = now; }
-    return { ...her, pos, elev: seatCfg.elev * e, pose: 'sit', walking: false, kind: 'idle' };
-  }
-  if (seatPhase === 'play') {
-    if (now - seatT0 > (seatCfg.holdMs || 15000)) { seatPhase = 'down'; seatT0 = now; }
-    return { ...her, pos: seatCfg.seat.slice(), elev: seatCfg.elev, pose: 'sit', walking: false, kind: 'idle' };
-  }
-  if (seatPhase === 'down') {
-    const t = Math.min(1, (now - seatT0) / 520);
-    const e = ease(t);
-    const pos = [
-      seatCfg.seat[0] + (seatCfg.mount[0] - seatCfg.seat[0]) * e,
-      seatCfg.seat[1] + (seatCfg.mount[1] - seatCfg.seat[1]) * e
-    ];
-    if (t >= 1) { seatPhase = 'idle'; return her; }
-    return { ...her, pos, elev: seatCfg.elev * (1 - e), pose: 'sit', walking: false };
-  }
-  return her;
-}
-
-// 上沙发：只能从两侧（绿框位置）上，坐到红框座面高度
-const SOFA_STAGE_L = [5.12, 4.42];   // 沙发正前方·左角（只能从这里上）
-const SOFA_STAGE_R = [7.48, 4.42];   // 沙发正前方·右角
-const SOFA_SEAT = 0.48;              // 座面高度（红框）
-let sofaPhase = 'idle';              // idle | walk | up | play | down
-let sofaT0 = 0;
-let sofaStage = SOFA_STAGE_L;
-
-function sofaPlayHer(her) {
-  if (!her) return her;
-  const now = Date.now();
-  const SEAT = SOFA_SEAT;
-
-  if (SEAT_PHASES.includes(sofaPhase) && (her.walking || her.kind === 'walk')) {
-    sofaPhase = 'idle';
-    return her;
-  }
-
-  if (sofaPhase === 'walk') {
-    if (now - sofaT0 > 20000) { sofaPhase = 'idle'; return her; }
-    if (her.walking) return her;
-    const d = Math.hypot((her.pos?.[0] || 0) - sofaStage[0], (her.pos?.[1] || 0) - sofaStage[1]);
-    if (d < 0.7) { sofaPhase = 'rise'; sofaT0 = now; } else return her;
-  }
-  if (sofaPhase === 'rise') {
-    const t = seatEase((now - sofaT0) / 600);
-    if (t >= 1) { sofaPhase = 'enter'; sofaT0 = now; }
-    return { ...her, pos: sofaStage.slice(), elev: SEAT * t, pose: 'sit', walking: false };
-  }
-  if (sofaPhase === 'enter') {
-    const t = seatEase((now - sofaT0) / 450);
-    const pos = [
-      sofaStage[0] + (SOFA_POINT[0] - sofaStage[0]) * t,
-      sofaStage[1] + (SOFA_POINT[1] - sofaStage[1]) * t
-    ];
-    if (t >= 1) { sofaPhase = 'play'; sofaT0 = now; }
-    return { ...her, pos, elev: SEAT, pose: 'sit', walking: false };
-  }
-  if (sofaPhase === 'play') {
-    if (now - sofaT0 > 15000) { sofaPhase = 'exit'; sofaT0 = now; }
-    return { ...her, pos: SOFA_POINT.slice(), elev: SEAT, pose: 'sit', walking: false };
-  }
-  if (sofaPhase === 'exit') {
-    const t = seatEase((now - sofaT0) / 450);
-    const pos = [
-      SOFA_POINT[0] + (sofaStage[0] - SOFA_POINT[0]) * t,
-      SOFA_POINT[1] + (sofaStage[1] - SOFA_POINT[1]) * t
-    ];
-    if (t >= 1) { sofaPhase = 'lower'; sofaT0 = now; }
-    return { ...her, pos, elev: SEAT, pose: 'sit', walking: false };
-  }
-  if (sofaPhase === 'lower') {
-    const t = seatEase((now - sofaT0) / 550);
-    if (t >= 1) { sofaPhase = 'idle'; return her; }
-    return { ...her, pos: sofaStage.slice(), elev: SEAT * (1 - t), pose: 'sit', walking: false };
-  }
-  return her;
-}
-async function sofaPlay() {
-  if (!state?.her) { toast('她还没出来'); return; }
-  if (state.her.asleep) { toast('她睡着了，先叫醒'); return; }
-  const p0 = state.her.pos || SOFA_POINT;
-  const dl = Math.hypot(p0[0] - SOFA_STAGE_L[0], p0[1] - SOFA_STAGE_L[1]);
-  const dr = Math.hypot(p0[0] - SOFA_STAGE_R[0], p0[1] - SOFA_STAGE_R[1]);
-  sofaStage = dl <= dr ? SOFA_STAGE_L : SOFA_STAGE_R;
-  sofaPhase = 'walk';
-  sofaT0 = Date.now();
-  toast(`${PET_NAME}去沙发上玩`);
-  void act('go', { pos: sofaStage });
-}
 
 const PREVIEW = String(params.get('preview') || '');
 const PREVIEW_TARGETS = {
@@ -2282,7 +2159,6 @@ function syncCharacter() {
   // 动画必须和位移对应（否则会出现边播动作边滑走）。
   if (motionWalking) {
     petActionOverride = null;
-    if (['rise', 'enter', 'play', 'exit', 'lower'].includes(sofaPhase)) sofaPhase = 'idle';
   }
   // 喝水：现在 webm 里已经有「举杯敬酒」的完整动画，直接用视频素材，
   // 不再临时切精灵图（两套画风不一致会让画面跳一下）。
@@ -2295,15 +2171,6 @@ function syncCharacter() {
   }
   if (PIN_TEST) {
     if (!syncCharacter._pinned) { syncCharacter._pinned = true; void actor.setClip('idle'); }
-    return;
-  }
-  if (seatPhase === 'play' && !her.asleep) {
-    if (actor.current !== 'dance') actor.setClip('dance');
-    setBubble('坐在上面玩', 5000);
-    return;
-  }
-  if (seatPhase === 'up' || seatPhase === 'down') {
-    if (actor.current !== 'mutter') actor.setClip('mutter');
     return;
   }
   // 片段最短保持：避免刚播一个动作就被下一帧的判断掐断
@@ -2330,24 +2197,6 @@ function syncCharacter() {
       syncCharacter._want = next;
     } else {
       syncCharacter._want = next;
-    }
-  }
-  if (sofaPhase === 'play' && !her.asleep) {
-    if (actor.current !== 'dance') actor.setClip('dance');
-    setBubble('沙发上玩', 5000);
-    return;
-  }
-  if (['rise', 'enter', 'exit', 'lower'].includes(sofaPhase)) {
-    if (actor.current !== 'mutter') actor.setClip('mutter');
-    return;
-  }
-  if (sofaPlayUntil && Date.now() < sofaPlayUntil && !her.walking && !her.asleep) {
-    const dx = (her.pos?.[0] || 0) - SOFA_POINT[0];
-    const dz = (her.pos?.[1] || 0) - SOFA_POINT[1];
-    if (Math.hypot(dx, dz) <= 0.5) {
-      if (actor.current !== 'dance') actor.setClip('dance');
-      setBubble('沙发上玩', 5000);
-      return;
     }
   }
   if (PREVIEW) {
@@ -2652,18 +2501,10 @@ $('infoGo').addEventListener('click', () => {
   const spot = $('info').dataset.spot;
   $('info').classList.add('hide');
   if (!room || !spot) return;
-  // 和左侧「沙发玩 / 躺椅玩」同一套行为：有站位脚本的走脚本，
-  // 其余交给服务端 spot（服务端会按 support/mount 处理，避免穿模）。
-  if (room === 'living' && spot === 'sofa') { void sofaPlay(); return; }
-  if (room === 'pool' && (spot === 'lounger' || spot === 'deck_e')) {
-    seatPlay({ mount: [11.72, 10.58], seat: [12.30, 10.58], elev: 0.445, toast: '去沙滩躺椅上玩' });
-    return;
-  }
-  if (room === 'her_room' && spot === 'bed') {
-    seatPlay({ mount: [10.78, 1.5], seat: [11.4, 1.32], elev: 0.54, toast: '去床上玩' });
-    return;
-  }
-  if (room === 'balcony' && spot === 'chair') { act('command', { room: 'balcony', spot: 'chair' }); return; }
+  // 「来这里玩」一律交给服务端 spot：服务端按 support/mount 做两段式上座
+  //（原地升到座面 → 沿座面平移到落点），客户端只负责画。
+  // 以前沙发/躺椅/床在这里走客户端自己那套假上座，坐标和服务端会漂，
+  // 而且绕过了 mounting——坐着的十几秒里只要有个需求把她叫走，画面就把人锁进家具里。
   act('command', { room, spot });
 });
 
@@ -3342,8 +3183,6 @@ if (params.get('devmenu') === '1') setTimeout(() => {
     chip.classList.add('active');
   }
 }, 1200);
-if (params.get('sofaplay') === '1') setTimeout(() => { void sofaPlay(); }, 1200);
-if (params.get('sofasit') === '1') setTimeout(() => { sofaPhase = 'play'; sofaT0 = Date.now(); }, 800);
 {
   const aw = Number(params.get('autowake') || 0);
   if (aw > 0) setTimeout(() => { void act('wake'); }, aw);
@@ -4046,7 +3885,7 @@ function frame(now) {
         el.style.cssText = 'position:fixed;left:12px;top:120px;z-index:99999;background:rgba(0,0,0,.78);color:#7dff9b;font:12px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none';
         document.body.appendChild(el);
       }
-      el.textContent = `walkdbg\nchar=${charMode}\nmoving=${movingNow} derived=${derivedWalk}\nstateWalk=${her.walking} predict=${!!walkPredict}\nclip=${actor.current} kind=${her.kind} speed=${her.speed}\nsofa=${sofaPhase}`;
+      el.textContent = `walkdbg\nchar=${charMode}\nmoving=${movingNow} derived=${derivedWalk}\nstateWalk=${her.walking} predict=${!!walkPredict}\nclip=${actor.current} kind=${her.kind} speed=${her.speed}`;
     }
     if (window.__PROBE) {
       window.__probe = {
@@ -4162,12 +4001,9 @@ function frame(now) {
     };
   }
 
-    const shownHer = pinHer(sofaPlayHer(seatPlayHer(swimHer(PREVIEW ? previewHer(her) : her))));
-    // 有“坐上去/躺上去”的覆盖时，位置也要跟着覆盖走，否则人会站在原地被抬高
-    const seatedPhase = ['rise', 'enter', 'play', 'exit', 'lower'];
-    const seatOverride = seatedPhase.includes(sofaPhase)
-      || ['up', 'play', 'down'].includes(seatPhase)
-      || PREVIEW || PIN_TEST;
+    // 座具的位置/高度全部来自服务端（两段式 mounting），客户端不再叠加自己的相位覆盖。
+    const shownHer = pinHer(swimHer(PREVIEW ? previewHer(her) : her));
+    const seatOverride = PREVIEW || PIN_TEST;
     bubbleAnchorPos = (seatOverride || her.kind === 'swim') ? shownHer.pos : null;
     // 高度必须和位置用同一份快照：shownHer 会滞后一帧，导致 pos 已到座位、elev 还是 0
     bubbleAnchorElev = displayElevFor(her || shownHer);
@@ -4195,7 +4031,6 @@ function frame(now) {
             serverPos: her.pos,
             shownPos: shownHer.pos, shownElev: shownHer.elev,
             displayElev: bubbleAnchorElev,
-            sofa: sofaPhase,
             seatOverride, walkingNow, model3d: !!modelReady
           })
         }).catch(() => {});
