@@ -1135,6 +1135,17 @@ export function positionOnRoute(route, now) {
 // 上/下座插值。分两段走，避免身体斜着穿过坐垫/床沿：
 //   上座：0~0.55 先在座点抬到座面高度，0.55~1 再横移进座位
 //   下座：0~0.55 先横移退到座点，0.55~1 再落回地面
+//
+// 时长必须明显长于客户端轮询间隔（public/room/app.js 的 POLL_TRANSIT_MS）。
+// 之前上座只给 620ms、下座 520ms，而轮询是 1200ms —— 过渡窗口比采样间隔还短，
+// 客户端一帧都采不到中间状态，看到的就只是「走到旁边停一下 → 闪现到座面上」。
+//
+// 现在过渡 2.4s / 1.8s，轮询 250ms → 上座区间能采到 9~10 帧。
+// 时长还要跟「横移距离」匹配：床和沙滩躺椅的座点到落点有 0.9~1.2m，
+// 采样帧数太少就会在前几帧看到明显的台阶（每帧 0.15~0.25m）。
+const MOUNT_MS = 2400;
+const DISMOUNT_MS = 1800;
+
 function seatLerp(seg, now) {
   const t = Math.max(0, Math.min(1, (now - seg.t0) / Math.max(1, seg.dur)));
   const smooth = (v) => {
@@ -1297,7 +1308,7 @@ function beginRoute(state, target, now, env = {}) {
         to: cur.mount.slice(),
         seatY: curY,
         t0: now,
-        dur: 520,
+        dur: DISMOUNT_MS,
         up: false,
         target
       };
@@ -1424,7 +1435,7 @@ function arrive(state, now) {
         to: (bedDef.pos || [0, 0]).slice(),
         seatY: bedY,
         t0: now,
-        dur: 700,
+        dur: MOUNT_MS,
         up: true,
         target: t,
         sleepAfter: true
@@ -1454,7 +1465,7 @@ function arrive(state, now) {
         to: (spDef.pos || currentPosition(state, now)).slice(),
         seatY,
         t0: now,
-        dur: 620,
+        dur: MOUNT_MS,
         up: true,
         target: t
       };
@@ -2508,7 +2519,8 @@ export function homeView(state, now = Date.now(), env = {}) {
       pose: s.pose,
       pos: [Math.round(pos[0] * 1000) / 1000, Math.round(pos[1] * 1000) / 1000],
       facing: Math.round(currentFacing(s, now) * 10) / 10,
-      elev: s.elev || 0,
+      elev: liveElev,   // 必须用插值后的高度：用 s.elev 的话过渡期间恒为 0，
+                        // 画面就是「贴着地滑进家具，最后一帧突然弹到座面」。
       walking,
       // 正在上/下座：客户端据此不做位置/高度缓动，避免缓动滞后导致穿过坐垫
       transitioning: !!(s.mounting || s.dismounting),

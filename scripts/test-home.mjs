@@ -12,6 +12,7 @@ import {
   beginGardenWork,
   buildHomePromptLine,
   buildRoute,
+  currentPosition,
   emptyHomeState,
   endGardenWork,
   graphPath,
@@ -397,7 +398,14 @@ test('sleep / wake / lamp / command 动作会改状态并留痕', () => {
   assert.equal(s.route.target.spot, 'bed');
   const bedAt = s.route.arriveAt;
   s = advanceHomeState(s, bedAt + 10, {}).state;
-  s = advanceHomeState(s, bedAt + 10 + 800, {}).state;
+  // 到了床位不等于已经躺好：上座（mounting）要走完才进被窝。
+  // 这里不能写死「等 800ms」——上座时长是可调的（MOUNT_MS），
+  // 写死会在调整过渡时长时变成假失败。按状态推进，推进到睡着或超时为止。
+  let t = bedAt + 10;
+  for (let i = 0; i < 120 && !s.asleep; i += 1) {
+    t += 100;
+    s = advanceHomeState(s, t, {}).state;
+  }
   assert.equal(s.asleep, true, '进被窝后才开始睡');
   assert.equal(`${s.room}.${s.spot}`, 'her_room.bed');
   s = applyHomeAction(s, { action: 'wake', at: bedAt + 20 }).state;
@@ -558,6 +566,59 @@ test('hygiene 有出口：邋遢到阈值她会自己去洗澡', () => {
     if (s.route?.target?.spot === 'shower' || s.spot === 'shower') went = true;
   }
   assert.ok(went, '邋遢到 0.8 应该自己去洗澡，否则「清爽」这根条的刻度是假的');
+});
+
+test('上座过渡明显长于客户端轮询间隔，否则会「停下→闪现」', () => {
+  // 客户端只能靠轮询采样服务端的插值。过渡窗口一旦短于采样间隔，
+  // 中间状态一帧都采不到，画面上就只剩「走到旁边停一下 → 闪现到座面上」。
+  // 这条测试把两边的数字钉在一起：改任一边忘了另一边就会红。
+  const appSrc = fs.readFileSync(new URL('../public/room/app.js', import.meta.url), 'utf8');
+  const stateSrc = fs.readFileSync(new URL('../src/home-state.js', import.meta.url), 'utf8');
+  const pollMs = Number(appSrc.match(/POLL_TRANSIT_MS\s*=\s*(\d+)/)?.[1]);
+  const mountMs = Number(stateSrc.match(/MOUNT_MS\s*=\s*(\d+)/)?.[1]);
+  assert.ok(pollMs > 0, 'app.js 里找不到 POLL_TRANSIT_MS');
+  assert.ok(mountMs > 0, 'home-state.js 里找不到 MOUNT_MS');
+  // 至少采到 6 帧，动作才看得出是连续的
+  const frames = Math.floor(mountMs / pollMs);
+  assert.ok(frames >= 6,
+    `上座过渡 ${mountMs}ms / 轮询 ${pollMs}ms 只能采到 ${frames} 帧（至少要 6 帧）`);
+
+  // 真的跑一遍：上座区间里必须采到多帧，且位置是连续变化的
+  const s0 = atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+  let s = applyHomeAction(s0, { action: 'command', room: 'living', spot: 'sofa', at: T0 }).state;
+  const seen = [];
+  for (let t = T0; t < T0 + 60000; t += pollMs) {
+    s = advanceHomeState(s, t, {}).state;
+    if (s.mounting) seen.push({ t, pos: currentPosition(s, t).slice(), elev: s.elev });
+    if (s.spot === 'sofa' && !s.mounting && !s.route) break;
+  }
+  assert.ok(seen.length >= 6, `上座过程只采到 ${seen.length} 帧，客户端会看到闪现`);
+  // 相邻采样之间不能出现「一步跨完」的跳跃
+  for (let i = 1; i < seen.length; i += 1) {
+    const d = Math.hypot(seen[i].pos[0] - seen[i - 1].pos[0], seen[i].pos[1] - seen[i - 1].pos[1]);
+    assert.ok(d < 0.55, `第 ${i} 帧横移了 ${d.toFixed(2)}m，会出现台阶感`);
+  }
+  // 高度必须和位置一起插值。之前 homeView 只算 liveElev 却没用（返回的是 s.elev，
+  // 过渡期间恒为 0），表现是「贴着地滑进家具，最后一帧突然弹到座面」。
+  const elevs = seen.map((a) => a.elev);
+  const risen = elevs.filter((v) => v > 0.02).length;
+  assert.ok(risen >= 3, `上座期间应该有多帧已经离地，实际只有 ${risen} 帧（高度没有插值）`);
+  for (let i = 1; i < elevs.length; i += 1) {
+    assert.ok(elevs[i] >= elevs[i - 1] - 1e-9, `第 ${i} 帧高度回退了：${elevs[i - 1]} → ${elevs[i]}`);
+  }
+  assert.ok(elevs.at(-1) > 0.3, `上座结束时应该已经在座面高度上，实际 ${elevs.at(-1)}`);
+
+  // 同样的检查走 homeView（客户端真正读的那个出口），确保它给的 elev 是插值后的值
+  let s2 = applyHomeAction(atState({ room: 'her_room', spot: 'desk', pose: 'stand', elev: 0, nextDecisionAt: T0 }),
+    { action: 'command', room: 'living', spot: 'sofa', at: T0 }).state;
+  const viewElevs = [];
+  for (let t = T0; t < T0 + 60000; t += pollMs) {
+    s2 = advanceHomeState(s2, t, {}).state;
+    if (s2.mounting) viewElevs.push(homeView(s2, t, {}).her.elev);
+    if (s2.spot === 'sofa' && !s2.mounting && !s2.route) break;
+  }
+  assert.ok(viewElevs.some((v) => v > 0.02),
+    'homeView().her.elev 在上座期间必须是插值后的值，不能一直是 0');
 });
 
 if (process.exitCode) {

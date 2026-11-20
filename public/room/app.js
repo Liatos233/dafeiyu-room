@@ -3854,7 +3854,36 @@ async function poll() {
   }
 }
 
-// ── 主循环 ────────────────────────────────────────────────────────────────
+// ── 轮询节拍：平时慢、上座/下座时快 ─────────────────────────────────────
+// 服务端的上座过渡（home-state.js 的 MOUNT_MS = 1.9s）是一段连续插值，客户端只能
+// 靠轮询采样它。之前固定 1200ms 轮询配 620ms 过渡，中间状态一帧都采不到，看到的
+// 就是「走到旁边停一下 → 闪现到座面上」。现在过渡期间拉到 250ms（约 8 帧），
+// 其余时间保持 1200ms，不白白增加请求。
+const POLL_IDLE_MS = 1200;
+const POLL_TRANSIT_MS = 250;
+let pollTimer = 0;
+let pollDelay = 0;
+
+function pollDelayFor() {
+  // transitioning 由服务端快照给出（mounting || dismounting），是最准的信号
+  return state?.her?.transitioning === true ? POLL_TRANSIT_MS : POLL_IDLE_MS;
+}
+
+function startPolling() {
+  const tick = async () => {
+    await poll();
+    const next = pollDelayFor();
+    // 节拍变了才重设定时器；否则保持原来的节奏，避免每轮都重建（也避免抖动）
+    if (next !== pollDelay) {
+      pollDelay = next;
+      clearInterval(pollTimer);
+      pollTimer = setInterval(tick, next);
+    }
+  };
+  pollDelay = POLL_IDLE_MS;
+  pollTimer = setInterval(tick, pollDelay);
+}
+
 let lastEnvTick = 0;
 let eyesPrev = null;                       // 她的视角上一帧位置（算移动方向用）
 const eyesDir = { x: 0, z: -1 };           // 平滑后的视线方向
@@ -4166,22 +4195,25 @@ function frame(now) {
       } catch { /* 忽略 */ }
     }
     // ── 显示：完全跟随服务端状态（位置 / 高度），不做任何几何修正 ──────────
-    // 上/下座由服务端两段式完成：原地升降 + 沿座面平移。
-    // 客户端只负责画，不再采样场景、不再搜索落点、不再做深度偏置。
+    // 上/下座由服务端两段式完成：原地升降 + 沿座面平移，服务端每帧都有插值。
     const drawPos = seatOverride ? shownHer.pos : displayPos;
     let drawElev = bubbleAnchorElev;
+    // onFurniture 里刻意**不含 transitioning**：上/下座期间要让它走缓动，
+    // 否则这一条会把上面去掉的 snap 又加回来（onFurniture 是 snap 的条件之一）。
     const onFurniture = !walkingNow && (
       (bubbleAnchorElev || 0) > 0.05
       || her.pose === 'sit'
-      || her.transitioning === true
       || seatOverride
     );
 
     window.__drawState = { pos: drawPos.slice ? drawPos.slice() : [drawPos[0], drawPos[1]], elev: drawElev, pose: her.pose, spot: her.spot, kind: her.kind, activity: her.activity, clip: actor.current, walking: walkingNow };
     actor.update(dt, camera, {
       pos: drawPos, elev: drawElev, walking: walkingNow, flip,
-      // 上/下座或坐姿覆盖时直接吸附：缓动会让人在半高处就已经横移进坐垫
-      snap: SHOT || seatOverride || her.transitioning === true || onFurniture,
+      // 上/下座期间**不能再 snap**：snap 会把目标位置直接 copy 过去，等于把服务端
+      // 逐帧算好的插值扔掉。之前 transitioning 也 snap，配合 1200ms 轮询 + 620ms 过渡
+      // （中间状态采不到），画面上就是「走到旁边停一下 → 闪现到座面上」。
+      // 现在过渡 1.9s、轮询 250ms，位置是连续变化的，交给缓动去追反而更顺。
+      snap: SHOT || seatOverride || onFurniture,
       drinking: her.kind === 'drink' && !her.asleep
     });
     const pose = {
@@ -4659,7 +4691,7 @@ async function boot() {
   renderer.info.reset();
   renderer.render(scene, camera);
   setTimeout(() => $('loading').classList.add('hide'), 250);
-  setInterval(poll, 1200);
+  startPolling();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
   if(params.get('garden')==='1') gardenController?.setOpen(true);
   requestAnimationFrame(frame);
