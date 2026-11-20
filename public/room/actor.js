@@ -333,12 +333,57 @@ const PLANE_W = 1.422;
 const PLANE_H = 1.6;
 const TARGET_H = 1.78;   // 统一身高（米）：和精灵图动作包对齐
 const FEET_CENTER_Y = 0.667;
-const CLIP_FOOT = new Map();   // clip src -> mesh.position.y（脚底贴到 y=0 时的高度） // 角色脚底在画面 91.7% 高度处，保证脚踩在地面
+const CLIP_FOOT = new Map();   // clip src -> 脚底在画面里的相对比例 fracFeet(0~1)
 const FADE_MS = 260;
+
+// ── 首帧 alpha 包围盒 ───────────────────────────────────────────────────
+// 立绘素材底部常带半透明投影/光晕。用很松的阈值（alpha > 24）会把阴影底边
+// 当成「脚底」，于是把整张平面往下拉去对齐阴影 —— 角色本体就被抬离地面（悬空），
+// 同时 fracH 被阴影撑大、quadH 变小，角色还会显得偏小。
+//
+// 所以先用**实心阈值**量（只认 alpha > 200 且该行像素数够多的行），
+// 量不到再退回宽松阈值。这样量出来的是角色本体，不是阴影。
+const ALPHA_SOLID = 200;
+const ALPHA_LOOSE = 24;
+
+function alphaBoxAt(data, sw, sh, threshold, minRowPixels) {
+  let minX = sw, minY = -1, maxX = -1, maxY = -1;
+  for (let y = 0; y < sh; y += 1) {
+    const row = y * sw * 4;
+    let count = 0;
+    let rowMinX = sw, rowMaxX = -1;
+    for (let x = 0; x < sw; x += 1) {
+      if (data[row + x * 4 + 3] > threshold) {
+        count += 1;
+        if (x < rowMinX) rowMinX = x;
+        if (x > rowMaxX) rowMaxX = x;
+      }
+    }
+    if (count < minRowPixels) continue;
+    if (minY < 0) minY = y;
+    maxY = y;
+    if (rowMinX < minX) minX = rowMinX;
+    if (rowMaxX > maxX) maxX = rowMaxX;
+  }
+  return (maxY > minY && maxX > minX) ? { minX, minY, maxX, maxY } : null;
+}
+
+/** 量首帧的角色本体包围盒：实心优先，量不到退回宽松阈值。 */
+function measureAlphaBox(data, sw, sh) {
+  const minRow = Math.max(2, Math.round(sw * 0.015));
+  return alphaBoxAt(data, sw, sh, ALPHA_SOLID, minRow)
+    || alphaBoxAt(data, sw, sh, ALPHA_LOOSE, 1);
+}
+
 // 躺/睡片段（画面下缘就在脚底线上）贴在床上时，床垫+被子被面比 spot 的 elev
 // 高出约 0.12：立绘是竖直平面，低于被面的那截会被床品挡住，看起来像下半身被切。
 // 这里给躺姿一点抬升，让身体下缘落在被面上；站姿（elev=0 / 地面）不受影响。
 const LIE_CLIPS = Object.freeze(new Set(['nap', 'sleep_in', 'sleep_loop', 'sleep_out']));
+const LIE_SRC = new Set([...LIE_CLIPS].map((k) => CLIPS[k]).filter(Boolean));
+// 站立类素材的「内容高度占画面比例」典型值（idle.png 实测：角色占 640×360 画面的 78%）。
+// 躺/蜷缩类素材用它做**固定**比例尺，不做「拉高到统一身高」的归一化 ——
+// 详见 applyBbox 里的说明。
+const STAND_FRAC_REF = 0.78;
 const LIE_SURFACE_LIFT = 0;
 
 function shadowTexture() {
@@ -506,19 +551,7 @@ class Layer {
       ctx.clearRect(0, 0, sw, sh);
       ctx.drawImage(v, 0, 0, sw, sh);
       const data = ctx.getImageData(0, 0, sw, sh).data;
-      let minX = sw, minY = sh, maxX = -1, maxY = -1;
-      for (let y = 0; y < sh; y++) {
-        const row = y * sw * 4;
-        for (let x = 0; x < sw; x++) {
-          if (data[row + x * 4 + 3] > 24) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      if (maxX > minX && maxY > minY) box = { minX, minY, maxX, maxY };
+      box = measureAlphaBox(data, sw, sh);
     } catch { box = null; }
     if (!box) return false;
 
@@ -529,7 +562,18 @@ class Layer {
     const fracFeet = (box.maxY + 1) / sh;
     const fracCx = (box.minX + box.maxX) / 2 / sw;
     const groupScale = this.mesh.parent ? this.mesh.parent.scale.y || 1 : 1;
-    const quadH = TARGET_H / Math.max(0.25, fracH) / groupScale;
+    // 比例尺（每素材的 plane 高度）。
+    //
+    // 站立类：按内容高度归一化到 TARGET_H —— 不同站姿素材的角色高度略有差异，
+    //         归一化能保证「她一直是 1.78 米高」。
+    // 躺/蜷缩类：**不能归一化**。sleep_loop 这类素材角色是蜷着的，内容只占画面 57%，
+    //         归一化等于把她放大 37%（1.78/0.57 的 plane），于是整个人浮在床面上方。
+    //         这类素材直接沿用站立类的比例尺（所有素材同是 640×360 同一比例尺，
+    //         保持原始比例才会「蜷着就矮、站着就高」）。
+    const isLie = LIE_SRC.has(this.src);
+    const quadH = isLie
+      ? TARGET_H / STAND_FRAC_REF / groupScale
+      : TARGET_H / Math.max(0.25, fracH) / groupScale;
     const quadW = quadH * (vw / vh);
     this.mesh.geometry.dispose();
     this.mesh.geometry = new THREE.PlaneGeometry(quadW, quadH);
@@ -575,14 +619,9 @@ class Layer {
       ctx.clearRect(0, 0, sw, sh);
       ctx.drawImage(v, 0, 0, sw, sh);
       const data = ctx.getImageData(0, 0, sw, sh).data;
-      let maxY = -1;
-      for (let y = 0; y < sh; y += 1) {
-        const row = y * sw * 4;
-        for (let x = 0; x < sw; x += 1) {
-          if (data[row + x * 4 + 3] > 24) { maxY = y; break; }
-        }
-      }
-      if (maxY > 0) fracFeet = (maxY + 1) / sh;
+      // 和 applyBbox 用同一套「实心包围盒」：底部的半透明阴影/光晕不算脚底。
+      const box = measureAlphaBox(data, sw, sh);
+      if (box) fracFeet = (box.maxY + 1) / sh;
     } catch { fracFeet = null; }
     if (!fracFeet) return;
     // 只做「比例合理性」保护（脚底不可能在画面最顶端，也不会超出最底端），

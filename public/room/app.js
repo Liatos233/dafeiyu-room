@@ -2204,7 +2204,15 @@ function previewHer(her) {
 // 家具有高度：默认 45° 俯视时，坐垫/床沿会把低于它们上表面的身体挡住。
 // 所以只要踩在家具上，统一抬高，让整个身体露出来（起床过渡、站姿也一样）。
 const FURNITURE_RAISE = 0.45;
-const BED_RAISE = 0.22;
+// 躺姿额外抬升：**必须是 0**。
+//
+// 这里原来写 0.22，注释说「床垫+被子被面比 spot 的 elev 高出约 0.12，抬一点让身体
+// 落在被面上」。但服务端给的 elev 已经是床面高度（0.65 + EPS = 0.662），而躺姿立绘
+// 的下边缘在 actor 里已经对齐到组原点 y=0 —— 再加 0.22 就是让整个人凭空浮在床面
+// 上方 22 厘米。用户看到的「睡觉循环悬空很远」主要就是这 0.22 米。
+//
+// 被子比床面高是正常的：人躺下去，下半身本来就该被被子盖住一部分。
+const BED_RAISE = 0;
 // 脚下踩在家具顶面上时返回顶面高度（沙发 0.48 / 床 0.54 / 椅面 0.46）
 function furnitureTopAt(pos) {
   const keep = NAV_DATA?.keepout || [];
@@ -3131,7 +3139,17 @@ function updateAnimBox() {
   animBoxFoot.quaternion.copy(animBoxMesh.quaternion);
   animBoxFoot.visible = true;
 
-  window.__animBox = { w: +w.toFixed(3), h: +h.toFixed(3), footY: +footY.toFixed(3) };
+  // 调试数据：脚底对齐的关键量都带上，排查「悬空/陷进去」时直接看这几个数。
+  //   footFrac  —— 素材里脚底在画面的相对高度（0~1，越大越靠画面底部）
+  //   planeH    —— 这张平面按内容算出来的实际高度（米）
+  //   footY     —— 框底边的世界高度；站姿站在地面时应 ≈ 0
+  window.__animBox = {
+    w: +w.toFixed(3),
+    h: +h.toFixed(3),
+    footY: +footY.toFixed(3),
+    footFrac: useMesh ? +(mesh.footFrac || 0).toFixed(4) : null,
+    planeH: useMesh ? +h.toFixed(3) : null
+  };
 }
 
 // ── 动画调试面板（开发调试用）──────────────────────────────────────────
@@ -3157,11 +3175,17 @@ function renderClipLog() {
   const nowKind = her?.kind || '?';
   const nowClip = actor?.current || '?';
   const pick = her?.freestylePick;
+  // 脚底对齐的关键数据：悬空/陷进去时看这几个数就知道是素材测量问题还是别处。
+  const ab = window.__animBox;
+  const footLine = ab && ab.footFrac != null
+    ? `footFrac=${ab.footFrac} planeH=${ab.planeH} footY=${ab.footY} elev=${+(her?.elev || 0).toFixed(3)}`
+    : null;
   const lines = [
     `动画调试（当前）`,
     `kind=${nowKind} clip=${nowClip}`,
     `activity=${String(her?.activity || '').slice(0, 22)}`,
     pick ? `触发=${pick.by}(${pick.group})` : '触发=需求/日程',
+    ...(footLine ? [footLine] : []),
     '— 切换日志（最新在上） —'
   ];
   const log = (window.__clipLog || []).slice(-20).reverse();
