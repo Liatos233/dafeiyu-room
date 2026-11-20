@@ -164,26 +164,31 @@ test('家具菜单只给真实能去的站位，且不残留左下角卡片', ()
     '打开菜单的顺序应该是「先定位再淡入」（hidden → layoutSpotMenu() → remove("hide")）');
 });
 
-test('客户端走路外推用绝对弧长，且动画判据不掺「本帧位移」', () => {
-  // 两条都是「走路一卡一卡 / 动画一闪一闪」的根因，写成断言防止回退：
-  //
-  // 1) 位置必须用「整条路线的绝对弧长」推算。旧版 advanceRoute(points, start, distance)
-  //    的 start 每次轮询都换，走过拐角后「最近线段」会跳一格，同一个 distance 映射到
-  //    完全不同的位置 —— 实测能产生 1.2m 的瞬时跳变（37 m/s）。
-  for (const fn of ['arcLengthAt(', 'pointAtArc(', 'routeLengths(']) {
-    assert.ok(appSource.includes(`function ${fn}`.replace('(', '(')), `缺少 ${fn}`);
+test('位置只有一份实现：服务端与客户端共用 public/room/motion.js', () => {
+  // 「走路一卡一卡 / 动画一闪一闪」的根源是同一个概念有多份实现：
+  // 服务端 positionOnRoute、客户端 pointAtArc/arcLengthAt、客户端再套一层指数平滑，
+  // 改一处另外几处就漂。现在位置只能有一个求值函数 motionAt，两边都 import 它。
+  const motionSrc = read('public/room/motion.js');
+  for (const fn of ['routeLengths', 'pointAtArc', 'arcLengthAt', 'motionAt']) {
+    assert.ok(new RegExp(`export function ${fn}\\b`).test(motionSrc), `motion.js 缺少 ${fn}`);
   }
-  assert.ok(!/function advanceRoute\s*\(/.test(appSource),
-    '旧的 advanceRoute(points, start, distance) 应该已删除（换锚点会跳格）');
-  assert.ok(/s0\s*=\s*arcLengthAt\(/.test(appSource),
-    '轮询锚点应该记弧长 s0，而不是起点坐标');
-  assert.ok(/pointAtArc\(walkPredict\.points,\s*walkPredict\.s0/.test(appSource),
-    '外推应该用 pointAtArc(路线, s0 + speed*elapsed)');
 
-  // 2) 走路动画的开关不能依赖「这一帧位移 > 阈值」。
-  //    拐角跨段采样、外推到路线末端都会让位移瞬间变 0 → motionWalking 翻转 →
-  //    syncCharacter() 反复调用 → 走路/待机片段横跳（就是「一闪一闪」）。
-  //    判定语句可能跨行，所以要取「从 const derivedWalk 到下一条语句」的整段。
+  // 两边都必须 import 它，且不许各自再实现一遍
+  assert.ok(/from '\.\/motion\.js'/.test(appSource), 'app.js 应该 import ./motion.js');
+  assert.ok(/from '\.\.\/public\/room\/motion\.js'/.test(read('src/home-state.js')),
+    'home-state.js 应该 import ../public/room/motion.js（同一份实现）');
+  for (const gone of ['function routeLengths', 'function pointAtArc', 'function arcLengthAt']) {
+    assert.ok(!appSource.includes(gone), `app.js 不该再自己实现 ${gone.replace('function ', '')}`);
+  }
+  // 旧的、会跳格的 advanceRoute 必须彻底消失
+  assert.ok(!/function advanceRoute\s*\(/.test(appSource), '旧 advanceRoute 应该已删除');
+
+  // 客户端渲染位置必须来自 motionAt，而不是读 pos
+  assert.ok(/motionAt\(her\.motion/.test(appSource), '客户端应该用 motionAt(her.motion, ...) 求位置');
+  // 服务端快照必须带 motion（客户端的唯一运动契约）
+  assert.ok(/motion,\s*$|\bmotion,/.test(read('src/home-state.js')), 'homeView 应该输出 motion');
+
+  // 走路动画的判据不能依赖「这一帧位移」
   const fromDerived = appSource.slice(appSource.indexOf('const derivedWalk ='));
   const derivedWalkStmt = fromDerived.slice(0, fromDerived.indexOf(';') + 1);
   assert.ok(derivedWalkStmt.length > 10, '找不到 derivedWalk 判定');

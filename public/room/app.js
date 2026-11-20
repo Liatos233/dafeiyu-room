@@ -13,6 +13,10 @@ import { getGardenFraming } from './garden-camera.js';
 import { toggleAnimGraph, isAnimGraphOpen } from './clip-graph.js';
 import { actionClip, actionSeatedClip, SEATED_FALLBACK } from './action-map.js';
 import { NEED_BARS, NEED_THRESHOLDS, barPercents, tickPercents, glowActions } from './need-bars.js';
+// 运动求值和服务端是**同一个文件**（src/home-state.js 也 import 它）。
+// 位置只此一份实现：之前两边各写一套、加上客户端再套一层平滑，才反复出现
+// 「路径对但一走就抖」。详见 motion.js 顶部的说明。
+import { motionAt, arcLengthAt, pointAtArc } from './motion.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -42,69 +46,13 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // 客户端沿服务端给的路点前进：快照每 1.2 秒才来一次，靠它做插值，
+// 客户端沿服务端给的路点前进：快照每 1.2 秒才来一次，靠它做插值，
 // 出发那一刻就能连续移动，不再等下一次轮询。
-// ── 路线位置推算：用「绝对弧长」而不是「从任意起点起算的距离」 ──────────────
-// 旧版 advanceRoute(points, start, distance) 有个会抖的缺陷：start 是「上次轮询时
-// 的位置」，每轮询会变一次；函数用「离 start 最近的线段」决定从第几段开始累积距离，
-// 于是 start 走过一个拐角后 idx 会跳一格，同一个 distance 就映射到完全不同的位置
-// —— 实测能产生 1.2m 的瞬时跳变（37 m/s），观感就是「一卡一卡」，
-// 而且位移跳变会让 movingNow 翻转，走路/待机动画跟着横跳，也就是「一闪一闪」。
+// 求值函数不在这里定义——motion.js 是服务端和客户端共用的唯一实现，
+// 这里只负责「用哪份 motion、按什么时刻算」。
 //
-// 改成三步、全部基于**整条折线的绝对弧长**，锚点变化不会跳格：
-//   1) routeLengths(points)      预计算每段长度与累计弧长
-//   2) arcLengthAt(points, pos)  把任意位置投影成「在这条路线上的弧长」
-//   3) pointAtArc(points, s)     按弧长取点
-// 轮询时只需要记住 s0（她此刻的弧长）和 t0，之后位置 = pointAtArc(s0 + speed*Δt)。
-let routeCache = { key: null, lens: null, cum: null };
-
-function routeLengths(points) {
-  const key = points;
-  if (routeCache.key === key) return routeCache;
-  const lens = [];
-  const cum = [0];
-  for (let i = 1; i < points.length; i += 1) {
-    const len = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-    lens.push(len);
-    cum.push(cum[i - 1] + len);
-  }
-  routeCache = { key, lens, cum };
-  return routeCache;
-}
-
-/** 把位置投影到折线上，返回它的绝对弧长（0..total）。 */
-function arcLengthAt(points, pos) {
-  if (!Array.isArray(points) || points.length < 2) return 0;
-  const { cum } = routeLengths(points);
-  let best = { s: 0, d: Infinity };
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const a = points[i], b = points[i + 1];
-    const dx = b[0] - a[0], dz = b[1] - a[1];
-    const len2 = dx * dx + dz * dz;
-    const t = len2 ? clamp(((pos[0] - a[0]) * dx + (pos[1] - a[1]) * dz) / len2, 0, 1) : 0;
-    const px = a[0] + dx * t, pz = a[1] + dz * t;
-    const d = Math.hypot(px - pos[0], pz - pos[1]);
-    if (d < best.d) best = { s: cum[i] + Math.sqrt(len2) * t, d };
-  }
-  return best.s;
-}
-
-/** 按绝对弧长取点；超出末端就钉在终点。 */
-function pointAtArc(points, s) {
-  if (!Array.isArray(points) || points.length < 2) return points?.[0] || [0, 0];
-  const { lens, cum } = routeLengths(points);
-  const total = cum[cum.length - 1];
-  const target = Math.max(0, Math.min(total, s));
-  for (let i = 0; i < lens.length; i += 1) {
-    if (target <= cum[i + 1]) {
-      const t = lens[i] > 1e-9 ? (target - cum[i]) / lens[i] : 0;
-      return [
-        points[i][0] + (points[i + 1][0] - points[i][0]) * t,
-        points[i][1] + (points[i + 1][1] - points[i][1]) * t
-      ];
-    }
-  }
-  return points[points.length - 1].slice();
-}
+// 曾经这里有一份自己的弧长实现（routeLengths/arcLengthAt/pointAtArc），
+// 加上服务端 positionOnRoute 那一份，同一个概念两份代码，改一处就漂一处。
 
 const canvas = $('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -1368,7 +1316,13 @@ function playTone({ from = 440, to = from, dur = 0.12, vol = 0.07, type = 'sine'
 function playPickup() { playTone({ from: 430, to: 690, dur: 0.10, vol: 0.055, type: 'sine' }); }
 function playDrop() { playTone({ from: 190, to: 105, dur: 0.16, vol: 0.085, type: 'triangle' }); }
 function playTap() { playTone({ from: 520, to: 610, dur: 0.065, vol: 0.032, type: 'sine' }); }
+// walkPredict 现在就是服务端给的 motion 对象（{kind:'walk'|'mount'|...}），
+// 不再是「客户端自己拼的锚点」。名字暂时留着避免大范围改动，语义已经是 motion。
 let walkPredict = null;
+// 服务端时钟相对本地时钟的偏移（ms）。motion 里的 t0 是服务端时刻，
+// 用 localNow + clockSkew 才能对齐到同一条时间轴。
+let clockSkew = 0;
+function serverNowMs() { return Date.now() + clockSkew; }
 let lastDisplayPos = null;
 
 // 事件文案统一成「你」的视角（也兼容历史数据里的旧文案）
@@ -1771,21 +1725,16 @@ function applyState(next) {
       ...skyOptions(), lamp: next.env?.lamp !== false, asleep: next.her.asleep, kind: next.her.kind
     });
     world.setClock?.(next.hour || 0, 0);
-    if (next.her.walking && Array.isArray(next.her.route) && next.her.route.length > 1) {
-      // 锚点记「绝对弧长」而不是「起点 + 距离」：
-      // 起点每轮询都会变，而弧长是整条路线上的全局量，换锚点不会让位置跳格。
-      // 时间同样要对齐到服务端算出这个 pos 的时刻（快照里的 now），
-      // 否则会把「过去的 pos」当成「现在的位置」，每次轮询往回拽一点。
+    if (next.her.motion) {
+      // 服务端直接给「运动描述」，客户端不再从 pos 反推锚点。
+      // 这是这次重构的重点：运动只有一种表示，两边用同一个 motionAt 求值，
+      // 不存在「客户端猜服务端在哪」这种必然漂移的环节。
+      //
+      // 时钟：motion 里的 t0 是**服务端时钟**。用快照的 now 和本地时钟算一次偏移，
+      // 之后本地时刻 + 偏移就是服务端时刻。偏移只做一次性校正，不持续漂移。
       const serverNow = Number(next.now) || Date.now();
-      const transit = Math.max(0, Math.min(400, Date.now() - serverNow));
-      const route = next.her.route;
-      const s0 = arcLengthAt(route, next.her.pos);
-      walkPredict = {
-        points: route,
-        s0,
-        at: performance.now() - transit,
-        speed: Math.max(0.5, Number(next.her.speed) || 1.05)
-      };
+      clockSkew = serverNow - Date.now();
+      walkPredict = next.her.motion;
     } else {
       walkPredict = null;
     }
@@ -4024,14 +3973,17 @@ function frame(now) {
 
   const her = state?.her;
   if (her) {
-    let displayPos = her.pos;
+    // 位置只有一个来源：motionAt(服务端给的 motion, 服务端此刻的时间)。
+    // 服务端算快照、客户端算每帧，用的都是同一个纯函数，所以不会漂。
     const swimmingNow = !!(her.swim && Date.now() < her.swim.until);
-    if (swimmingNow) displayPos = swimHer(her).pos;
-    // 过渡期间禁止路径外推：到达入口后的预测会把角色推进家具内部（高度还没抬起来）
-    if (walkPredict && her.walking && !swimmingNow && her.transitioning !== true) {
-      const elapsed = Math.max(0, (performance.now() - walkPredict.at) / 1000);
-      displayPos = pointAtArc(walkPredict.points, walkPredict.s0 + walkPredict.speed * elapsed);
+    let displayPos = her.pos;
+    let displayElev = her.elev || 0;
+    if (her.motion) {
+      const m = motionAt(her.motion, serverNowMs(), her.motion.pos);
+      displayPos = m.pos;
+      displayElev = m.elev;
     }
+    if (swimmingNow) displayPos = swimHer(her).pos;
     const dragging = !!charDrag?.active;
     if (dragging) displayPos = charDrag.pos;
     else if (placeHold && performance.now() < placeHold.until) displayPos = placeHold.pos;

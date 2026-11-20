@@ -14,6 +14,10 @@ import path from 'node:path';
 
 import { CATALOG, FREESTYLE_DEFAULTS } from '../public/room/action-catalog.js';
 import { FREESTYLE_BUBBLE, actionBubble } from '../public/room/action-map.js';
+// 位置的唯一实现。页面也 import 同一个文件，两边算出来的位置必然一致。
+// 放在 public/room/ 下是因为那份代码要进 Vite 打包（root = public/room），
+// 服务端反过来 import 它 —— 这和 action-map.js / action-catalog.js 的做法一致。
+import { arcLengthAt, motionAt, pointAtArc, polylineLength, routeLengths } from '../public/room/motion.js';
 
 const MIN = 60_000;
 const HOUR = 3_600_000;
@@ -1109,27 +1113,16 @@ export function buildRoute(from, fromSpotDef, target, now, speed = 0.55) {
   return { points, departAt: now, arriveAt: now + Math.max(1, total / speed * 1000), speed, target };
 }
 
-export function polylineLength(points) {
-  let d = 0;
-  for (let i = 1; i < points.length; i += 1) d += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-  return d;
-}
+// 折线长度现在只有一份实现（shared/motion.js），这里保留同名导出给测试和内部用。
+export { polylineLength };
 
+// 沿路线取位置：直接用共享实现，不再自己写一份（两份实现漂移是之前抖动的根源）。
 export function positionOnRoute(route, now) {
   if (!route?.points?.length) return null;
   const pts = route.points;
   if (now <= route.departAt) return pts[0].slice();
   const traveled = Math.max(0, (now - route.departAt) / 1000 * route.speed);
-  let left = traveled;
-  for (let i = 1; i < pts.length; i += 1) {
-    const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    if (left <= seg) {
-      const t = seg ? left / seg : 0;
-      return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t];
-    }
-    left -= seg;
-  }
-  return pts.at(-1).slice();
+  return pointAtArc(pts, traveled);
 }
 
 // 上/下座插值。分两段走，避免身体斜着穿过坐垫/床沿：
@@ -1146,40 +1139,70 @@ export function positionOnRoute(route, now) {
 const MOUNT_MS = 2400;
 const DISMOUNT_MS = 1800;
 
-function seatLerp(seg, now) {
-  const t = Math.max(0, Math.min(1, (now - seg.t0) / Math.max(1, seg.dur)));
-  const smooth = (v) => {
-    const c = Math.max(0, Math.min(1, v));
-    return c * c * (3 - 2 * c);
-  };
-  const seatY = Number(seg.seatY) || 0;
-  const RISE = 0.55;   // 抬升/横移的分界
-
-  let h;   // 横向进度
-  let v;   // 高度进度
-  if (seg.up) {
-    v = smooth(t / RISE);
-    h = smooth((t - RISE) / (1 - RISE));
-  } else {
-    h = smooth(t / RISE);
-    v = smooth((t - RISE) / (1 - RISE));
+/**
+ * 把状态编译成「运动描述」——**服务端和客户端之间唯一的运动契约**。
+ *
+ * 以前双方各自从 route / mounting / walking 这些散字段里拼理解，于是同一件事
+ * 有两份实现、多个判据；现在只有这一个函数产出 motion，客户端只消费它。
+ *
+ * @returns {object} { kind, points?, s0?, t0, speed?, from?, to?, seatY?, dur?, up?, pos?, elev? }
+ */
+function motionOf(state) {
+  if (state.mounting) {
+    const m = state.mounting;
+    return {
+      kind: 'mount',
+      from: (m.from || [0, 0]).slice(),
+      to: (m.to || [0, 0]).slice(),
+      seatY: Number(m.seatY) || 0,
+      t0: Number(m.t0) || 0,
+      dur: Number(m.dur) || MOUNT_MS,
+      up: true
+    };
   }
+  if (state.dismounting) {
+    const m = state.dismounting;
+    return {
+      kind: 'dismount',
+      from: (m.from || [0, 0]).slice(),
+      to: (m.to || [0, 0]).slice(),
+      seatY: Number(m.seatY) || 0,
+      t0: Number(m.t0) || 0,
+      dur: Number(m.dur) || DISMOUNT_MS,
+      up: false
+    };
+  }
+  if (state.route && Array.isArray(state.route.points) && state.route.points.length > 1) {
+    return {
+      kind: 'walk',
+      points: state.route.points,
+      // s0 = 出发时刻的弧长（从路线起点算起）。用绝对弧长而不是「起点坐标 + 距离」，
+      // 这样换锚点不会跳格（旧实现就是这么抖的）。
+      s0: Number(state.route.s0) || 0,
+      t0: Number(state.route.departAt) || 0,
+      speed: Math.max(0.05, Number(state.route.speed) || 1.05)
+    };
+  }
+  const rest = state.spot === 'free' && Array.isArray(state.freePos)
+    ? state.freePos.slice()
+    : (spotOf(state.room, state.spot)?.pos?.slice() || [6.3, 5.1]);
+  return { kind: 'still', pos: rest, elev: Number(state.elev) || 0 };
+}
 
-  const x = seg.from[0] + (seg.to[0] - seg.from[0]) * h;
-  const z = seg.from[1] + (seg.to[1] - seg.from[1]) * h;
-  const y = seg.up ? seatY * v : seatY * (1 - v);
-  return { pos: [x, z], elev: y, done: t >= 1 };
+export { motionOf };
+
+/** 此刻的位置/高度/是否在走——服务端内部统一走这个，不再各算各的。 */
+export function motionStateAt(state, now) {
+  const motion = motionOf(state);
+  return motionAt(motion, now, motion.kind === 'still' ? motion.pos : undefined);
 }
 
 export function currentPosition(state, now) {
-  if (state.mounting) return seatLerp(state.mounting, now).pos;
-  if (state.dismounting) return seatLerp(state.dismounting, now).pos;
-  if (state.route) {
-    const p = positionOnRoute(state.route, now);
-    if (p) return p;
-  }
-  if (state.spot === 'free' && Array.isArray(state.freePos)) return state.freePos.slice();
-  return spotOf(state.room, state.spot)?.pos?.slice() || [6.3, 5.1];
+  return motionStateAt(state, now).pos;
+}
+
+function seatLerp(seg, now) {
+  return motionAt({ kind: 'mount', ...seg, up: seg.up !== false }, now);
 }
 
 export function currentFacing(state, now) {
@@ -2464,12 +2487,13 @@ function speechFor(kind, activity, extra = {}) {
 
 export function homeView(state, now = Date.now(), env = {}) {
   const s = normalizeHomeState(state, now);
-  const pos = currentPosition(s, now);
-  // 过渡期间高度必须和位置来自同一段插值：
-  // 否则 pos 已经在座点上、elev 还是 0，画面上就是"贴着地滑进家具，最后突然弹上去"。
-  let liveElev = s.elev || 0;
-  if (s.mounting) liveElev = seatLerp(s.mounting, now).elev;
-  else if (s.dismounting) liveElev = seatLerp(s.dismounting, now).elev;
+  // 位置/高度/是否在走，全部来自同一个 motion + 同一个求值函数。
+  // 以前是 currentPosition 算位置、另一段代码算 liveElev，两处各写一遍就容易不同步
+  //（曾经出现 pos 已经在座点上、elev 还是 0，最后突然弹上去）。
+  const motion = motionOf(s);
+  const live = motionAt(motion, now, motion.kind === 'still' ? motion.pos : undefined);
+  const pos = live.pos;
+  const liveElev = live.elev;
   const hour = localHour(now);
   const night = hour >= 22 || hour < 7;
   const asleep = s.asleep === true;
@@ -2521,6 +2545,10 @@ export function homeView(state, now = Date.now(), env = {}) {
       facing: Math.round(currentFacing(s, now) * 10) / 10,
       elev: liveElev,   // 必须用插值后的高度：用 s.elev 的话过渡期间恒为 0，
                         // 画面就是「贴着地滑进家具，最后一帧突然弹到座面」。
+      // 运动描述：客户端用它 + motionAt() 每帧算出位置/高度，不再依赖 pos 采样。
+      // pos/elev/route/walking 仍然保留一个版本，是为了兼容调试工具和旧客户端，
+      // 但**渲染不再读它们** —— 位置只有 motion 一个来源。
+      motion,
       walking,
       // 正在上/下座：客户端据此不做位置/高度缓动，避免缓动滞后导致穿过坐垫
       transitioning: !!(s.mounting || s.dismounting),
