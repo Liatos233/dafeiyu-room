@@ -141,7 +141,14 @@ class DafeiyuDraw(Star):
         """智谱 CogView-4，返回 (图片字节, 落盘路径)。"""
         if not self.api_key:
             raise RuntimeError("没有配置智谱 API Key（插件配置 api_key）")
-        body = {"model": self.model, "prompt": prompt, "size": size}
+        body = {
+            "model": self.model,
+            "prompt": prompt,
+            "size": size,
+            # 关水印。注意：智谱要求账号先在「个人中心 → 安全管理 → 去水印管理」
+            # 签署免责声明；没签的话服务端会**静默忽略**这个字段（实测仍出水印）。
+            "watermark_enabled": False,
+        }
         timeout = aiohttp.ClientTimeout(total=180)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
