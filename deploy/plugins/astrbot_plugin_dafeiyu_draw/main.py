@@ -180,7 +180,17 @@ class DafeiyuDraw(Star):
         return image_bytes, str(path)
 
     async def _draw_for_tool(self, event: AstrMessageEvent, prompt: str, size: str):
-        """生成并发图；返回 (给模型看的文字, 图片字节或 None)。"""
+        """生成图片；返回 (给模型看的文字, 图片字节或 None)。
+
+        注意：这里**不主动 event.send**。
+        历史 bug：原先这里 `await event.send(...)` 发一次，同时又把图片放进
+        CallToolResult 的 ImageContent 里；AstrBot 会把工具图片缓存下来，并给模型
+        追加一句「Use send_message_to_user to send it to the user if satisfied」——
+        模型照做，于是同一张图被发了两次（日志里能同时看到 `[draw] 画好一张` 和
+        随后一次 `send_message_to_user`）。
+        现在统一由模型通过 send_message_to_user 发一次；图片仍留在工具结果里，
+        所以模型照样"看得见"这张图，可以接着评价/修改。
+        """
         user = str(event.get_sender_id())
         ok, why = self._quota_ok(user)
         if not ok:
@@ -198,17 +208,11 @@ class DafeiyuDraw(Star):
             return f"画失败了：{exc}", None
         self._last[user] = time.time()
         self._usage.setdefault(user, []).append(time.time())
-        sent_ok = True
-        try:
-            await event.send(event.chain_result([Comp.Image.fromBytes(image_bytes)]))
-        except Exception as exc:  # noqa: BLE001
-            sent_ok = False
-            logger.warning(f"[draw] 发送图片失败：{exc}")
         logger.info(f"[draw] {user} 画好一张：{clean[:40]} size={want} file={path}")
-        if sent_ok:
-            text = f"画好了，已经发到聊天里了（{want}）。画面：{clean[:80]}"
-        else:
-            text = f"画好了但发送失败（{want}），文件在 {path}。画面：{clean[:80]}"
+        text = (
+            f"画好了（{want}）。请立刻用 send_message_to_user 把这张图发给用户"
+            f"（type=image，path 用这次工具结果里的图片路径），不要重复发送。画面：{clean[:80]}"
+        )
         return text, image_bytes
 
     async def _draw_and_send(self, event: AstrMessageEvent, prompt: str, size: str) -> str:
