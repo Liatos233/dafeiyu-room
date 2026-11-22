@@ -75,7 +75,9 @@ new = '''    @filter.permission_type(filter.PermissionType.ADMIN)
                 return
             await call_onebot(client, 'delete_msg', message_id=int(target))
             logger.info(f"[qq_tools] /撤回 成功：{target}")
-            yield event.plain_result("撤回了。")
+            # 成功就不回复：撤回本身就是"少一条消息"，那条消息消失已经是反馈了，
+            # 再发一句"撤回了。"反而又补一条回来。只有失败才提示。
+            return
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[qq_tools] /撤回 失败：{e}")
             yield event.plain_result(f"撤回失败：{e}")
