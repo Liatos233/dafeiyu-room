@@ -641,6 +641,11 @@ class RoomLinkPlugin(Star):
                 return
             extra = (
                 "\n【房间实时状态（最高优先级，覆盖你记忆和之前对话里的任何位置描述）】"
+                # 房间服务给的 line 是第三人称（"她在菜园采收""她钻进被窝"）。
+                # 模型有时候分不清这个「她」是自己还是别人 —— 实测记忆里出现过
+                # 把「她在菜园采收」记成「Liatos 在菜园采收」。这里用一句话点明主体，
+                # 不改 line 原文（改原文要动房间那边的文案，影响面更大）。
+                "\n（下面这段里的「她」就是你自己，请当成「我」来读，不要理解成主人或别人）"
                 + line
                 + "\n你之前说过自己在别处，那是过时信息，一律以本条为准。"
                 "\n如果主人让你去某个地方、做某件事或播某个动画，必须调用 "
@@ -650,7 +655,7 @@ class RoomLinkPlugin(Star):
             req.system_prompt = f"{req.system_prompt or ''}{extra}"
             # 同时贴到本轮用户消息末尾：离生成最近，模型最难忽略
             if getattr(req, "prompt", None):
-                req.prompt = f"{req.prompt}\n\n（房间实时状态，以此为准：{line}）"
+                req.prompt = f"{req.prompt}\n\n（房间实时状态，以此为准；其中「她」= 你自己：{line}）"
             try:
                 logger.info(f"[room_link] 注入房间状态（{len(line)} 字）：{line[:70]}")
             except Exception:
