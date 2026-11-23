@@ -13,3 +13,12 @@
 - 改动：文件名改为英文 key（`idle.webm` 等）、用 ffmpeg 抽取 2.4s 的透明 PNG 作为截图后备；
   动画内容未重新剪辑。
 - 如果这个仓库公开，请保留本文件与页面底部署名；`public/room/assets/pet/` 不应被当作 MIT 代码授权。
+
+## 动作素材的精灵图来源（aboutme-pets）
+
+pet-import/*.webm 与 pet-gen/*.webm 的**精灵图素材源**是 **aboutme-pets**
+<https://github.com/hunmer/aboutme-pets>（由 `scripts/download_pet_sheets.py` 拉取
+`pets/dsh`、`pets/dsh1` 两个动作包，再由 `scripts/gen_pet_sheets.py` 转码）。
+
+- aboutme-pets 的要求：**禁止商用**；二次创作需署名其上游形象来源 dsh-pet。
+- 因此本项目的动作素材署名 = **aboutme-pets（精灵图源）+ dsh-pet（形象源）**，两者都需保留。

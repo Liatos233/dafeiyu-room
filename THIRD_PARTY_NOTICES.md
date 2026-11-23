@@ -21,10 +21,17 @@
 
 ## 动作素材（pet-import / pet-gen）
 
-- `public/room/assets/pet-import/*.webm`：dsh-pet 官方动作素材，来源 <https://github.com/PC2005-cloud/dsh-pet>，授权 **CC BY-NC-SA 4.0**
-- `public/room/assets/pet-gen/*.webm`：由同一批 dsh-pet 精灵图逐帧转码，授权同上
+- **精灵图素材源**：**aboutme-pets** <https://github.com/hunmer/aboutme-pets>
+  - `scripts/download_pet_sheets.py` 从该仓库拉取 `pets/dsh`、`pets/dsh1` 两个动作包的精灵图；
+    `scripts/gen_pet_sheets.py` 再转成项目使用的动作元数据与 WebM。
+  - 该仓库的要求：**禁止商用**；二次创作需署名其上游形象来源 `PC2005-cloud/dsh-pet`。
+  - 运行期生成的 `public/room/assets/pet-sheets/` 不入库（由脚本按需下载）。
+- `public/room/assets/pet-import/*.webm`：由 aboutme-pets 精灵图转码而来，形象源自 dsh-pet，授权 **CC BY-NC-SA 4.0**
+- `public/room/assets/pet-gen/*.webm`：由同一批精灵图逐帧转码，授权同上
 - `public/room/assets/pet-gen/swim.webm`、`phone.webm`：作者用 AI 视频生成 + ffmpeg 绿幕抠像制作，角色形象源自 dsh-pet，按 **CC BY-NC-SA 4.0** 共享
-- 署名要求：标注来源 dsh-pet、保留本文件、不得商业使用、修改后需相同方式共享
+- 署名要求：**同时标注 aboutme-pets（精灵图源）与 dsh-pet（形象源）**、保留本文件、不得商业使用、修改后需相同方式共享
+
+> 注：本文件早期版本只署名了 dsh-pet，遗漏了 aboutme-pets；2026-11-22 补齐。
 
 ## 作者提供的 3D 模型
 
