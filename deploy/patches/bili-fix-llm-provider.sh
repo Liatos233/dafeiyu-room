@@ -3,7 +3,7 @@
 #
 # 证据（18:27:09）：
 #   回复前已读取视频上下文：BV1wiTx6FEg7（465 字）
-#   回复内容为空，跳过：Liatos「@Liatos3906 大肥鱼，能看到吗」
+#   回复内容为空，跳过：Liatos「@<bilibili-handle> 大肥鱼，能看到吗」
 #
 # _llm 的实现：
 #   provider_id = self._str("auto.provider_id").strip()      # 配置里是空的

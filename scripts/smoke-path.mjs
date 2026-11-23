@@ -5,7 +5,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const OUT = process.argv[2] || 'C:/Users/liato/dafeiyu-room/smoke';
+const OUT = process.argv[2] || join(process.env.DAFEIYU_ROOT || process.cwd(), 'smoke');
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PORT = 9531;
 const PROFILE = join(tmpdir(), 'chrome-smoke');
@@ -42,7 +42,7 @@ const send = (method, params = {}) => new Promise((resolve) => {
 });
 await send('Runtime.enable');
 await send('Page.enable');
-const URL_TARGET = process.env.SMOKE_URL || 'http://101.245.76.51:3100/room/?sky=day&hour=12';
+const URL_TARGET = process.env.SMOKE_URL || process.env.DAFEIYU_ROOM_URL || 'http://127.0.0.1:3100/room/?sky=day&hour=12';
 await send('Page.navigate', { url: URL_TARGET });
 await sleep(34000);
 

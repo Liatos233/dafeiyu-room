@@ -14,7 +14,7 @@ powershell -ExecutionPolicy Bypass -File deploy\local\restore-windows.ps1
 ## 从云端取最新备份
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\data\fetch-backup.ps1 -Host 101.245.76.51 -User root
+powershell -ExecutionPolicy Bypass -File deploy\data\fetch-backup.ps1 -Host <your-server-ip> -User root
 ```
 
 备份会下载到 `backups\` 目录（自动取服务器上最新的 `dafeiyu-*.tar.gz`）。

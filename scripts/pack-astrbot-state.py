@@ -1,7 +1,8 @@
 import os, tarfile, sqlite3, shutil, tempfile
 
-DATA = r"C:\Users\liato\.astrbot_launcher\instances\0390ed20-69d8-4e5b-b449-055ce88e34dc\core\data"
-OUT = r"C:\Users\liato\dafeiyu-room\_migrate\astrbot-full-state.tar.gz"
+DATA = os.environ.get("ASTROBOT_DATA") or os.path.expandvars(
+    r"%USERPROFILE%\.astrbot_launcher\instances\0390ed20-69d8-4e5b-b449-055ce88e34dc\core\data")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_migrate", "astrbot-full-state.tar.gz")
 
 # 需要迁移的插件数据（排除 snowluma：那是 QQ 客户端安装目录，与机器绑定）
 PLUGIN_DATA_KEEP = [

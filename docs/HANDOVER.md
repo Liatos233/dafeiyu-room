@@ -3,8 +3,8 @@
 > 更新：**2026-11-18**　本地 HEAD：见 `git log`　云端部署：`1f0f1ee`（2026-11-17 09:14）
 > 面向接手的新会话/新模型。本文是系统总览；分模块深潜见文末索引。
 
-- 本地仓库：`C:\Users\liato\dafeiyu-room\app`（事实源）
-- 线上房间：`http://101.245.76.51:3100/room/`
+- 本地仓库：`<repo>`（事实源）
+- 线上房间：`http://<your-server-ip>:3100/room/`
 - 文档索引：
   - 穿模问题全过程：[`HANDOVER-clipping.md`](./HANDOVER-clipping.md)
   - 家具/平台/占用网格：[`HANDOVER-room-seats.md`](./HANDOVER-room-seats.md)
@@ -39,7 +39,7 @@ QQ 用户 ──> QQ ──> SnowLuma ──> AstrBot（:6185 面板 / :6199 One
 | `nginx` | **3100** | 反代到 3101 |
 | `astrbot` | **6185** 面板 / 6188 插件 / **6199** OneBot 反连 | QQ 机器人 |
 | SnowLuma | 5099 WebUI / **3000** OneBot HTTP / **3001** WS / 5900 VNC | 托管于 AstrBot 插件 |
-| 面板隧道 | 本地 **16185** → 服务器 6185 | `ssh -N -L 16185:127.0.0.1:6185 -i C:\Users\liato\.ssh\dafeiyu_cloud root@101.245.76.51` |
+| 面板隧道 | 本地 **16185** → 服务器 6185 | `ssh -N -L 16185:127.0.0.1:6185 -i ~/.ssh/dafeiyu_cloud_final root@<your-server-ip>` |
 
 - 服务器：Ubuntu 24.04，2C2G，`/opt/dafeiyu-room`
 - **服务器不通 GitHub**，只能本地 `deploy\cloud\deploy.ps1` 推送

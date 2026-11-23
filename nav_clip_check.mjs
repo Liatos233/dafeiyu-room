@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 
-const mod = await import(pathToFileURL('C:/Users/liato/dafeiyu-room/app/src/home-state.js').href);
+const mod = await import(pathToFileURL(new URL('./src/home-state.js', import.meta.url)).href);
 const { HOME_LAYOUT, buildRoute, HOME_KEEPOUT, roomAtPoint } = mod;
 
 const spots = [];

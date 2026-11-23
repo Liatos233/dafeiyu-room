@@ -17,12 +17,12 @@
   "webchat_username": {
     "type": "string",
     "description": "房间对话以谁的身份进入 AstrBot（填主人 QQ 号）",
-    "default": "630151911"
+    "default": "<owner-qq>"
   },
   "owner_qq": {
     "type": "string",
     "description": "只有这个 QQ 号能在群里/私聊里指挥她",
-    "default": "630151911"
+    "default": "<owner-qq>"
   },
   "room_conversation_id": {
     "type": "string",
@@ -42,7 +42,7 @@
   "owner_session": {
     "type": "string",
     "description": "主动通知发到哪个会话",
-    "default": "aiocqhttp:FriendMessage:630151911"
+    "default": "aiocqhttp:FriendMessage:<owner-qq>"
   },
   "bridge_auto_start": {
     "type": "bool",
@@ -52,7 +52,7 @@
   "bridge_dir": {
     "type": "string",
     "description": "房间桥接目录（feiyu-room-template/app）",
-    "default": "C:\\Users\\liato\\dafeiyu-room\\app"
+    "default": ""
   },
   "bridge_node": {
     "type": "string",

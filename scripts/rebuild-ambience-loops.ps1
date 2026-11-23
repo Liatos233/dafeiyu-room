@@ -1,6 +1,6 @@
 ﻿param(
-  [string]$SrcDir = "C:\Users\liato\dafeiyu-room\_tmp\audio-src",
-  [string]$OutDir = "C:\Users\liato\dafeiyu-room\app\public\room\assets\sound\ambience"
+  [string]$SrcDir = (Join-Path $PSScriptRoot "..\_tmp\audio-src"),
+  [string]$OutDir = (Join-Path $PSScriptRoot "..\public\room\assets\sound\ambience")
 )
 $ff = "C:\AAAAAplications\ACommonTools\FFmpegFreeUI\ffmpeg.exe"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

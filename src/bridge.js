@@ -4115,7 +4115,7 @@ async function main() {
       // 用**实际绑定端口**而不是配置值：测试夹具用 consolePort: 0 让系统分配端口，
       // 配置里那个 0 不是请求里的 Host 端口。请求必然发生在 listen 之后，所以这里拿得到。
       const boundPort = server.address()?.port ?? port;
-      // 额外允许的 Host/Origin（反代到公网时用，例如 ["101.245.76.51:3100"]）
+      // 额外允许的 Host/Origin（反代到公网时用，例如 ["<your-server-ip>:3100"]）
       const extraHostsRaw = Array.isArray(cfg.room?.allowedHosts)
         ? cfg.room.allowedHosts
         : String(process.env.ROOM_ALLOWED_HOSTS || '').split(',');

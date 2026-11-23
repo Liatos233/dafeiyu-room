@@ -39,7 +39,7 @@
   "owner_qq": {
     "description": "允许触发的 QQ 号",
     "type": "string",
-    "default": "630151911"
+    "default": "<owner-qq>"
   },
   "daily_limit": {
     "description": "每人每天最多画几张（0=不限）",

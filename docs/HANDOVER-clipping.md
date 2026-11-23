@@ -4,8 +4,8 @@
 > 这份文档只讲**穿模这一条线**：踩过哪些坑、每次为什么失败、现在的架构是什么、怎么验收。
 > 系统总览见 [`HANDOVER.md`](./HANDOVER.md)；家具/平台模块速查见 [`HANDOVER-room-seats.md`](./HANDOVER-room-seats.md)。
 
-- 仓库：`C:\Users\liato\dafeiyu-room\app`
-- 线上：`http://101.245.76.51:3100/room/`（当前部署 `5ced7f8`）
+- 仓库：`<repo>`
+- 线上：`http://<your-server-ip>:3100/room/`（当前部署 `5ced7f8`）
 - 本文最后更新：2026-11-15，对应本地 HEAD `5ced7f8` 之后的文档提交
 
 ---

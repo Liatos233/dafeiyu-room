@@ -2,7 +2,7 @@
 # 让 poke_user 不传 qq_id 也能戳当前对话的人。
 #
 # 问题：poke_user 的 qq_id 是必填，但 dafeiyu_clean 会把上下文里的
-# "User ID: 630151911, Nickname: ..." 删掉（防串台），模型拿不到主人的 QQ 号，
+# "User ID: <owner-qq>, Nickname: ..." 删掉（防串台），模型拿不到主人的 QQ 号，
 # 于是这个工具从注册起一次都没被调用过（日志里只有 added LLM tool: poke_user）。
 #
 # 改法：qq_id 改可选；不传时用 event.get_sender_id()（私聊里就是主人）。

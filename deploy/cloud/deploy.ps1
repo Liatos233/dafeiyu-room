@@ -6,9 +6,11 @@
 #   ... -NoRestart         # 只上传解包，不重启
 #   ... -FullAssets        # 资产不做增量，强制全量上传
 param(
-  [string]$Server = "101.245.76.51",
+  # 服务器地址不再写死在仓库里：用环境变量 DAFEIYU_SERVER（或 -Server 显式传）
+  [string]$Server = "$env:DAFEIYU_SERVER",
   [string]$User = "root",
-  [string]$Key = "$env:USERPROFILE\.ssh\dafeiyu_cloud",
+  # 私钥带口令，走 Windows ssh-agent：先跑 ssh-add 再部署（见 scripts/setup-ssh-agent.ps1）
+  [string]$Key = $(if ($env:DAFEIYU_SSH_KEY) { $env:DAFEIYU_SSH_KEY } else { "$env:USERPROFILE\.ssh\dafeiyu_cloud_final" }),
   [string]$AppDir = "/opt/dafeiyu-room",
   [switch]$AllowDirty,
   [switch]$NoRestart,

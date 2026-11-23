@@ -365,7 +365,7 @@ class RoomLinkPlugin(Star):
         if webchat_queue_mgr is None:
             raise RuntimeError("当前 AstrBot 版本没有 webchat 队列")
         conv = str(self.config.get("room_conversation_id") or "room")
-        user = str(self.config.get("webchat_username") or "630151911")
+        user = str(self.config.get("webchat_username") or "<owner-qq>")
         timeout = int(self.config.get("reply_timeout") or 90)
 
         async with self._chat_lock:
@@ -688,7 +688,7 @@ class RoomLinkPlugin(Star):
             action(string): 要做的动作或目标，例如「去睡觉」「去厨房」「浇花」「看电视」
             target(string): 可选，更细的目标，例如「床」「菜园」
         """
-        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or "630151911"):
+        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or ""):
             return "这个只有主人能指挥。"
         cmd = {
             "id": uuid.uuid4().hex[:8],
@@ -739,7 +739,7 @@ class RoomLinkPlugin(Star):
         Args:
             clip(string): 动画名，例如「跳街舞」「写毛笔字」「游泳」「撸猫」「吹气球」
         """
-        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or "630151911"):
+        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or ""):
             return "这个只有主人能指挥。"
         name = str(clip or "").strip()[:40]
         if not name:
@@ -798,7 +798,7 @@ class RoomLinkPlugin(Star):
         Args:
             text(string): 要她说的话，尽量保持她的语气
         """
-        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or "630151911"):
+        if str(event.get_sender_id()) != str(self.config.get("owner_qq") or ""):
             return "这个只有主人能指挥。"
         words = str(text or "").strip()[:140]
         if not words:

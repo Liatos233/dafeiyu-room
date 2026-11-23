@@ -202,7 +202,7 @@ powershell -ExecutionPolicy Bypass -File deploy\data\apply-state-windows.ps1 -Ta
 ### 标准流程
 
 ```
-1. 本地改代码（C:\Users\liato\dafeiyu-room\app）
+1. 本地改代码（<repo>）
 2. 本地自检：node --check <改动的 js>；必要时 npm test
 3. git add -A && git commit && git push
 4. 云端：bash /usr/local/bin/update.sh         # 自动备份 → git reset → npm ci → 重启

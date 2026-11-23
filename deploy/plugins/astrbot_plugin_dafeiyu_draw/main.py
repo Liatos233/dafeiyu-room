@@ -8,7 +8,7 @@
   api_key   智谱 API Key（必填）
   model     默认 cogview-4-250304
   size      默认 1024x1024
-  owner_qq  只有这个 QQ 能触发（默认 630151911）
+  owner_qq  只有这个 QQ 能触发（必须在配置里显式填写，代码不设默认值）
   daily_limit 每人每天最多画几张（默认 20，0 = 不限）
 """
 
@@ -63,7 +63,7 @@ class DafeiyuDraw(Star):
         self.model = str(self.config.get("model") or "cogview-4-250304").strip()
         size = str(self.config.get("size") or "1024x1024").strip()
         self.default_size = size if size in ALLOWED_SIZES else "1024x1024"
-        self.owner_qq = str(self.config.get("owner_qq") or "630151911").strip()
+        self.owner_qq = str(self.config.get("owner_qq") or "").strip()
         self.daily_limit = max(0, int(self.config.get("daily_limit") or 20))
         self._usage: dict[str, list[float]] = {}
         self._last: dict[str, float] = {}

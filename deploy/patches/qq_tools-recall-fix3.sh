@@ -12,7 +12,7 @@
 # 于是 sender_id == self_id 一个都匹配不上（或匹配到了主人的）。
 #
 # 改法：一律用 OneBot 的 get_login_info 取 user_id 作为 self_id（已实测返回
-# 2086213845 吃饱的鱼），拿不到才回退 event.get_self_id()。
+# <bot-qq> 吃饱的鱼），拿不到才回退 event.get_self_id()。
 #
 # 用法（AstrBot 所在机器，root）：
 #   bash qq_tools-recall-fix3.sh

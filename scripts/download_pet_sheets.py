@@ -7,7 +7,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = "https://raw.githubusercontent.com/hunmer/aboutme-pets/main/"
-ROOT = r"C:\Users\liato\dafeiyu-room\app\public\room\assets\pet-sheets"
+ROOT = os.environ.get("DAFEIYU_PET_SHEETS") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public", "room", "assets", "pet-sheets")
 PACKS = ["dsh", "dsh1"]
 
 sys.stdout.reconfigure(encoding="utf-8")

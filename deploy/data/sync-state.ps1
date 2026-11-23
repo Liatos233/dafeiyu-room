@@ -5,9 +5,9 @@
 # 注意：同一时间只跑一端，避免双写分叉。
 param(
   [ValidateSet("push", "pull")][string]$Direction = "push",
-  [string]$Server = "101.245.76.51",
+  [string]$Server = "$env:DAFEIYU_SERVER",
   [string]$User = "root",
-  [string]$Key = "$env:USERPROFILE\.ssh\dafeiyu_cloud",
+  [string]$Key = $(if ($env:DAFEIYU_SSH_KEY) { $env:DAFEIYU_SSH_KEY } else { "$env:USERPROFILE\.ssh\dafeiyu_cloud_final" }),
   [string]$Tar = "_migrate\astrbot-full-state.tar.gz"
 )
 

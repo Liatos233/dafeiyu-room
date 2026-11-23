@@ -1,12 +1,12 @@
 ﻿# 从云端拉最新备份到本机（Windows PowerShell）
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File deploy\data\fetch-backup.ps1
-#   powershell -ExecutionPolicy Bypass -File deploy\data\fetch-backup.ps1 -Host 101.245.76.51 -User root -Key $env:USERPROFILE\.ssh\dafeiyu_cloud
+#   powershell -ExecutionPolicy Bypass -File deploy\data\fetch-backup.ps1 -Host <your-server-ip> -User root -Key $env:USERPROFILE\.ssh\dafeiyu_cloud
 
 param(
-  [string]$Server = "101.245.76.51",
+  [string]$Server = "$env:DAFEIYU_SERVER",
   [string]$User = "root",
-  [string]$Key = "$env:USERPROFILE\.ssh\dafeiyu_cloud",
+  [string]$Key = $(if ($env:DAFEIYU_SSH_KEY) { $env:DAFEIYU_SSH_KEY } else { "$env:USERPROFILE\.ssh\dafeiyu_cloud_final" }),
   [string]$RemoteDir = "/var/backups/dafeiyu",
   [string]$OutDir = "backups"
 )

@@ -4,8 +4,8 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const OUT_DIR = process.argv[2] || 'C:/Users/liato/dafeiyu-room/mount-frames';
-const URL_TARGET = process.argv[3] || 'http://101.245.76.51:3100/room/?sky=day&hour=12';
+const OUT_DIR = process.argv[2] || join(process.env.DAFEIYU_ROOT || process.cwd(), 'mount-frames');
+const URL_TARGET = process.argv[3] || process.env.DAFEIYU_ROOM_URL || 'http://127.0.0.1:3100/room/?sky=day&hour=12';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PORT = 9511;
 const PROFILE = join(tmpdir(), 'chrome-mount');

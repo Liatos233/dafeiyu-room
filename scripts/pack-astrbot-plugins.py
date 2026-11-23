@@ -1,9 +1,10 @@
 import os, tarfile, pathlib
 
-SRC = r"C:\Users\liato\.astrbot_launcher\instances\0390ed20-69d8-4e5b-b449-055ce88e34dc\core\data"
+SRC = os.environ.get("ASTROBOT_DATA") or os.path.expandvars(
+    r"%USERPROFILE%\.astrbot_launcher\instances\0390ed20-69d8-4e5b-b449-055ce88e34dc\core\data")
 PLUGINS = os.path.join(SRC, "plugins")
 CFG = os.path.join(SRC, "config")
-OUT = r"C:\Users\liato\dafeiyu-room\_migrate\astrbot-plugins.tar.gz"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_migrate", "astrbot-plugins.tar.gz")
 
 # 已单独部署过，不重复打包
 SKIP = {"astrbot_plugin_room_link", "pulids_snowluma_go_to_astrbot"}

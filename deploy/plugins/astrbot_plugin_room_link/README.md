@@ -41,7 +41,7 @@ QQ 和房间是**两条独立会话**，不会互相抢消息。
 
 `livingmemory` 默认按会话隔离。要让房间和 QQ 共用记忆，把它的
 `filtering_settings.memory_scope_mode` 改成 `user`，并让插件的
-`webchat_username` 填**主人 QQ 号**（默认 `630151911`）。这样两边的记忆按同一个人归档。
+`webchat_username` 填**主人 QQ 号**（必须自己填，不要留默认值）。这样两边的记忆按同一个人归档。
 
 ## 前置条件
 

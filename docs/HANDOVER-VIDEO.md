@@ -12,7 +12,7 @@
 两边共用同一个人设：
 
 - **房间**：浏览器里的 3D 平层（客厅/卧室/厨房/阳台/泳池/菜园），她会在里面走动、睡觉、
-  游泳、浇花、坐沙发。前端是 three.js，`http://101.245.76.51:3100/room/`。
+  游泳、浇花、坐沙发。前端是 three.js，`http://<your-server-ip>:3100/room/`。
 - **QQ**：接在 AstrBot 上的一整套插件（记忆、语音、画图、B 站、房间联动）。
 - 房间里的状态会**实时注入** QQ 的对话上下文 —— 所以她在 QQ 里说的话和房间里的动作是一致的。
 
@@ -77,7 +77,7 @@
 | 3D 模型 | `public/room/assets/models/` |
 | 音效 | `public/room/assets/sound/` |
 | 生图产出（今天） | 仓库外层 `generated/`：`q-deepseek-whale.png`（Q 版蓝鲸娘抱 DeepSeek 徽章）、`bili-fast-test.jpg`（抽帧九宫格示例） |
-| 线上房间 | `http://101.245.76.51:3100/room/` |
+| 线上房间 | `http://<your-server-ip>:3100/room/` |
 
 **注意**：立绘是**横版 640×360**、角色只占画面一部分（站立约 78%、蜷缩约 57%），
 运行时按内容包围盒裁切对齐脚底 —— 直接拿原始 png 做视频要注意留白。
@@ -122,8 +122,8 @@
 
 ## 7. 环境与部署（如果视频要录真实画面）
 
-- **本地仓库**：`C:\Users\liato\dafeiyu-room\app`（分支 `optimize`，事实源）
-- **线上**：`http://101.245.76.51:3100/room/`（当前 `da45d14`）
+- **本地仓库**：`<repo>`（分支 `optimize`，事实源）
+- **线上**：`http://<your-server-ip>:3100/room/`（当前 `da45d14`）
 - **部署**：`powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1`
   （**服务器不通 GitHub**，只能本地推）
 - **插件**：服务器 `/root/data/plugins/` 与仓库 `deploy/plugins/` 是**两份**，
