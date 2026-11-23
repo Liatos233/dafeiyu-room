@@ -1,4 +1,4 @@
-# 一次性准备：让部署脚本能用带口令的私钥（Windows OpenSSH Agent）
+﻿# 一次性准备：让部署脚本能用带口令的私钥（Windows OpenSSH Agent）
 #
 # 背景：部署私钥 dafeiyu_cloud_final 带口令，脚本里用 BatchMode 跑，不会弹交互提示。
 #       所以口令要在 ssh-agent 里，ssh 才能自动签名。
@@ -35,13 +35,24 @@ if ((Get-Service ssh-agent).Status -ne "Running") {
 }
 
 # 已经在 agent 里的就别重复加（ssh-add 会提示 passphrase）
-$existing = & $sshAdd -l 2>&1
-if ($LASTEXITCODE -eq 0 -and ($existing -match [regex]::Escape((Get-Content "$Key.pub" -Raw).Split(" ")[1].Substring(0, 20)))) {
+# 注意：ssh-add -l 查不到密钥时会往 stderr 写一行并返回 1，
+# 在 $ErrorActionPreference="Stop" 下会被当成异常终止，所以这里临时放宽。
+$existing = ""
+$eap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$existing = (& $sshAdd -l 2>&1) -join "`n"
+$agentExit = $LASTEXITCODE
+$ErrorActionPreference = $eap
+
+$blobStart = (Get-Content "$Key.pub" -Raw).Trim().Split(" ")[1].Substring(0, 20)
+if ($agentExit -eq 0 -and $existing.Contains($blobStart)) {
   Write-Host "==> 密钥已在 agent 中" -ForegroundColor Green
 } else {
-  Write-Host "==> 添加密钥（会提示输入一次口令）" -ForegroundColor Cyan
+  Write-Host "==> 添加密钥（会提示输入一次口令，就是生成密钥时那串）" -ForegroundColor Cyan
   & $sshAdd $Key
 }
 
 Write-Host "`n==> 当前 agent 里的密钥：" -ForegroundColor Cyan
+$ErrorActionPreference = "Continue"
 & $sshAdd -l
+$ErrorActionPreference = $eap
