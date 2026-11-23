@@ -38,7 +38,7 @@
 
 GitHub Desktop → **File** → **New repository**
 
-- Name：`dsh-room-template`
+- Name：`dafeiyu-room`
 - Description：`A sanitized DSH + SnowLuma room template`
 - Local path：选择一个空文件夹的**上一级**，例如 `D:\GitHub`
 - 不要勾选 “Initialize this repository with a README”（你已经有 README）
@@ -85,7 +85,7 @@ GitHub Desktop 会列出变更：
 # 方式 C：命令行（会 Git 的人）
 
 ```bash
-cd dsh-room-template
+cd dafeiyu-room
 git init
 git add .
 git commit -m "Initial room template"

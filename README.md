@@ -1,216 +1,226 @@
-# 大肥鱼房子模板
+# 大肥鱼的家 · dafeiyu-room
 
-> 当前发布包：**大肥鱼房子最新版2**  
-> 以后每次修改模板，版本号 +1。
+一个能自己过日子的 **3D 房间**，和住在 **QQ** 上的同一个「她」。
 
-[安装指南](SETUP.md) · [生成自己的房子](HOUSE_GENERATION_PROMPT.md) · [GitHub 上传教程](GITHUB_UPLOAD.md) · [安全与部署约定](docs/SECURITY.md) · [问题反馈](https://github.com/Liatos233/dafeiyu-room/issues)
+浏览器里是一套可自由走动、能投屏、能种菜的 three.js 大平层；QQ 那头通过 AstrBot 插件连回这个房间——你在 QQ 上问她「在干嘛」，她答的就是房间里真实发生的事。两边共用同一份状态、同一份记忆、同一套人格。
 
-我把这套**公开、脱敏、可复刻**的 DeepSeek Harness + SnowLuma 房间整理成了模板：3D 大平层、家具、屋后菜园、电视投屏陪伴、QQ 桥接和网页私聊都在里面。
-
-当前模板版本：`v2.0.0`。目标 DSH：`0.2.1-rc.2`；Node.js：`>= 22.13.0`。
+[安装指南](SETUP.md) · [让 AI 帮你装](AI_SETUP_PROMPT.md) · [QQ ↔ 房间联动](docs/QQ-LINK.md) · [安全与部署约定](docs/SECURITY.md) · [问题反馈](https://github.com/Liatos233/dafeiyu-room/issues)
 
 > [!IMPORTANT]
-> **这是一个模板，不是作者本人的运行存档，也不隶属于 SnowLuma、DeepSeek 或腾讯 / QQ。**
-> 仓库不包含作者的角色卡、QQ 号、群号、聊天记录、记忆、语音、照片、API Key、Cookie 或 `state/`；3D 模型附带作者授权的优化版展示文件和 58.9 MB 原始工程备份。
-> 2D 立绘来自第三方项目 dsh-pet，按 **CC BY-NC-SA 4.0** 使用；代码按 MIT 使用。两者授权不同，详见[素材与许可](#素材与许可)。
+> **这是一个可自托管的项目，不是作者本人的运行存档，也不隶属于 SnowLuma、DeepSeek 或腾讯 / QQ。**
+> 仓库不包含作者的角色卡、QQ 号、群号、聊天记录、记忆、语音、照片、API Key 或 Cookie。所有服务地址、账号、密钥都要你自己在 `config.json` 里填。
+
+## 它现在长什么样
 
 ```text
-浏览器 /room/  ──>  qq-bridge（本项目 Node 进程）──>  DSH Web API
-       │                                      │
-       ├── Three.js 房间 / 菜园 / 电视          ├── SnowLuma（可选，QQ）
-       └── 本地房间 API                        └── MCP / agent presets
+                    ┌──────────────── 浏览器 ────────────────┐
+   /room/  ────────▶ │  three.js 房间 / 菜园 / 电视 / 陪伴层   │
+                    └───────────────┬───────────────────────┘
+                                    │  /api/home/*（本机回环）
+                    ┌───────────────▼───────────────────────┐
+                    │  qq-bridge  (Node, src/bridge.js)     │
+                    │  ├── 房间状态 / 寻路 / 事件日志        │
+                    │  ├── 记忆卡 / 菜园自主照料 / 预算      │
+                    │  └── DSH 客户端 + MCP server          │
+                    └───────┬───────────────────┬───────────┘
+                            │                   │
+                    ┌───────▼────────┐   ┌──────▼──────────────┐
+                    │ DeepSeek       │   │ SnowLuma（可选）     │
+                    │ Harness Web    │   │ OneBot ← AstrBot     │
+                    │ （人格 / 模型）│   │ ← QQ                 │
+                    └────────────────┘   └─────────────────────┘
 ```
 
-## 来源与上游
-
-- **本仓库 fork 自**：<https://github.com/sh2234113/feiyu-room-template>（作者 sh2234113），在其「大肥鱼房子模板」基础上继续开发。
-- **上游许可**：代码 **MIT**；2D 立绘与动作素材 **CC BY-NC-SA 4.0**（署名 / 非商业 / 相同方式共享）。
-- **本仓库相对上游的主要改动**：
-
-| 改动 | 说明 |
+| 模块 | 现在的样子 |
 | --- | --- |
-| 270 段动作库 + 自主动作调度 | 空闲时按心情、天气、时长加权抽动作，一半会走到对应家具旁执行 |
-| 详细事件日志 | 出发 / 到达 / 完成 / 需求越线 / 心情变化 / QQ 指令，保留 6 小时 |
-| QQ ↔ 房间联动 | `/api/home/context`、`/api/home/clips`、`clip` / `say` 动作，配套 AstrBot 插件 0.2.0 |
-| 新动作素材 | `swim.webm`（泳池来回游）、`phone.webm`（玩手机），按头部比例适配 |
-| UI 与相机 | 右侧卡片统一宽度与间距、房间名开关、泳池第一视角 |
+| 3D 房间 | 客厅、厨房、餐厅、卧室、卫生间、阳台、玄关、走廊、屋后菜园；昼夜与天气、第一视角、地图寻路并自动避开大件家具 |
+| 动作库 | **269 段动作**，分 9 组：吃喝 45 / 其它 52 / 起居 36 / 才艺 33 / 玩耍 26 / 运动 24 / 情绪 21 / 工作 18 / 节日 14 |
+| 自主行为 | 空闲 20~45 秒抽一件事做，按心情、天气、时段加权，最近 5 条不重复；一半会走到对应家具旁再执行 |
+| 菜园 | **8 畦**地、**12 种**作物（萝卜 / 胡萝卜 / 生菜 / 番茄 / 黄瓜 / 茄子 / 青椒 / 南瓜 / 玉米 / 草莓 / 土豆 / 白菜），翻土→播种→浇水→施肥→采收→出售，也能自主照料 |
+| 事件日志 | 右上「刚刚发生」：出发 / 到达 / 做完 / 需求越线 / 心情变化 / QQ 指令，保留 6 小时 |
+| QQ 联动 | `GET /api/home/context`·`clips`·`state`·`nav`·`weather`，`POST /api/home/act`（`clip` / `say`）；配套 AstrBot 插件提供 `room_status` / `room_command` / `room_play` / `room_say` |
+| 房间私聊 | 网页内直接和她聊，不经过 QQ，记录只存在浏览器 localStorage |
+| 电视投屏 | `getDisplayMedia` 把标签页共享进房间电视，50% / 80% / 全屏 |
+| 陪伴层 | 左下角 2D 立绘陪你看电视，可调大小、开关气泡、截取电视画面说观后感 |
+| 控制台 | 切换模式、白名单、日志、token 用量 |
+| 部署 | `deploy/cloud` 一键装到 Linux 云主机，`deploy/data` 备份与状态同步，`deploy/local` 本机脚本 |
 
-> 如果你只想复刻上游的原始效果，请直接使用上游仓库；本仓库在上游基础上增加了上述功能，行为与素材体积都不同。
+## 和上游的关系
 
-## 能做什么
+这个项目**起步于** [sh2234113/feiyu-room-template](https://github.com/sh2234113/feiyu-room-template)（作者 sh2234113）的「大肥鱼房子模板」，代码沿用 MIT。但**现在已经不是那个模板的镜像**了——下面是这一路自己加/改/重写的部分：
 
-| 场景 | 功能 |
+| 方向 | 具体做了什么 |
 | --- | --- |
-| 3D 房间 | 客厅、厨房、餐厅、卧室、卫生间、阳台、玄关、走廊、屋后菜园；家具、灯光、昼夜、相机与第一视角；同房间地图寻路、自动避开大件家具 |
-| 3D 画质 | 默认加载 6.7 MB 优化模型；右上「画质」按钮可按需切换 58.9 MB 原始工程模型，不强制所有访问者下载源文件 |
-| 角色互动 | 点击移动、长按抓取、摸头/喂食/倒水/陪玩/叫醒、气泡、立绘/3D 模式切换；右侧动作栏可跳舞、伸懒腰、行礼等 |
-| 房间私聊 | 网页内和同一个角色聊天，不经过 QQ；聊天记录只存在浏览器 localStorage |
-| 电视投屏 | 用 `getDisplayMedia` 把浏览器标签页共享到房间电视；50% / 80% / 全屏 |
-| 跟随一起看 | 左下角立绘陪伴层，可调大小、开关气泡、截取电视画面说观后感 |
-| 菜园 | 8 畦菜地、12 种作物、翻土/播种/浇水/施肥/采收/出售/买种子/买堆肥、自主照料 |
-| QQ 桥接 | 文本、图片、表情、引用、合并转发；两代群聊仿真、角色卡、记忆与白名单 |
-| 本地控制台 | 切换模式、管理白名单、查看日志和 token 用量 |
+| 动作与自主性 | 重建为 269 条带元数据的动作目录（点位 / 时段 / 权重），加上按心情天气加权的自主调度；新增 `swim.webm`、`phone.webm` |
+| 事件与可观测 | 详细事件日志、token 账本与预算、性能与测试文档（`docs/TESTS.md`、`docs/PERF.md`） |
+| QQ 侧 | 全新的 `/api/home/*` 联动接口；AstrBot 插件 `room_link`（房间状态 / 指令 / 播放 / 说话）与 `dafeiyu_draw`（真去画图） |
+| 前端 | 右侧卡片统一宽度间距、房间名开关、泳池第一视角、座位与寻路修正 |
+| 工程化 | `deploy/` 全套部署与备份脚本、`scripts/` 下 50 多个测试/探针/截图脚本、`docs/` 里 12 篇交接与专题文档 |
+| 安全 | SSH 只留密钥、fail2ban、仓库脱敏与提交前自查，见 [docs/SECURITY.md](docs/SECURITY.md) |
 
-## 最近新增
+> 想要上游最初那一版的效果，直接用上游仓库；本项目的行为、素材体积和依赖都不同了。
 
-| 功能 | 说明 |
-| --- | --- |
-| **270 个动作库** | `public/room/action-catalog.js` 把 270 段动画按「吃喝 / 起居 / 工作 / 才艺 / 运动 / 玩耍 / 情绪 / 节日 / 其它」分类，并标注适合的点位（书桌、沙发、厨房、阳台、泳池、菜园）与生效时段 |
-| **自主动作调度** | 她空闲时（20~45 秒）会从动作库抽一件事做：一半走到对应家具旁，一半原地做；按心情、天气、时段加权，最近 5 条不重复 |
-| **详细事件日志** | 右上「刚刚发生」记录出发/到达/做完/自主动作/需求越线/心情变化/QQ 指令，带类型图标，保留 6 小时、最多 40 条 |
-| **QQ ↔ 房间联动** | 新增 `GET /api/home/context`（一句话状态）、`GET /api/home/clips`（动作清单）、`POST /api/home/act {"action":"clip"\|"say"}`；配套 AstrBot 插件 `astrbot_plugin_room_link` 0.2.0 提供 `room_status` / `room_command` / `room_play` / `room_say` 四个工具，详见 [docs/QQ-LINK.md](docs/QQ-LINK.md) |
-| **泳池与「玩手机」动画** | 抠像后的 `swim.webm`（泳池水面来回游，进出方向随游动方向翻转）与 `phone.webm`（坐沙发玩手机），按头部比例与既有素材对齐 |
-| **房间名开关** | 设置里可开关地板上的「客厅 / 厨房 / 泳池露台」等字样，默认关闭 |
-| **泳池第一视角** | 「走进去 → 泳池露台」有独立的站立高度机位，站在两把躺椅之间望向泳池 |
+## 目录
 
-## 两种使用方式
+```text
+src/                 桥接与后端核心
+  bridge.js          HTTP 服务、房间 API、QQ 消息流水线、MCP
+  home-state.js      房间状态、寻路、事件日志
+  memory-card.js     记忆卡、日记
+  garden-autonomy.js 菜园自主照料
+  token-ledger.js    模型用量账本与预算
+public/room/         房间前端（three.js / 菜园 / 电视 / 陪伴层 / 动作目录）
+public/console.html  本地控制台
+plugins/             两个 DSH 插件：qq-agent-presets、qq-mode-console
+dsh/                 qq-chat / qq-chat-v2 preset 源
+deploy/
+  cloud/             一键部署到云主机（nginx、systemd、证书说明）
+  data/              备份拉取 / 状态同步
+  local/             本机启停脚本
+  patches/           线上热修脚本（有注释说明起因）
+  plugins/           随仓库分发的 AstrBot 插件
+scripts/             安装、启动、截图、测试、探针
+docs/                交接与专题文档（见下方索引）
+roles/               示例角色卡
+```
 
-### 方式 A：直接复刻这套房子
-
-适合想快速看到效果的人。按 [SETUP.md](SETUP.md) 安装，得到和模板一致的户型、菜园、电视、陪伴层和 QQ 桥接。
-
-### 方式 B：让 DSH 生成你自己的房子
-
-适合想要不同风格、不同户型的人。不复制现有房子，只把需求告诉 DSH，让它从零搭自己的版本。
-
-入口：[HOUSE_GENERATION_PROMPT.md](HOUSE_GENERATION_PROMPT.md)。  
-里面有需求访谈、分阶段提示词、五套风格方向和一份可直接复制的设计 brief。
-
-> 方式 A 是“代码/界面接近 1:1”；方式 B 是“生成你自己的版本”，两者不要混着用。
+运行后会生成 `config.json`、`state/`、`audio/`、`assets/`、`dist/`、`backups/` 等本地数据，均已被 `.gitignore` 排除。
 
 ## 快速开始
 
-准备：
+依赖：
 
-- **Node.js >= 22.13**；
-- **DeepSeek Harness**（目标 `0.2.1-rc.2`）；
-- **SnowLuma**（可选，只影响 QQ；单独安装）；
-- Chrome / Edge（投屏需要 `getDisplayMedia`）。
-
-### 1. 获取项目
+- **Node.js >= 22.13**
+- **DeepSeek Harness**（按 `0.2.1-rc.2` 的 API / preset 机制编写，见 [SETUP.md](SETUP.md)）
+- **SnowLuma**（可选，只影响 QQ，需单独安装）
+- Chrome / Edge（投屏需要 `getDisplayMedia`）
 
 ```bash
 git clone https://github.com/Liatos233/dafeiyu-room.git
-cd dsh-room-template
+cd dafeiyu-room
 npm ci
+cp config.example.json config.json      # Windows: Copy-Item config.example.json config.json
 ```
 
-没有 Git 就下载 ZIP，解压后进入目录。
+编辑 `config.json`，至少核对这几项：
 
-### 2. 创建配置
-
-```bash
-cp config.example.json config.json
-```
-
-Windows PowerShell：
-
-```powershell
-Copy-Item config.example.json config.json
-```
-
-### 3. 填写配置
-
-编辑 `config.json`，至少核对这些字段：
-
-| 字段 | 填写内容 |
+| 字段 | 填什么 |
 | --- | --- |
-| `ownerQQ` | 你的管理员 QQ；只填自己的 |
-| `allow.private` / `allow.groups` | 允许接入的 QQ / 群；空白名单不响应任何会话 |
-| `consoleToken` | 自己生成的一长串随机字符；不要发到群里 |
-| `snowluma.wsUrl` / `httpUrl` | OneBot WS/HTTP 地址，默认 `ws://127.0.0.1:3001` / `http://127.0.0.1:3000` |
-| `snowluma.accessToken` | 如果 SnowLuma 配了 token 才填 |
+| `ownerQQ` | 你自己的 QQ，只填自己 |
+| `allow.private` / `allow.groups` | 允许接入的 QQ / 群；空白名单则不响应任何会话 |
+| `consoleToken` | 自己生成一长串随机字符，别发群里 |
 | `dsh.baseUrl` | DSH Web 地址，默认 `http://127.0.0.1:3080` |
-| `dsh.provider` / `dsh.model` | 必须是当前 DSH 真实可用的 provider/model |
-| `room.access` | 默认 `loopback`；房间只允许本机回环访问 |
+| `dsh.provider` / `dsh.model` | 必须是你环境里真实可用的 provider/model |
+| `snowluma.wsUrl` / `httpUrl` | OneBot 地址，默认 `ws://127.0.0.1:3001` / `http://127.0.0.1:3000` |
+| `snowluma.accessToken` | SnowLuma 配了 token 才填 |
+| `room.access` | 默认 `loopback`，房间只允许本机回环访问 |
 
-### 4. 安装 DSH preset / MCP
+装 preset 与 MCP（会注册 `qq-chat` / `qq-chat-v2` preset、三个 MCP server 和两个 DSH 插件）：
 
 ```bash
 node scripts/setup-dsh.mjs
 ```
 
-这一步会注册 `qq-chat` / `qq-chat-v2` preset、三个 MCP server 和两个 DSH 插件。  
-完成后**重启 DSH Web**，否则 preset 和工具不会生效。
-
-### 5. 启动
+**装完必须重启 DSH Web**，否则 preset 和工具不生效。然后启动：
 
 ```bash
-npm start
+npm start          # 或 Windows 双击 scripts/start.bat，macOS/Linux 用 scripts/start.sh
 ```
 
-打开：
+打开 <http://127.0.0.1:3100/room/>（**必须带结尾 `/`**，`/room` 会 302，相对路径可能解析错）。
 
-```text
-http://127.0.0.1:3100/room/
-```
-
-必须带结尾 `/`；`/room` 会 302，相对路径可能解析错。
-
-Windows 也可以双击 `scripts/start.bat`；Linux/macOS 可运行 `./scripts/start.sh`。
-
-### 6. 验收
+验收：
 
 ```bash
-npm run test:room
-npm run test:home
-npm run test:garden
-npm run test:mcp-servers
+npm run test:all
 ```
 
-浏览器检查：
+或至少跑 `npm run test:room`、`npm run test:home`、`npm run test:garden`、`npm run test:mcp-servers`，再看一眼浏览器：进菜园能返回、8 畦地 12 作物都在、投屏能选标签页、陪伴层出现且滑块可用、刷新无 500。更多测试见 [docs/TESTS.md](docs/TESTS.md)。
 
-- 进入菜园 / 返回小屋正常；
-- 8 块菜畦、12 种作物、自主照料按钮存在；
-- 电视投屏能选标签页；
-- 「跟随一起看」左下角出现陪伴层，大小滑块、气泡、截屏按钮可用；
-- 刷新页面无 500、无未捕获 JS 异常。
+## QQ 侧：AstrBot 插件
 
-## 目录
+房间本身不需要 AstrBot；要接 QQ 才需要。**仓库里随代码分发的只有两个**（`deploy/plugins/`）：
 
-```text
-src/                桥接、DSH 客户端、MCP、记忆卡、花园、房间状态
-public/room/        房间前端（Three.js / 菜园 / 电视 / 陪伴层）
-public/console.html 控制台页面
-plugins/            DSH 插件：qq-agent-presets / qq-mode-console
-dsh/                qq-chat / qq-chat-v2 preset 源
-roles/              示例角色卡（example.md）
-scripts/            安装、预览、截图、测试
-assets/             你自己的贴纸/图片目录（默认不提交）
+| 插件 | 作用 |
+| --- | --- |
+| `astrbot_plugin_room_link` | 房间状态、下达动作、播放片段、让她说话；走 `/api/home/*` |
+| `astrbot_plugin_dafeiyu_draw` | 给她一个真的画画工具（智谱 CogView-4），画完发到当前会话 |
+
+**其余插件都不属于本仓库**，是各自作者维护的第三方项目，装了才装、没装也能跑。作者实际那套环境里还用了下面这些，仅供你参考组合方式——请到各自仓库按它们的许可证安装：
+
+| 类别 | 插件 | 上游 |
+| --- | --- | --- |
+| 长期记忆 | `astrbot_plugin_livingmemory` | `lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory` |
+| 查梗 | `astrbot_plugin_memewiki` | `in1t1a1/astrbot_plugin_memewiki` |
+| 表情包 | `meme_manager` | `anka-afk/astrbot_plugin_meme_manager` |
+| 主动消息 | `astrbot_plugin_proactive_chat` | `Pancakes-Labs/astrbot_plugin_proactive_chat` |
+| 群聊读空气 | `astrbot_plugin_group_chat_plus` | `Him666233/astrbot_plugin_group_chat_plus` |
+| QQ 操作 | `astrbot_plugin_qq_tools`、`astrbot_plugin_qqprofile`、`astrbot_plugin_qzone` | `YUMU1658/...`、`Zhalslar/...` |
+| B 站 | `astrbot_plugin_bili_whale` | `DrKthrose/astrbot_plugin_bili_whale` |
+| OneBot 适配 | `pulids_snowluma_go_to_astrbot` | `SATA-F5/Snowluma-Go` |
+
+## 部署到服务器
+
+```bash
+# 云主机（Ubuntu/Debian，装 nginx + systemd 服务）
+bash deploy/cloud/install.sh
 ```
 
-运行后会自动生成 `config.json`、`state/`、`audio/`、`assets/` 等本地数据，均已被 `.gitignore` 排除。
+本机向服务器推送代码与增量资产：
 
-## 文档与开发
+```powershell
+# 先设一次服务器地址（不写进仓库）
+setx DAFEIYU_SERVER <你的服务器IP>
+powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
+```
+
+备份与状态互传见 `deploy/data/`。部署脚本会检查 `ssh-agent` 里有没有密钥，缺了直接提示怎么修，不会静默失败。细节见 [docs/deploy/CLOUD-MIGRATION.md](docs/deploy/CLOUD-MIGRATION.md) 和 [docs/SECURITY.md](docs/SECURITY.md)。
+
+## 安全
+
+这个仓库**不含任何密钥**：所有地址、账号、API Key 都在 `config.json`（已 gitignore）和环境变量里。提交前建议自查一遍：
+
+```bash
+npm run privacy-scan
+git grep -n -I -E "BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9_-]{16,}|ghp_|AKIA|AIza"
+git grep -n -I -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[A-Za-z]:\\\\?Users\\\\?"
+```
+
+**绝对不要提交 / 外传**：`config.json`、`_migrate/`（含完整配置与真实 API Key）、`backups/`、`*.tar.gz`、`__pycache__/`。服务器侧的加固（SSH 只留密钥、fail2ban、密钥轮换）记在 [docs/SECURITY.md](docs/SECURITY.md)，改之前先读那一页。
+
+## 文档
 
 | 我想…… | 入口 |
 | --- | --- |
 | 从零安装、配置、排查 | [SETUP.md](SETUP.md) |
-| 让另一个 DSH 接手安装 | [AI_SETUP_PROMPT.md](AI_SETUP_PROMPT.md) |
-| 生成自己的房子 | [HOUSE_GENERATION_PROMPT.md](HOUSE_GENERATION_PROMPT.md) |
-| 上传到 GitHub | [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md) |
-| 查看隐私与素材边界 | [PRIVACY_AND_ASSETS.md](PRIVACY_AND_ASSETS.md) |
-| 查看灵感来源 / 署名 | [INSPIRATION.md](INSPIRATION.md) |
-| 查看第三方许可证 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
+| 让另一个 AI 接手安装 | [AI_SETUP_PROMPT.md](AI_SETUP_PROMPT.md) |
+| QQ 和房间怎么联动 | [docs/QQ-LINK.md](docs/QQ-LINK.md) |
+| 加新动作 / 改动画 | [docs/ANIMATION.md](docs/ANIMATION.md) |
+| 跑测试、看覆盖 | [docs/TESTS.md](docs/TESTS.md) |
+| 性能与开销 | [docs/PERF.md](docs/PERF.md) |
+| 服务器加固与密钥 | [docs/SECURITY.md](docs/SECURITY.md) |
+| 部署到云端 | [docs/deploy/CLOUD-MIGRATION.md](docs/deploy/CLOUD-MIGRATION.md) |
 | 用 NapCat 接 QQ | [docs/guides/NAPCAT.md](docs/guides/NAPCAT.md) |
+| 上传到 GitHub | [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md) |
+| 隐私与素材边界 | [PRIVACY_AND_ASSETS.md](PRIVACY_AND_ASSETS.md) |
+| 灵感来源与署名 | [INSPIRATION.md](INSPIRATION.md) |
+| 第三方许可证 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 
 ## 素材与许可
 
 - **代码**：MIT，见 [LICENSE](LICENSE)。
-- **2D 立绘/动画/点击音效**：来自 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet)，**CC BY-NC-SA 4.0**（署名、非商业、相同方式共享），详见 [CREDITS](public/room/assets/pet/CREDITS.md)。
-- **Three.js**：MIT，见 [LICENSE-three](public/room/vendor/LICENSE-three.txt)。
-- **3D 模型**：附带作者提供的优化版 `da-feiyu.opt.glb`（6.7 MB）和原始工程 `da-feiyu.glb`（58.9 MB）；页面实际加载优化版。版权归作者，仅用于模板展示，不可单独转售/商用。
+- **2D 立绘与动作素材**：形象源自 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet)，精灵图实际取自 [aboutme-pets](https://github.com/hunmer/aboutme-pets)，按 **CC BY-NC-SA 4.0** 使用（署名、非商业、相同方式共享）。详见 [CREDITS](public/room/assets/pet/CREDITS.md)。
+- **动作动画**：`public/room/assets/pet-import/`（114 个）为原始 webm，`pet-gen/`（164 个）由精灵图逐帧转码，均沿用 CC BY-NC-SA 4.0。
+- **新动作** `swim.webm` / `phone.webm`：AI 生成 + ffmpeg 抠像，形象源自 dsh-pet，同样 CC BY-NC-SA 4.0。
+- **Three.js**：MIT，见 `public/room/vendor/LICENSE-three.txt`。
+- **3D 模型**：附 `da-feiyu.opt.glb`（6.7 MB，页面实际加载）与 `da-feiyu.glb`（约 56 MB 原始工程备份）。版权归作者，仅用于展示，不可单独转售或商用。
 - **SnowLuma**：独立专有软件，不在本仓库内，也不随本仓库分发。
-- **动作动画（pet-import / pet-gen）**：`public/room/assets/pet-import/` 为 dsh-pet 官方 webm 素材；`pet-gen/` 由 dsh-pet 精灵图逐帧转码而来；两者均沿用 **CC BY-NC-SA 4.0**。
-- **新动作 `swim.webm` / `phone.webm`**：由本项目作者使用 AI 视频生成、再经 ffmpeg 绿幕抠像处理，角色形象源自 dsh-pet，因此同样按 **CC BY-NC-SA 4.0** 共享。
-- **房间灵感来源**：见 [INSPIRATION.md](INSPIRATION.md)，只参考氛围，不复制原博主的视频/图片/文字。
-- **QQ 联动插件**：`astrbot_plugin_room_link` 为独立仓库的 AstrBot 插件，不随本项目分发；使用时请遵守 AstrBot 自身的许可证。
+- **AstrBot 第三方插件**：各自授权，不属于本仓库，安装前请读上游许可证。
 
 ## 使用边界
 
-- 仅在自己知情并获准的 QQ 会话中使用，遵守平台规则；非官方 QQ 后端可能导致账号受限。
-- 聊天内容会经 DSH 发送给你配置的模型服务；电视截屏观后感会把截图发送给支持图片输入的模型。
-- `config.json`、`state/`、`audio/`、`assets/`、私人模型不要提交到公开仓库。
-- 本模板不实现 QQ 登录或 OneBot 协议，不安装/打包/启停 SnowLuma。
-- 电视投屏是浏览器标签页镜像，声音仍在原标签页；投屏控制扩展不随本仓库分发。
-- 模板附带作者的展示模型，但不包含作者的角色人格、私人记忆和语音，所以**代码/界面接近 1:1，私人身份不 1:1**。
+- 只在你知情并获准的会话里用，遵守平台规则；非官方 QQ 后端可能导致账号受限。
+- 聊天内容会经 DSH 发给你配置的模型服务；电视截屏观后感会把截图发给支持图片输入的模型。
+- 本项目不实现 QQ 登录或 OneBot 协议，也不安装 / 打包 / 启停 SnowLuma。
+- 电视投屏是浏览器标签页镜像，声音仍在原标签页。
+- 模板附带作者的展示模型，但不含作者的人格、私人记忆和语音——**代码与界面接近 1:1，私人身份不 1:1**。

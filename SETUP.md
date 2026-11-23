@@ -79,8 +79,8 @@ SnowLuma 是 QQ → OneBot v11 的网关，**专有软件，不在本仓库内**
 ### 下载方式 1：Git
 
 ```bash
-git clone <你的仓库地址> dsh-room-template
-cd dsh-room-template
+git clone https://github.com/Liatos233/dafeiyu-room.git
+cd dafeiyu-room
 ```
 
 ### 下载方式 2：下载 ZIP
