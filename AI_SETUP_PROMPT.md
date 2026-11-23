@@ -104,8 +104,8 @@ npm run test:mcp-servers
 
 ## 隐私和素材
 
-- 不要提交/上传 `config.json`、`state/`、`audio/`、`assets/`、`*.log`、`public/room/assets/models/*.glb`；
-- 模板只有 2D 立绘（dsh-pet，CC BY-NC-SA 4.0），3D 模型目录是空的；
+- 不要提交/上传 `config.json`、`state/`、`audio/`、`assets/`、`*.log`，也不要额外上传自己的私人 3D 模型；
+- 仓库自带的 2D 立绘（dsh-pet，CC BY-NC-SA 4.0）和 `public/room/assets/models/*.glb` 是随模板分发的素材，**保留即可**，来源与限制见 `THIRD_PARTY_NOTICES.md`；
 - 不要把我私人的角色卡、语音、照片、聊天记录复制进公开目录；
 - 不要把 API Key、Cookie、QQ号、群号写进 README 或截图。
 

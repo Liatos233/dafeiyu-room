@@ -213,7 +213,7 @@ git grep -n -I -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[A-Za-z]:\\\\?
 - **动作动画**：`public/room/assets/pet-import/`（114 个）为原始 webm，`pet-gen/`（164 个）由精灵图逐帧转码，均沿用 CC BY-NC-SA 4.0。
 - **新动作** `swim.webm` / `phone.webm`：AI 生成 + ffmpeg 抠像，形象源自 dsh-pet，同样 CC BY-NC-SA 4.0。
 - **Three.js**：MIT，见 `public/room/vendor/LICENSE-three.txt`。
-- **3D 模型**：附 `da-feiyu.opt.glb`（6.7 MB，页面实际加载）与 `da-feiyu.glb`（约 56 MB 原始工程备份）。版权归作者，仅用于展示，不可单独转售或商用。
+- **3D 模型**：`da-feiyu.opt.glb`（6.7 MB，页面实际加载）与 `da-feiyu.glb`（58.9 MB 原始工程，页面不加载）来自**上游仓库** [feiyu-room-template](https://github.com/sh2234113/feiyu-room-template)，由上游作者用 Tripo 生成后减面/优化。本仓库只是随代码一并分发，文件与上游字节一致。版权归**上游作者**：仅用于个人非商业展示，不可单独提取、转售、商用或批量再分发；商用或二次创作需上游作者许可。
 - **SnowLuma**：独立专有软件，不在本仓库内，也不随本仓库分发。
 - **AstrBot 第三方插件**：各自授权，不属于本仓库，安装前请读上游许可证。
 
