@@ -1,4 +1,4 @@
-﻿# 一键部署：本地 git archive（代码，排除 assets）→ scp → 服务器解包重启（不依赖 GitHub）
+# 一键部署：本地 git archive（代码，排除 assets）→ scp → 服务器解包重启（不依赖 GitHub）
 # 资产（public/room/assets，~380MB）走增量：按 sha256 清单只上传新增/变更的文件。
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
@@ -20,6 +20,23 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $root
+
+# 服务器地址不再写死在仓库里。第一次用先设一次用户级环境变量：
+#   setx DAFEIYU_SERVER <你的服务器 IP>
+if (-not $Server) {
+  Write-Host "!! 没设置服务器地址：setx DAFEIYU_SERVER <服务器IP>，或加 -Server 传入" -ForegroundColor Yellow
+  exit 1
+}
+# 私钥带口令，脚本是 BatchMode，必须先把密钥放进 ssh-agent
+$sshAdd = "C:\Windows\System32\OpenSSH\ssh-add.exe"
+if (Test-Path $sshAdd) {
+  & $sshAdd -l *> $null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "!! ssh-agent 里没有密钥。先跑一次（首次需管理员）：" -ForegroundColor Yellow
+    Write-Host "     powershell -ExecutionPolicy Bypass -File scripts\setup-ssh-agent.ps1"
+    exit 1
+  }
+}
 
 $git = "C:\Program Files\Git\cmd\git.exe"
 $scp = "C:\Windows\System32\OpenSSH\scp.exe"
