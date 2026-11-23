@@ -81,6 +81,10 @@ function seatAt(seg, now) {
   const dur = Math.max(1, Number(seg.dur) || 1);
   const t = Math.max(0, Math.min(1, (now - seg.t0) / dur));
   const seatY = Number(seg.seatY) || 0;
+  // 起点高度：默认 0（从地面升起/落到地面）。
+  // 但「从一张家具直接换到另一张」时起点不是地面，传 fromElev 才不会被
+  // 瞬间拽到 0 再拉回来（实测床→沙发的第一帧会出现 render=0 而 elev=0.48）。
+  const fromY = Number.isFinite(Number(seg.fromElev)) ? Number(seg.fromElev) : 0;
   const up = seg.up !== false;
   const v = smooth(up ? t / RISE : (t - RISE) / (1 - RISE));   // 高度进度
   const h = smooth(up ? (t - RISE) / (1 - RISE) : t / RISE);   // 横向进度
@@ -88,7 +92,8 @@ function seatAt(seg, now) {
   const to = seg.to || [0, 0];
   return {
     pos: [from[0] + (to[0] - from[0]) * h, from[1] + (to[1] - from[1]) * h],
-    elev: up ? seatY * v : seatY * (1 - v),
+    // 高度在 fromY 和 seatY 之间插值（正常情况下 fromY=0，等价于原来的 seatY*v）
+    elev: up ? fromY + (seatY - fromY) * v : seatY + (fromY - seatY) * v,
     walking: false,
     done: t >= 1
   };

@@ -1221,6 +1221,10 @@ function motionOf(state) {
       from: (m.from || [0, 0]).slice(),
       to: (m.to || [0, 0]).slice(),
       seatY: Number(m.seatY) || 0,
+      // fromElev：上座起点高度。正常情况下是 0（从地面升起），
+      // 但从一张家具换到另一张时起点不是地面 —— 不传的话插值会从 0 开始，
+      // 第一帧渲染高度瞬间掉到地面（观感就是在家具上闪一下）。
+      fromElev: Number.isFinite(Number(m.fromElev)) ? Number(m.fromElev) : 0,
       t0: Number(m.t0) || 0,
       dur: Number(m.dur) || MOUNT_MS,
       up: true
@@ -1233,6 +1237,8 @@ function motionOf(state) {
       from: (m.from || [0, 0]).slice(),
       to: (m.to || [0, 0]).slice(),
       seatY: Number(m.seatY) || 0,
+      // 下座的起点就是座面高度，终点由 fromElev 决定（默认 0 = 落到地面）。
+      fromElev: Number.isFinite(Number(m.fromElev)) ? Number(m.fromElev) : 0,
       t0: Number(m.t0) || 0,
       dur: Number(m.dur) || DISMOUNT_MS,
       up: false
@@ -1340,7 +1346,14 @@ function setActivity(state, kind, activity, pose, elev, facing) {
   state.kind = kind || 'idle';
   state.activity = sanitizeText(activity, 80) || '在发呆';
   if (pose) state.pose = pose;
-  state.elev = supportY(state);
+  // 高度优先用调用方给的 elev（上座中途、下座中途这些「不在标准支撑面上」的时刻），
+  // 没给才退回 supportY 推导。
+  //
+  // 原来这里无条件用 supportY(state)：而上座/下座过渡期间 pose 还是 'stand'，
+  // supportY 会算出 0 —— 于是「还在床沿上」的那一帧被按到地面，
+  // 下一帧又被 mounting 的插值拉回座面，观感就是家具上闪一下。
+  const explicit = Number(elev);
+  state.elev = Number.isFinite(explicit) && explicit > 0 ? explicit : supportY(state);
   if (facing !== undefined) state.facing = Number(facing) || 0;
   state.walking = false;
 }
@@ -1407,8 +1420,15 @@ function beginRoute(state, target, now, env = {}) {
       state.activity = '起身';
       state.walking = false;
       state.route = null;
-      state.spot = 'free';
-      state.freePos = cur.mount.slice();
+      // 不要把 spot 改成 'free'。
+      //
+      // 原来是 state.spot = 'free' + freePos = 座点。问题有两个：
+      //   ① decideTarget 判断「到了没有」用的是 state.spot === command.spot，
+      //      把它改成 free 之后，指令的「已到达」判断就永远对不上，或者
+      //      反过来被 freeTarget 逻辑当成一个新的自由点去重算路线；
+      //   ② 前端 syncCharacter 看到 spot 变化会重新 clipFor，动画跳一下。
+      // dismounting 本身已经带着 from/to/target，足够推进了，spot 留原样更安全。
+      state.freePos = null;
       return;
     }
   }
@@ -1485,11 +1505,22 @@ function beginRoute(state, target, now, env = {}) {
   }
   state.route = route;
   state.room = target.room;
-  state.spot = target.spot;
+  // spot 必须等她真的到了才改。
+  //
+  // 原来这里直接 state.spot = target.spot：但从坐具起身（dismounting）时她还在
+  // 座点上，紧接着这次改写会让所有「按 spot 推高度」的地方（setActivity →
+  // supportY、displayElevFor）以为她已经在新位置 —— 而新位置 pose 是 stand、
+  // 支撑面是地板，于是 elev 瞬间变 0，下一帧又被 mounting 的插值拉回座面。
+  // 实测：床→沙发时 elev 出现 0.65 → 0.00 → 0.65 的三帧跳变，
+  // 画面就是「在家具上鬼畜闪一下」。
+  //
+  // 现在：起身过渡期间保持原 spot；普通走路照旧（它只影响「她在哪个点」，
+  // 而 walking 期间渲染完全由 route 的插值决定）。
+  if (!state.dismounting) state.spot = target.spot;
   if (target.spot === 'free' && Array.isArray(target.pos)) state.freePos = target.pos.slice();
-  else if (target.spot !== 'free') state.freePos = null;
+  else if (target.spot !== 'free' && !state.dismounting) state.freePos = null;
   state.pose = 'stand';
-  state.elev = 0;
+  state.elev = state.dismounting ? (Number(state.elev) || 0) : 0;
   state.facing = target.facing ?? state.facing;
   state.kind = 'walk';
   state.activity = target.walkText || `往${ROOM_NAMES[target.room] || '屋里'}走`;
@@ -1528,10 +1559,13 @@ function arrive(state, now) {
     const bedY = Number(SURFACES[bedDef?.support || 'floor'] || 0);
     if (bedY > 0.05 && Array.isArray(bedDef?.mount)) {
       // 先「爬床」，过渡结束再钻进被窝
+      // fromElev 用当前高度：从地面走过来是 0；从另一张家具直接过来时是那张的高度。
+      const bedFromElev = Math.max(0, Number(state.elev) || 0);
       state.mounting = {
         from: bedDef.mount.slice(),
         to: (bedDef.pos || [0, 0]).slice(),
         seatY: bedY,
+        fromElev: bedFromElev,
         t0: now,
         dur: MOUNT_MS,
         up: true,
@@ -1539,7 +1573,8 @@ function arrive(state, now) {
         sleepAfter: true
       };
       state.pose = 'stand';
-      state.elev = 0;
+      // 不能归零：爬床过渡期间保持起点高度，避免「瞬间掉到地面再弹回」。
+      state.elev = bedFromElev;
       state.kind = 'idle';
       state.activity = '爬上床';
       state.walking = false;
@@ -1558,17 +1593,26 @@ function arrive(state, now) {
     const spDef = spotOf(t.room, t.spot);
     const seatY = Number(SURFACES[spDef?.support || 'floor'] || 0);
     if (seatY > 0.05 && Array.isArray(spDef?.mount)) {
+      // 记录上座的起点高度：从地面过来是 0；从另一张家具直接换过来时
+      // 是那张家具的高度。只写 0 的话，插值第一帧会从地面开始，
+      // 渲染高度瞬间掉一下（家具上「闪一下/跳一下」就是这么来的）。
+      const fromElev = Math.max(0, Number(state.elev) || 0);
       state.mounting = {
         from: spDef.mount.slice(),
         to: (spDef.pos || currentPosition(state, now)).slice(),
         seatY,
+        fromElev,
         t0: now,
         dur: MOUNT_MS,
         up: true,
         target: t
       };
       state.pose = 'stand';
-      state.elev = 0;
+      // 保持起点高度（通常是 0，从地面升起）。
+      // 关键：这里**不能**写成 seatY —— 上座刚开始时人还在地面，
+      // 直接跳到座面高度会让「高度单调上升」的插值断掉（测试也会红）。
+      // 真正的插值由 mounting 推进时的 seatLerp 负责。
+      state.elev = fromElev;
       state.kind = 'idle';
       state.activity = '坐上去';
       state.walking = false;
@@ -2230,8 +2274,17 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
   if (now < state.reactionUntil) return { state, changed };
 
   // 鼠标指点：立即覆盖当前停留/路线（go 动作已经把 route 清掉，这里兜底）。
+  //
+  // 但「指令优先」：command 还没过期时，绝不能把路线抢去 freeTarget。
+  // 之前这里没有这层判断，于是「点动作面板 → 立刻 act('place') → freeTarget 生效
+  // → 把 command 刚建的路线清掉重建」，表现就是她在点位之间来回奔波。
   if (state.freeTarget) {
-    if (now > state.freeTarget.until) {
+    const commandActive = !!(state.command && now < state.command.until);
+    if (commandActive) {
+      // 有指令在跑：丢掉这次指点，别跟指令抢。
+      state.freeTarget = null;
+      changed = true;
+    } else if (now > state.freeTarget.until) {
       state.freeTarget = null;
       changed = true;
     } else {
@@ -2263,6 +2316,15 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     }
     return { state, changed };
   }
+
+  // 上/下座过渡期间不许做任何新的决策或寻路。
+  //
+  // 真 bug：这里原来只判断 route / dwell，而过渡期间两者都是 null，
+  // 于是会继续往下走 decideTarget → beginRoute —— 正在进行的下座被另一条
+  // 路线覆盖，表现就是「在家具上鬼畜跳动 / 各个点之间来回奔波」。
+  // （mounting 在更前面已经 return，dismounting 在更后面才推进，所以必须在
+  //  这里挡一道，否则它挡不住中间的决策流程。）
+  if (state.dismounting) return { state, changed };
 
   if (state.route || state.dwell) return { state, changed };
 
@@ -2580,6 +2642,18 @@ export function applyHomeAction(state, input = {}) {
     // 用户点「让她去」时，不能让她先把上一段「到了沙发坐下」的停留耗完；
     // 清掉 dwell，下一次 advance 立即出发。
     s.dwell = null;
+    // 关键：把「鼠标指点」的残留目标也清掉。
+    // go 留下的 freeTarget 会在下一次 advance 里重新 beginRoute，把刚下的
+    // 指令路线抢走（两套目标源打架 = 她在点位之间来回奔波）。
+    s.freeTarget = null;
+    // 起身/下座的中途状态也清掉：它是上一次移动的半截，留着会让
+    // 「出去」的分支先跑一遍再重新寻路，画面就是一顿。
+    s.dismounting = null;
+    // 旧路线必须清掉：不清的话，下一次 advance 会先把旧路线跑完（她还在
+    // 走去上一个地方），而 command 又指向新地方 —— 两条路线叠在一起，
+    // 表现就是「来回奔波 / 走到一半折返」。
+    s.route = null;
+    s.walking = false;
     event = { type: 'command', text: `你让她去${HOME_LAYOUT.spots[room][spot].label}` };
   } else if (action === 'sick') {
     s.needs.pain = 0.82;

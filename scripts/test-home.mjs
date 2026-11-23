@@ -622,6 +622,72 @@ test('上座过渡明显长于客户端轮询间隔，否则会「停下→闪�
     'homeView().her.elev 在上座期间必须是插值后的值，不能一直是 0');
 });
 
+test('下座过渡期间 spot 不许提前改成目标点（否则家具上会闪一下）', () => {
+  // 真 bug：beginRoute 里无条件 state.spot = target.spot。
+  // 从坐具起身（dismounting）时人还在座点上，这一改会让所有「按 spot 推高度」
+  // 的地方（setActivity → supportY、displayElevFor）以为她已经在新位置 ——
+  // 新位置 pose=stand、支撑面是地板，elev 瞬间变 0，下一帧又被插值拉回座面。
+  // 实测床→沙发：elev 出现 0.65 → 0.00 → 0.65 的三帧跳变，画面就是「鬼畜闪一下」。
+  const s0 = atState({ room: 'her_room', spot: 'bed', pose: 'lie', elev: 0.662, nextDecisionAt: T0 });
+  let s = applyHomeAction(s0, { action: 'command', room: 'living', spot: 'sofa', at: T0 }).state;
+
+  let t = T0;
+  let dismountFrames = 0;
+  let spotChangedMidway = 0;
+  let elevDroppedToZero = 0;
+  let prevElev = s.elev;
+  let prevSpot = s.spot;
+  for (let i = 0; i < 200; i += 1) {
+    t += 100;
+    const wasDismounting = !!s.dismounting;
+    s = advanceHomeState(s, t, {}).state;
+    if (s.dismounting) {
+      dismountFrames += 1;
+      // 只检查「下座进行中」的那些帧：最后一帧 dismounting 会被清空，
+      // 那一刻 spot 从座点切到走路目标是正确的（紧接着 beginRoute 重算路线）。
+      if (wasDismounting && s.spot !== prevSpot) spotChangedMidway += 1;
+      // 下座是「先横移、再落地」，高度只能单调下降，不能中途掉到 0 再弹回来
+      if (s.elev === 0 && prevElev > 0.05) elevDroppedToZero += 1;
+    }
+    prevElev = s.elev;
+    prevSpot = s.spot;
+    if (!s.dismounting && s.route) break;
+  }
+  assert.ok(dismountFrames >= 3, `应该采到下座过程，实际只有 ${dismountFrames} 帧`);
+  assert.equal(spotChangedMidway, 0,
+    `下座期间 spot 变了 ${spotChangedMidway} 次，会导致高度被按到地面再弹回`);
+  assert.equal(elevDroppedToZero, 0,
+    `下座期间高度有 ${elevDroppedToZero} 帧掉到 0（应该在座面和地面之间单调插值）`);
+});
+
+test('command 会清掉 freeTarget / 旧路线，避免两套目标源打架', () => {
+  // 真 bug：go 留下的 freeTarget 会在下一次 advance 里重新 beginRoute，
+  // 把刚下的 command 路线抢走 —— 表现是「点了动作，她却在点位之间来回奔波」。
+  const s0 = atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.492, nextDecisionAt: T0 });
+  // 先制造一个 freeTarget（模拟刚点过「走到这里」）
+  let s = applyHomeAction(s0, { action: 'go', pos: [8.0, 6.0], at: T0 }).state;
+  assert.ok(s.freeTarget, 'go 之后应该有 freeTarget');
+  // 再下一条明确的指令
+  s = applyHomeAction(s, { action: 'command', room: 'her_room', spot: 'bed', at: T0 + 100 }).state;
+  assert.equal(s.freeTarget, null, 'command 必须清掉 freeTarget（否则会被它抢走路线）');
+  assert.equal(s.route, null, 'command 必须清掉旧路线（否则边跑旧路线边等新指令）');
+  assert.equal(s.dismounting, null, 'command 必须清掉半截的下座状态');
+
+  // 推进几步，路线必须指向指令目标而不是 freeTarget 的位置
+  let t = T0 + 100;
+  let ok = false;
+  for (let i = 0; i < 60; i += 1) {
+    t += 200;
+    s = advanceHomeState(s, t, {}).state;
+    if (s.route) {
+      assert.equal(s.route.target?.spot, 'bed', '路线应该去指令指定的 bed');
+      ok = true;
+      break;
+    }
+  }
+  assert.ok(ok, '下指令后应该开始走向 bed');
+});
+
 test('泳池可以从面板点「来游泳」：走到水面自动下水，游完复位', () => {
   // 以前游泳只能靠「点播动画 → 游泳」触发，而 startSwim 直接把她瞬移到水里，
   // 观感是「点一下人就不见了」。现在 pool 有独立的 swim 站位：
