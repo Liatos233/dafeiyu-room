@@ -1,0 +1,1422 @@
+{
+ "三球抛接": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "下五子棋": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "原地专心玩魔方": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "吹气球": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "抽陀螺": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "撸猫": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "玩水枪": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "玩游戏气急败坏": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "荡秋千": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "蝴蝶蜜蜂环绕头顶开花": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "鲸鱼吐泡泡特效": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "吹泡泡": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "堆雪人": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "打主机游戏": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "打雪仗": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "拼拼图": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "搭帐篷": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "搭积木": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "放风筝": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "消防员持水枪": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "转魔方": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "逗狗": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "逗猫": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "逗蝴蝶": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "钓鱼": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "骑木马": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "东张西望": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-袋空如洗": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地漂浮踏步": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "哈欠连天": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "小幅度原地360度旋转展示": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "待机呼吸休闲": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "悠闲哼歌": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打瞌睡被惊醒": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "整体换装试色": {
+  "spots": [
+   "bed"
+  ]
+ },
+ "晨间刷牙": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "碎碎念-擦桌碎碎念": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "被鼠标拖拽悬空反馈": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "超大伸懒腰": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "刷牙": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "剪刘海": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "剪指甲": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "叠衣服": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "吸尘器吸地": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "扎马尾": {
+  "spots": [
+   "bathroom",
+   "bed"
+  ]
+ },
+ "换装侦探服思考": {
+  "spots": [
+   "bed"
+  ]
+ },
+ "换装浴袍": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "掏耳朵": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "擦窗户": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "收拾书桌": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "收纳行李箱": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "整理鞋柜": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "梳理鲸鱼尾巴": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "洗碗": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "洗脸": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "熨衣服": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "理发师剪发": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "站着晃神打瞌睡": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "系围裙": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "踮脚换灯泡": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "铺床单": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "玩手机": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "中秋赏月吃月饼": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "偷吃零食被抓住": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "原地敲击桌面互动": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "吃Token": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃冰淇淋融化": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃午餐": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃大闸蟹": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃年糕": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃早餐": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃晚餐": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃汤圆": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃白饭": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃粽子": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃糖葫芦": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃腊八粥": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃西瓜": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃重阳糕": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃长寿面": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃青团": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吃饺子": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "大口吃零食": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "是啊，吃什么": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "涮火锅": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "用鲸鱼尾巴拍打地面": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "螃蟹走路": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "讨糖南瓜灯": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "举糖葫芦": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "冰箱翻吃的": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "切蛋糕": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "剥橘子": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "包饺子": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "吹泡泡糖": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "手冲咖啡": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "手摇磨咖啡": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "挤番茄酱": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "捏面人": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "撒盐调味": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "擀饺子皮": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "敷面膜": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "烤饼干": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "煮泡面": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "甩拉面": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "舔冰淇淋球": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "蛋糕裱花": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "雪克杯摇奶茶": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "优雅女仆舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "可爱宅舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "吹笛子": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "小提琴演奏": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "扑克魔术": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "轻快摇摆舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "举哑铃弯举": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "交响乐指挥": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "写毛笔字": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "吹长笛": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "唱歌-清唱": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "弹尤克里里": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "弹钢琴": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打快板": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "拉小提琴": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "拍手鼓": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "指挥合唱": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "摇沙锤": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "摇铃铛报喜": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "敲木琴": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "敲锣打鼓拜年": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "木匠锯木头": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "水彩作画": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "深蹲举杠铃": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "生气鼓腮跺脚": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "织毛衣": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "绸带舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "缝扣子": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "跳芭蕾": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "跳街舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "踢踏舞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "陶艺拉坯": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "魔术师变出花": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-分文不剩": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-数金皱眉": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-金袋叮当": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-钱袋如常": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "余额-钱袋满溢": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "凭空生花": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "动物环绕": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地小憩沉眠": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "原地跳跃抓碎头顶物品": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "变鸽子": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "女仆屈膝礼仪": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "摇扇纳凉": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "照镜子": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "萌化小幽灵": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "蓝鲸现世": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "被落叶淹没": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "变戏法撒纸钱": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "宇航员行走": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "开合跳": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打嗝不停": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打电话汇报": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "折纸飞机": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "折纸鹤": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "拆礼物": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "拧干湿抹布": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "挂彩旗": {
+  "spots": [
+   "living",
+   "kitchen"
+  ]
+ },
+ "掰巧克力": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "摘花送镜头": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "撒花瓣": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "放飞纸飞机": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "敲木鱼祈福": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "涂口红": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "滴眼药水": {
+  "spots": [
+   "bathroom"
+  ]
+ },
+ "熬夜刷手机": {
+  "spots": [
+   "bed",
+   "sofa"
+  ]
+ },
+ "画家调色": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "看恐怖片捂眼": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "耍流星锤": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "脚麻了": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "花艺师包花": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "衣服标签刺痒": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "袖口太长": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "袜子破洞": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "被阳光晃眼": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "被雨淋": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "观星指认": {
+  "spots": [
+   "garden",
+   "pool",
+   "balcony"
+  ]
+ },
+ "踩到香蕉皮": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "踩高跷": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "蹦迪-戴墨镜": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "递药和水": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "鞋带松了": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "风扇前啊啊叫": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "走路": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "写代码": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作状态-原地踱步张望": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作状态-忙碌点按": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作状态-清点归档": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作状态-雀跃庆祝": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "轻快记录": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "医生听诊": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "厨师抛饼": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "图书管理员嘘": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作加班": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "护士量血压": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "摄影师打光": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "服务生托盘": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "检票打孔": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "警察开罚单": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "递包裹": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "量体温": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "钉钉子挂画": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "写福字": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "插茱萸赏菊": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "收红包": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "放孔明灯": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "放河灯": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "放烟花": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "穿针乞巧": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "舞狮头": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "装点圣诞树": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "挂灯笼": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "放礼花筒": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "点许愿灯": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "舞狮": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "贴春联": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地左转奔跑": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地蹲下玩玩具汽车": {
+  "spots": [
+   "living",
+   "sofa"
+  ]
+ },
+ "原地重力下蹲压缩": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "中国功夫": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "举杯敬酒": {
+  "spots": [
+   "kitchen"
+  ]
+ },
+ "举荧光棒应援": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "侧身举相机拍别人": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "保安举金属探测仪": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "单脚闭眼平衡": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "压腿拉伸": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地划桨": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "原地打羽毛球": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "平板支撑": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打乒乓球": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打太极拳": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "打滚-原地": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "滑雪": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "潜水比手势": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "瑜伽树式": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "被风吹跑帽子": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "跳绳-减肥": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "踢毽子": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "转呼啦圈": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "游泳": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "工作状态-垂头叹气冒汗": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "工作状态-思考冒泡": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "深度思考碎碎念": {
+  "spots": [
+   "desk"
+  ]
+ },
+ "点击回应-傲娇生气": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "点击回应-元气挥手": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "点击回应-害羞惊讶": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "点击回应-开心跃动": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "点击回应-挠痒咯咯笑": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "碎碎念-发呆碎碎念": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "碎碎念-对屏碎碎念": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "被吓一跳": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "害羞捂脸偷看": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "尴尬抠手指": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "得意炫耀转圈": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "心疼捂胸口": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "惊讶下巴掉": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "感动抹泪": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "抖空竹": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "无语扶额": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "狂喜原地跳": {
+  "spots": [
+   "anywhere"
+  ]
+ },
+ "紧张搓手抖": {
+  "spots": [
+   "anywhere"
+  ]
+ }
+}
