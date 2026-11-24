@@ -2554,6 +2554,80 @@ function buildPoolDeck(world, M) {
   addHotspot(world, 5.8, 11.3, 0.2, { title: '泳池', sub: '整池浅蓝瓷砖，水是温的，池底晃着一条一条的光', room: 'pool', spot: 'swim', label: '泳池里' });
   addHotspot(world, 12.42, 10.58, 0.6, { title: '沙滩躺椅', sub: '躺椅侧对着泳池，扶手上搭着毛巾', room: 'pool', spot: 'lounger', label: '躺椅上' });
   addHotspot(world, 9.0, 9.85, 0.6, { title: '泳池梯', sub: '不锈钢扶手被太阳晒得温热，踏板伸进水里', room: 'pool', spot: 'swim', label: '泳池梯旁' });
+
+  // ── 补细节：露台在 13×4.5 米里只有「泳池+两躺椅+一把伞」显得空 ──────
+  // 加的是真实泳池边会有的东西：户外淋浴柱、池边台阶、盆栽、叠放的毛巾、
+  // 角落里的小推车。都贴着边缘放，不挡走道（走道净宽仍 ≥0.9m）。
+
+  // 1) 户外淋浴柱（泳池西端，靠阳台墙）
+  {
+    const sx = 0.55, sz = 10.5;
+    cyl(p, 0.035, 0.035, 2.02, M.steel, sx, DECK_TOP + 1.01, sz, 10);
+    // 底盘
+    cyl(p, 0.16, 0.19, 0.05, M.stoneDark, sx, DECK_TOP + 0.025, sz, 16);
+    // 顶部横臂 + 花洒
+    const armLen = 0.4;
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, armLen, 8), M.steel);
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(sx + armLen / 2, DECK_TOP + 1.99, sz);
+    p.add(arm);
+    cyl(p, 0.10, 0.085, 0.045, M.steel, sx + armLen, DECK_TOP + 1.955, sz, 18);
+    // 水龙头（十字把手）
+    cyl(p, 0.022, 0.022, 0.09, M.brass, sx + 0.05, DECK_TOP + 1.1, sz, 8);
+    for (const a of [0, Math.PI / 2]) {
+      const h = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.14, 6), M.brass);
+      h.rotation.z = a + Math.PI / 2;
+      h.position.set(sx + 0.05, DECK_TOP + 1.1, sz);
+      p.add(h);
+    }
+  }
+
+  // 2) 池边台阶（泳池东端入水处，两级）
+  {
+    const tx0 = 10.25, tz = (POOL_Z0 + POOL_Z1) / 2;
+    rbox(p, 0.34, 0.16, 1.1, 0.02, M.stone, tx0 + 0.17, DECK_TOP + 0.08, tz);
+    rbox(p, 0.20, 0.08, 1.1, 0.02, M.stone, tx0 + 0.10, DECK_TOP + 0.20, tz);
+    // 台阶边的防滑条
+    for (const dz of [-0.42, 0, 0.42]) {
+      box(p, 0.30, 0.008, 0.05, M.steel, tx0 + 0.17, DECK_TOP + 0.162, tz + dz);
+    }
+  }
+
+  // 3) 盆栽：栏杆边补两盆，和阳台那两盆呼应
+  plant(world, 11.15, 9.35, 1.05);
+  plant(world, 4.6, 9.3, 0.85);
+
+  // 4) 叠放的毛巾（躺椅旁的小边桌上）
+  {
+    const tx = 11.55, tz = POOL_MID_Z;
+    for (let i = 0; i < 3; i++) {
+      rbox(p, 0.30, 0.045, 0.22, 0.02, i === 1 ? M.fabricBlue : M.fabricCream,
+        tx, DECK_TOP + 0.50 + i * 0.047, tz, (i - 1) * 0.06);
+    }
+  }
+
+  // 5) 角落的小推车（毛巾车）
+  {
+    const cx = 0.62, cz = 12.85;
+    const g = new THREE.Group();
+    g.position.set(cx, DECK_TOP, cz);
+    p.add(g);
+    rbox(g, 0.46, 0.05, 0.34, 0.015, M.oak, 0, 0.72, 0);
+    rbox(g, 0.42, 0.04, 0.30, 0.012, M.oak, 0, 0.40, 0);
+    for (const [dx, dz] of [[-0.19, -0.13], [0.19, -0.13], [-0.19, 0.13], [0.19, 0.13]]) {
+      cyl(g, 0.018, 0.018, 0.72, M.steel, dx, 0.36, dz, 8);
+    }
+    for (const dz of [-0.13, 0.13]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 12), M.black);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(-0.19, 0.045, dz);
+      g.add(wheel);
+    }
+    // 车上堆的毛巾
+    for (let i = 0; i < 2; i++) {
+      rbox(g, 0.36, 0.06, 0.26, 0.018, i ? M.fabricBlue : M.fabricCream, 0, 0.78 + i * 0.062, 0);
+    }
+  }
 }
 
 
