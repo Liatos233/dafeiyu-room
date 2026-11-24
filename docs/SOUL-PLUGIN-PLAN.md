@@ -224,3 +224,65 @@ req.extra_user_content_parts.append(TextPart(text=block))
 4. **不管生理指标** —— 房间状态机唯一管辖
 5. **不建第二套记忆** —— 不存聊天原文
 6. **不碰 system prompt** —— 只用 `extra_user_content_parts`
+
+
+---
+
+## 十一、上线记录（2026-11-25 01:30）
+
+整套方案已全部走完并部署。
+
+### 已上线
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| P0 数值 | ✅ | 七维 + 五档 + 阶段，55 项单测全过 |
+| P1 注入 | ✅ | `inject.enabled = true`，走 extra_user_content_parts |
+| P2 面板 | ✅ | `views/soul/`，七维雷达 + 徽章 + 基线刻度 |
+| 房间页接入 | ✅ | bridge 的 readFeiyuMood 先读 soul，回退旧路径 |
+| 关闭旧系统 | ✅ | group_chat_plus.enable_mood_system → False |
+| affinity.js | ✅ | 标记 DEPRECATED，保留作命名对照 |
+
+### 最终验证
+
+```
+soul.json: label 愿意搭话 | band 日常
+七维: 依恋 45 / 亲密 40.06 / 开心 50.2 / 担心 15 / 难过 10 / 好奇 55.54 / 疲惫 20
+
+/api/home/context → mood:
+{"label":"愿意搭话","mood":50,"stage":"愿意搭话",
+ "attitude":"嘴上嫌麻烦，还是会回","band":"日常","bandKey":"calm",
+ "blame":0,"dims":{...7维...},"dimLabels":{...},"source":"soul"}
+```
+
+房间页那条 line 已经变成：
+`心情愿意搭话（50/100）`
+
+### 踩到的三个坑（都已修）
+
+1. **相对导入** —— AstrBot 把插件当包加载（`data.plugins.<pkg>.<mod>`），
+   `import core` 报 No module named 'core'。必须 `from . import core`。
+2. **soul.json 不生成** —— 原来只在状态变化时写，启动时不写，
+   房间页会一直读不到。改成 `__init__` 里启动就写一次。
+3. **面板 401** —— 裸 `fetch` 拿不到 asset_token。必须走
+   `bridge.apiGet / bridge.apiPost`（AstrBot WebUI 注入的 SDK）。
+
+### 回滚方法
+
+```bash
+# 关新插件
+sed -i 's/"enabled": true/"enabled": false/' /root/data/config/astrbot_plugin_dafeiyu_soul_config.json
+
+# 恢复旧情绪系统
+cp /root/data/config/astrbot_plugin_group_chat_plus_config.json.bak-soulmigrate-* \
+   /root/data/config/astrbot_plugin_group_chat_plus_config.json
+
+systemctl restart astrbot
+```
+
+### 观察要点（接下来几天）
+
+- 发 `/心` 看她此刻的七维和责怪档
+- 留意「依恋/亲密」是否异常涨落（半衰期 51h，应该很慢）
+- 责怪档会不会卡在 40（心结）下不来 —— 那说明该哄了
+- 面板在 AstrBot WebUI → 插件详情页 → 页面
