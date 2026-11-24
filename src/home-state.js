@@ -2031,24 +2031,39 @@ export function advanceHomeState(input, now = Date.now(), env = {}) {
     const h = elapsed / HOUR;
     const prevNeeds = { ...state.needs };
     const n = state.needs;
-    // 增速按「一天几轮」定，而不是随手取的每小数：
-    // 饿 0.09/时 → 7 小时一轮，一天 3 顿；渴 0.13 → 5 小时一轮，一天 4 次；
-    // 憋 0.13 → 5.5 小时一轮；邋遢 0.10 → 8 小时一轮，一天洗两次。
-    // 之前清爽 0.06/时（13 小时一轮）条几乎不动，用户看不出变化。
-    n.hunger = clamp01(n.hunger + 0.09 * h);
-    n.hygiene = clamp01((n.hygiene ?? 0.1) + 0.10 * h);
-    n.thirst = clamp01(n.thirst + 0.13 * h);
-    n.bladder = clamp01(n.bladder + 0.13 * h);
-    if (state.asleep) {
-      // 睡觉回体力（fatigue 往下走）：睡满一小时基本就缓过来了。
-      n.fatigue = clamp01(n.fatigue - 2.0 * h);
-      // 睡着时饥饿/口渴/如厕都放慢，醒来才不至于崩溃
-      n.hunger = clamp01(n.hunger - 0.02 * h);
-      n.thirst = clamp01(n.thirst - 0.02 * h);
-      n.bladder = clamp01(n.bladder - 0.01 * h);
-    } else {
-      n.fatigue = clamp01(n.fatigue + 0.055 * h);
+    // ── 需求推进：按「清醒时的基准速率」写成一张表，睡眠只是乘一个系数 ──
+    //
+    // 之前是「先按清醒速率加满，再 if(asleep) 减一点点」——
+    // 减幅（-0.02）比增速（+0.09）小，所以睡 8 小时饿还净涨 0.56，
+    // 醒来直接快饿死。注释写的是"放慢"，代码做的是"稍微不那么快"。
+    // 现在是真正的乘法：睡眠系数 0.35 表示睡一觉只攒 35%，符合代谢变慢的直觉。
+    //
+    // 基准按「一天几轮」定，不是随手取的每小数：
+    //   饿 0.09/时 → 11 小时一轮，一天 2~3 顿
+    //   渴 0.13/时 → 7.7 小时一轮，一天 3~4 次
+    //   憋 0.13/时 → 7.7 小时一轮
+    //   脏 0.10/时 → 10 小时一轮，一天洗一两次
+    //   累 0.055/时 → 清醒 18 小时耗尽
+    const NEED_RATE = { hunger: 0.09, thirst: 0.13, bladder: 0.13, hygiene: 0.10 };
+    // 睡着时代谢变慢，但各维不一样：
+    //   饿  0.35 —— 睡觉不吃饭，但代谢也慢，8 小时攒 0.25（醒来"有点饿"，合理）
+    //   渴  0.28 —— 口渴不该一夜爆表；8 小时攒 0.29（醒来"渴了"，刚好该喝水）
+    //   憋  0.28 —— 睡 8 小时憋到 0.49 是"有点憋"，醒来上厕所正合适
+    //   脏  0.60 —— 睡觉也出汗，但没有清醒时那么多；8 小时攒 0.48
+    // ⚠ 这些是**乘法系数**，不是"加减"。之前写成先加满再减 0.02，
+    //   净增速仍为正，睡一觉全部爆表 —— 那才是用户报的"睡觉时掉得很快"。
+    const SLEEP_RATE = { hunger: 0.35, thirst: 0.28, bladder: 0.28, hygiene: 0.60 };
+    for (const key of Object.keys(NEED_RATE)) {
+      const k = state.asleep ? SLEEP_RATE[key] : 1;
+      n[key] = clamp01((n[key] ?? 0) + NEED_RATE[key] * k * h);
     }
+
+    // 体力：睡着回得快，但没有原来那么夸张。
+    // 原来 -2.0/h 意味着睡着 30 分钟就满血（一个 8 小时觉的前 4% 就还完了），
+    // 现在 -0.42/h 让它接近"回满一整晚的觉"：睡 2.4 小时从 1.0 降到 0。
+    // 醒着的时候慢慢掉 0.055/h，睡一觉刚好把掉下去的补回来并留一点余量。
+    n.fatigue = clamp01(n.fatigue + (state.asleep ? -0.42 : 0.055) * h);
+
     if (n.pain > 0) n.pain = clamp01(n.pain - 0.055 * h);
     if (n.fatigue > 0.95 && n.pain < 0.28) n.pain = 0.28;
     // 需求越线日志（只记「变糟」的那一次）

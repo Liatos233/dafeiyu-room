@@ -895,6 +895,93 @@ test('点一次「来游泳」只游一次：上岸后 command 必须清干净',
   assert.equal(cmdAfterArrive, null, `游完 command 应该已清空，实际 ${cmdAfterArrive}`);
 });
 
+// ══════════════════════════════════════════════════════════════
+// 睡觉时的需求推进
+//
+// 用户报「睡觉的时候其他状态掉的也很快」。排查发现是个净速率 bug：
+// 旧代码先按清醒速率把饥饿/口渴/如厕加满，再 if(asleep) 减 0.02，
+// 减幅比增速小，所以睡 8 小时 hunger 还净涨 0.56 —— 醒来直接快饿死。
+// hygiene 更是完全没有睡眠分支。
+//
+// 现在改成乘法系数（睡眠只攒清醒时的一小部分），这组测试把它钉住。
+// ══════════════════════════════════════════════════════════════
+
+test('睡觉 8 小时，需求不会爆表', () => {
+  let t = Date.now();
+  let s = normalizeHomeState({}, t);
+  s = applyHomeAction(s, { action: 'sleep' }, t).state;
+  // 走到床边并睡下
+  for (let i = 0; i < 900; i += 1) { t += 100; s = advanceHomeState(s, t, {}).state; }
+  // 睡前把需求设成一个正常的傍晚水平
+  s.needs.hunger = 0.30;
+  s.needs.thirst = 0.40;
+  s.needs.bladder = 0.20;
+  s.needs.hygiene = 0.20;
+  s.needs.fatigue = 0.85;
+  s.lastTickAt = t;
+  const before = { ...s.needs };
+
+  // 推进 8 小时
+  t += 8 * HOUR;
+  s = advanceHomeState(s, t, {}).state;
+
+  assert.ok(s.asleep || s.needs.fatigue < 0.2, '8 小时后应该睡够了或已经醒了');
+  assert.ok(s.needs.hunger < 0.65, `睡 8h 后 hunger 不该超过 0.65，实际 ${s.needs.hunger.toFixed(2)}`);
+  assert.ok(s.needs.thirst < 0.75, `睡 8h 后 thirst 不该超过 0.75，实际 ${s.needs.thirst.toFixed(2)}`);
+  assert.ok(s.needs.bladder < 0.65, `睡 8h 后 bladder 不该超过 0.65，实际 ${s.needs.bladder.toFixed(2)}`);
+  assert.ok(s.needs.hygiene < 0.80, `睡 8h 后 hygiene 不该超过 0.80，实际 ${s.needs.hygiene.toFixed(2)}`);
+});
+
+test('睡觉时需求涨得比清醒时慢', () => {
+  const t0 = Date.now();
+  // 清醒 4 小时
+  let a = normalizeHomeState({}, t0);
+  a.asleep = false;
+  a.needs = { hunger: 0.1, thirst: 0.1, fatigue: 0.1, pain: 0, hygiene: 0.1, bladder: 0.1 };
+  a.lastTickAt = t0;
+  a = advanceHomeState(a, t0 + 4 * HOUR, {}).state;
+  const awakeRise = a.needs.hunger - 0.1;
+
+  // 睡着 4 小时（同样的起点）
+  let b = normalizeHomeState({}, t0);
+  b.asleep = true;
+  b.needs = { hunger: 0.1, thirst: 0.1, fatigue: 0.6, pain: 0, hygiene: 0.1, bladder: 0.1 };
+  b.lastTickAt = t0;
+  b = advanceHomeState(b, t0 + 4 * HOUR, {}).state;
+  const asleepRise = b.needs.hunger - 0.1;
+
+  assert.ok(asleepRise > 0, '睡着时还是会饿，只是慢');
+  assert.ok(asleepRise < awakeRise * 0.6, `睡着时涨得应该不到清醒的 60%，实际 ${(asleepRise / awakeRise * 100).toFixed(0)}%`);
+});
+
+test('睡一晚能把疲劳补回来，但不会 30 分钟就满血', () => {
+  const t0 = Date.now();
+  let s = normalizeHomeState({}, t0);
+  s.asleep = true;
+  s.needs.fatigue = 1.0;
+  s.lastTickAt = t0;
+
+  // 30 分钟
+  let half = advanceHomeState(s, t0 + 0.5 * HOUR, {}).state;
+  assert.ok(half.needs.fatigue > 0.6, `30 分钟不该回满，实际剩 ${half.needs.fatigue.toFixed(2)}`);
+
+  // 3 小时
+  let three = advanceHomeState(s, t0 + 3 * HOUR, {}).state;
+  assert.ok(three.needs.fatigue < 0.05, `3 小时应该基本回满，实际剩 ${three.needs.fatigue.toFixed(2)}`);
+});
+
+test('睡觉时卫生也在涨（不是只有清醒才脏）', () => {
+  const t0 = Date.now();
+  let s = normalizeHomeState({}, t0);
+  s.asleep = true;
+  s.needs.hygiene = 0.20;
+  s.needs.fatigue = 0.8;
+  s.lastTickAt = t0;
+  const after = advanceHomeState(s, t0 + 6 * HOUR, {}).state;
+  assert.ok(after.needs.hygiene > 0.35, `睡觉也会变脏，6h 后应 >0.35，实际 ${after.needs.hygiene.toFixed(2)}`);
+  assert.ok(after.needs.hygiene < 0.75, `但不该一夜就脏透，实际 ${after.needs.hygiene.toFixed(2)}`);
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {
