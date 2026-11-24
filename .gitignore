@@ -55,6 +55,12 @@ dist/
 # 无头渲染验证截图（调试产物）
 .shots/
 
+# 临时调试截图：命名形如 .tmp-close-kitchen.png / .tmp-recheck-balcony.png
+# 这些是逐房排查时随手拍的，数量多、体积大、随时会被重拍，不入库。
+# 需要长期留的证据请放 docs/ 下（如 docs/modeling-audit-evidence/）。
+.tmp-*.png
+.tmp-*.jpg
+
 # 临时调试/部署脚本（本地草稿，不入库）
 .tmp-state/
 
