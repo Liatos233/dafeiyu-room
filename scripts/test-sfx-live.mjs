@@ -79,7 +79,7 @@ ws.addEventListener('message', (ev) => {
 
 console.log(`打开线上地址：${URL}`);
 await send('Page.navigate', { url: URL }, sessionId);
-await sleep(9000);   // 3D 场景 + 素材加载要时间
+await sleep(18000);   // 3D 场景 + 素材加载要时间
 
 async function evaluate(expression) {
   const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
