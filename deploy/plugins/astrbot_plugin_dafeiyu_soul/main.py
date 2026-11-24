@@ -457,32 +457,75 @@ class DafeiyuSoul(Star):
             return event.plain_result(f"出错了：{exc}")
 
     def _render_status(self, now: int) -> str:
+        """给 QQ 看的紧凑格式。
+
+        设计取舍（都是被真实问题逼出来的）：
+          · **10 行太长**：QQ 上要滑动才看得完 → 压到 6~7 行
+          · **小数参差**：40.12 / 50.4 / 56.07 视觉上很乱 → 全部取整
+          · **看不出相对基线**：45 和 55 在 45 基线上差异巨大，但绝对值看不出来
+            → 用 ▲▼ 标出相对基线的方向，差值 ≥3 才标
+          · **没有方向感**：只说数值不说"所以呢" → 补一句她此刻的语气倾向
+          · 进度条从 10 格压到 8 格，两边对齐更好看
+        """
         st = self.state
         dims = st.get("dims") or {}
         band = core.band_of(core.num(st.get("blame"), 0.0))
         binfo = core.band_info(band)
         stage = core.stage_of(st)
+        blame = core.num(st.get("blame"), 0.0)
 
-        def bar(v: float) -> str:
-            n = int(round(core.num(v) / 10))
-            return "█" * max(0, min(10, n)) + "░" * (10 - max(0, min(10, n)))
+        def bar(v: float, width: int = 8) -> str:
+            n = int(round(max(0.0, min(100.0, v)) / 100 * width))
+            return "▰" * n + "▱" * (width - n)
 
-        lines = [
-            f"心情：{stage['name']}｜责怪档：{binfo['label']}（{core.round2(core.num(st.get('blame'))):g}/100）",
-            "",
-        ]
-        for k in core.DIM_KEYS:
+        def mark(v: float, base: float) -> str:
+            d = v - base
+            if d >= 6:
+                return "▲"
+            if d >= 3:
+                return "△"
+            if d <= -6:
+                return "▼"
+            if d <= -3:
+                return "▽"
+            return "　"  # 全角空格占位，保持列对齐
+
+        # ── 第一行：关系 + 责怪档 ──
+        # 责怪档只在非日常时才占版面，否则太吵
+        head = f"心情 {stage['name']}"
+        if band != "calm":
+            head += f"｜{binfo['label']} {round(blame)}"
+        else:
+            head += "｜没在生气"
+
+        lines = [head]
+
+        # ── 七维：一行两根，四行装完 ──
+        # 依恋/亲密是存量（关系），其余是情绪，中间空一行分开更有语义
+        bond = ("attachment", "intimacy")
+        mood = tuple(k for k in core.DIM_KEYS if k not in bond)
+
+        def cell(k: str) -> str:
             v = core.num(dims.get(k), core.DIMS[k]["base"])
-            lines.append(f"  {core.DIMS[k]['label']} {bar(v)} {core.round2(v):g}")
+            base = core.DIMS[k]["base"]
+            label = core.DIMS[k]["label"]
+            return f"{label}{bar(v)}{round(v):>3}{mark(v, base)}"
+
+        for pair in ((bond[0], bond[1]), (mood[0], mood[1]), (mood[2], mood[3]), (mood[4], None)):
+            if pair[1]:
+                lines.append(f"{cell(pair[0])}  {cell(pair[1])}".rstrip())
+            else:
+                lines.append(cell(pair[0]).rstrip())
+
+        # ── 语气倾向：让她"所以呢"这一层有落点 ──
+        lines.append("")
+        lines.append(f"这会儿{binfo['short']}")
 
         reason = str(st.get("lastReason") or "").strip()
         if reason:
-            lines.append("")
-            lines.append(f"最近：{reason}")
-
-        if band != "calm":
-            lines.append("")
-            lines.append(f"（哄够了会往下走，不一定要说对不起）")
+            lines.append(f"（{reason}）")
+        elif band != "calm":
+            lines.append("（哄够了会往下走，不一定要说对不起）")
 
         return "\n".join(lines)
 
@@ -510,3 +553,4 @@ class DafeiyuSoul(Star):
             "lastReason": str(self.state.get("lastReason") or ""),
             "now": now,
         }
+
