@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 服务器端部署落地：解包代码 tar（不含 assets），可选解包资产增量 tar，
-# 更新资产清单，保留 state/config/node_modules。
-# 用法：apply-deploy.sh <code.tar> <manifest.json> [assets.tar] [commit]
+# 更新资产清单，清理已删除的资产，保留 state/config/node_modules。
+# 用法：apply-deploy.sh <code.tar> <manifest.json> <dist.tar> [assets.tar] [commit] [stale.txt]
 set -euo pipefail
 
 CODE_TAR="${1:-/root/deploy-incoming-code.tar}"
@@ -9,6 +9,7 @@ MANIFEST="${2:-/root/deploy-incoming-manifest.json}"
 DIST_TAR="${3:-/root/deploy-incoming-dist.tar}"
 ASSET_TAR="${4:-}"           # 空 = 无资产变更
 COMMIT="${5:-}"
+STALE_LIST="${6:-}"          # 每行一个相对 assets 的路径，空/不存在 = 不用删
 APP="${APP_DIR:-/opt/dafeiyu-room}"
 
 [ -f "$CODE_TAR" ] || { echo "找不到代码包 $CODE_TAR" >&2; exit 1; }
@@ -32,6 +33,26 @@ fi
 if [ -n "$ASSET_TAR" ] && [ -f "$ASSET_TAR" ]; then
   echo "==> 解包资产（git archive，路径含 public/room/assets/ 前缀）"
   tar -xf "$ASSET_TAR" -C "$APP"
+fi
+
+# 清理已删除的资产。增量解包是覆盖式的（tar -xf 只写不删），
+# 本地删掉的素材如果不清理，会一直占盘、也会让下次判断"服务器已有"而出错。
+if [ -n "$STALE_LIST" ] && [ -s "$STALE_LIST" ]; then
+  REMOVED=0
+  while IFS= read -r rel || [ -n "$rel" ]; do
+    rel=$(printf '%s' "$rel" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -z "$rel" ] && continue
+    # 只允许动 assets 目录内的相对路径，挡住 ../ 之类的穿越
+    case "$rel" in
+      *..*) echo "   跳过可疑路径 $rel" >&2; continue ;;
+    esac
+    target="$APP/public/room/assets/$rel"
+    if [ -f "$target" ]; then
+      rm -f "$target"
+      REMOVED=$((REMOVED + 1))
+    fi
+  done < "$STALE_LIST"
+  echo "==> 清理已删除资产 $REMOVED 个"
 fi
 
 if [ -f "$MANIFEST" ]; then
