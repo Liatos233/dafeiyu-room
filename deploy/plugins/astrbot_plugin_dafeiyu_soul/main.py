@@ -60,6 +60,67 @@ class DafeiyuSoul(Star):
         self.state: dict = {}
         self._last_tick = 0.0
         self._load()
+        # 启动时就写一次 soul.json：否则房间页要等到第一次情绪变化才读得到，
+        # 中间会一直是「读不到心情」。
+        if self._cfg("panel.write_soul_json", True):
+            self._write_soul_json()
+        self._register_web_apis()
+
+    # ══════════════════════════════════════════════════
+    # 面板接口（P2）
+    # ══════════════════════════════════════════════════
+    def _register_web_apis(self) -> None:
+        routes = [
+            ("/astrbot_plugin_dafeiyu_soul/state", self._api_state, ["GET"], "查看她的心"),
+            ("/astrbot_plugin_dafeiyu_soul/tick", self._api_tick, ["POST"], "手动跳一次心跳"),
+            ("/astrbot_plugin_dafeiyu_soul/calm", self._api_calm, ["POST"], "把责怪清零"),
+        ]
+        for route, handler, methods, desc in routes:
+            try:
+                self.context.register_web_api(route, handler, methods, desc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"[{PLUGIN_NAME}] 注册接口 {route} 失败：{exc}")
+        logger.info(f"[{PLUGIN_NAME}] 已注册 WebUI 接口：state / tick / calm")
+
+    async def _api_state(self):
+        try:
+            from quart import jsonify
+        except Exception:  # noqa: BLE001
+            from flask import jsonify  # type: ignore
+        try:
+            self._tick()
+            return jsonify({"status": "ok", **self.export_view()})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
+    async def _api_tick(self):
+        try:
+            from quart import jsonify
+        except Exception:  # noqa: BLE001
+            from flask import jsonify  # type: ignore
+        try:
+            self._last_tick = 0
+            self._tick()
+            return jsonify({"status": "ok", **self.export_view()})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
+    async def _api_calm(self):
+        try:
+            from quart import jsonify
+        except Exception:  # noqa: BLE001
+            from flask import jsonify  # type: ignore
+        try:
+            now = int(time.time() * 1000)
+            self.state["blame"] = 0.0
+            self.state["gentleRounds"] = 0
+            self.state["lastBand"] = "calm"
+            self.state["lastReason"] = ""
+            self.state["updatedAt"] = now
+            self._save()
+            return jsonify({"status": "ok", **self.export_view()})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"status": "error", "message": str(exc)}), 500
 
     # ══════════════════════════════════════════════════
     # 配置读取
@@ -116,8 +177,46 @@ class DafeiyuSoul(Star):
                 encoding="utf-8",
             )
             os.replace(tmp, self.state_file)
+            # 同时写一份给房间页读（bridge 的 readFeiyuMood 会读这个路径）
+            if self._cfg("panel.write_soul_json", True):
+                self._write_soul_json()
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[{PLUGIN_NAME}] 写状态失败：{exc}")
+
+    def _write_soul_json(self):
+        """写 soul.json 给房间页读。
+
+        路径：<DSH_HOME>/feiyu-soul/state.json
+        房间侧（bridge.js 的 readFeiyuMood）改读这里，字段已对齐它的旧口径
+        （mood 0-100 + label + dims），所以房间页不用大改就能显示。
+        """
+        try:
+            dsh_home = os.environ.get("DSH_HOME") or str(Path.home() / ".dsh")
+            out_dir = Path(dsh_home) / "feiyu-soul"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / "state.json"
+            view = self.export_view()
+            payload = {
+                "version": core.VERSION,
+                "updatedAt": view["updatedAt"],
+                # 兼容 bridge 的旧字段
+                "mood": view["mood"],
+                "label": view["label"],
+                "dims": view["dims"],
+                # 新字段（房间页可以显示更多）
+                "band": view["band"],
+                "bandKey": view["bandKey"],
+                "blame": view["blame"],
+                "stage": view["stage"],
+                "attitude": view["attitude"],
+                "labels": view["labels"],
+                "lastReason": view["lastReason"],
+            }
+            tmp = out.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, out)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"[{PLUGIN_NAME}] 写 soul.json 失败（不影响主流程）：{exc}")
 
     def _tick(self):
         """按真实时间推进衰减。节流到 base_interval_minutes，避免每轮都算。"""

@@ -123,6 +123,9 @@ const WEATHER_FILE = path.join(STATE_DIR, 'weather.json');
 // 已有的心情数据（dsh-feiyu-mood 插件）只读接进来给房间展示，绝不写回、绝不算第二套情绪。
 const DSH_HOME_DIR = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
 const FEIYU_MOOD_FILE = path.join(DSH_HOME_DIR, 'feiyu-mood', 'state.json');
+    // 新情绪系统（AstrBot 插件 astrbot_plugin_dafeiyu_soul）写的状态文件。
+    // 七维 + 五档责怪 + 关系阶段，见 docs/SOUL-PLUGIN-PLAN.md。
+    const SOUL_MOOD_FILE = path.join(DSH_HOME_DIR, 'feiyu-soul', 'state.json');
 // 操作者为每个会话预写的「初始提示词」（见 main() 里的 initialPrompts）。
 // 单独一个文件：它属于操作者配置，不能随 social-v2.json 的会话状态一起被重置清掉。
 const INITIAL_PROMPTS_FILE = path.join(STATE_DIR, 'initial-prompts.json');
@@ -3485,6 +3488,7 @@ async function main() {
     let homeActTimes = [];
     let homeSavedAt = 0;
     let feiyuMoodCache = { mtimeMs: 0, size: 0, value: null };
+    let soulMoodCache = { mtimeMs: 0, size: 0, value: null };
     function feiyuMoodLabel(mood) {
       if (mood >= 82) return '心情很好';
       if (mood >= 70) return '还不错';
@@ -3493,10 +3497,20 @@ async function main() {
       return '不太好';
     }
     /**
-     * 只读 dsh-feiyu-mood 的 state.json：房间页和快照显示「她此刻的心情」。
-     * 不写回、不拿它重算情绪、不拿它当第二套生命状态；心情插件自己会注入提示词。
+     * 只读「她的心」的状态文件：房间页和快照显示「她此刻的心情」。
+     * 不写回、不拿它重算情绪、不拿它当第二套生命状态。
+     *
+     * 2026-11-25：情绪系统换成了 AstrBot 插件 astrbot_plugin_dafeiyu_soul，
+     * 它把状态写到 <DSH_HOME>/feiyu-soul/state.json（七个维度）。
+     * 旧的 feiyu-mood/state.json 是七个完全不同的维度（happy/calm/sweet...），
+     * 而且那个插件从来没装过，文件一直不存在。所以这里先读新路径，
+     * 读不到再回退旧路径 —— 保证换系统期间房间页不会突然空白。
      */
     function readFeiyuMood() {
+      // 先试新系统（soul）
+      const soul = readSoulMood();
+      if (soul) return soul;
+      // 回退旧系统
       try {
         const st = fs.statSync(FEIYU_MOOD_FILE);
         if (st.mtimeMs === feiyuMoodCache.mtimeMs && st.size === feiyuMoodCache.size) return feiyuMoodCache.value;
@@ -3510,6 +3524,43 @@ async function main() {
         feiyuMoodCache = { mtimeMs: st.mtimeMs, size: st.size, value };
         return value;
       } catch { return feiyuMoodCache.value; }
+    }
+    /**
+     * 读 astrbot_plugin_dafeiyu_soul 写的 soul.json。
+     *
+     * 它带来的字段比旧系统多：七维（依恋/亲密/开心/担心/难过/好奇/疲惫）、
+     * 五档责怪（日常/委屈/生气/害怕/回避）、关系阶段（陌生鱼苗…黏人）。
+     * 这里**原样透出**，房间页想显示什么自己挑；`label` 沿用旧口径
+     * （给「心情：xxx」这类文案用），所以不用改前端就能看到阶段名。
+     */
+    function readSoulMood() {
+      try {
+        const st = fs.statSync(SOUL_MOOD_FILE);
+        if (st.mtimeMs === soulMoodCache.mtimeMs && st.size === soulMoodCache.size) return soulMoodCache.value;
+        const raw = JSON.parse(fs.readFileSync(SOUL_MOOD_FILE, 'utf8'));
+        const dims = {};
+        for (const k of ['attachment', 'intimacy', 'joy', 'worry', 'sad', 'curious', 'fatigue']) {
+          if (raw.dims && raw.dims[k] !== undefined) dims[k] = Math.max(0, Math.min(100, Number(raw.dims[k]) || 0));
+        }
+        const mood = Math.max(0, Math.min(100, Number(raw.mood) || 0));
+        const value = {
+          mood,
+          // label 用关系阶段名（"愿意搭话"），比 0-100 的档位描述更有信息量
+          label: String(raw.stage || raw.label || feiyuMoodLabel(mood)),
+          stage: String(raw.stage || ''),
+          attitude: String(raw.attitude || ''),
+          band: String(raw.band || ''),
+          bandKey: String(raw.bandKey || ''),
+          blame: Number(raw.blame) || 0,
+          dims,
+          dimLabels: raw.labels || null,
+          lastReason: String(raw.lastReason || ''),
+          updatedAt: Number(raw.updatedAt) || null,
+          source: 'soul'
+        };
+        soulMoodCache = { mtimeMs: st.mtimeMs, size: st.size, value };
+        return value;
+      } catch { return soulMoodCache.value; }
     }
     /** 大平层读同一份 QQ 环境：未读数、上次开口、潜水模式。只读，不碰会话状态。 */
     function homeEnvSnapshot(now = Date.now()) {

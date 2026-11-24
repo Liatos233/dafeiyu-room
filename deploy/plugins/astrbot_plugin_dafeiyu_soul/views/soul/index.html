@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大肥鱼的心</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --card: #ffffff;
+    --ink: #2c2a27;
+    --muted: #8a8580;
+    --line: #e6e2db;
+    --accent: #5b8fb9;
+    --warm: #d99058;
+    --cold: #7a8fa3;
+    --danger: #c25a48;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b1a;
+      --card: #262524;
+      --ink: #ede9e3;
+      --muted: #9a948c;
+      --line: #3a3836;
+      --accent: #7ba8cc;
+      --warm: #e0a06c;
+      --cold: #93a8b8;
+      --danger: #d47060;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  h1 { font-size: 21px; margin: 0; font-weight: 600; letter-spacing: .5px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .card h2 {
+    font-size: 13px; margin: 0 0 14px; font-weight: 600;
+    color: var(--muted); letter-spacing: 1px; text-transform: uppercase;
+  }
+  /* 雷达 */
+  .radar-box { display: flex; justify-content: center; }
+  svg { display: block; overflow: visible; }
+  /* 徽章 */
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .badge {
+    padding: 5px 13px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .b-calm    { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .b-wronged { background: color-mix(in srgb, var(--warm) 16%, transparent);  color: var(--warm);   border-color: color-mix(in srgb, var(--warm) 32%, transparent); }
+  .b-angry   { background: color-mix(in srgb, var(--danger) 16%, transparent);color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, transparent); }
+  .b-afraid  { background: color-mix(in srgb, var(--danger) 22%, transparent);color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+  .b-shut    { background: color-mix(in srgb, var(--cold) 18%, transparent);  color: var(--cold);   border-color: color-mix(in srgb, var(--cold) 34%, transparent); }
+  .b-stage   { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); border-color: var(--line); }
+  /* 条 */
+  .row { display: grid; grid-template-columns: 52px 1fr 42px; gap: 10px; align-items: center; margin: 9px 0; }
+  .row .n { font-size: 13px; color: var(--muted); }
+  .row .v { font-size: 12px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .track { height: 9px; background: color-mix(in srgb, var(--ink) 7%, transparent); border-radius: 999px; overflow: hidden; position: relative; }
+  .fill { height: 100%; border-radius: 999px; transition: width .4s ease; }
+  .base-mark { position: absolute; top: -2px; bottom: -2px; width: 1.5px; background: var(--muted); opacity: .45; }
+  /* 提示 */
+  .tone {
+    margin-top: 14px; padding: 11px 13px; border-radius: 8px;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    font-size: 13px; color: var(--ink); line-height: 1.65;
+  }
+  .tone .k { color: var(--muted); }
+  .reason { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .foot { margin-top: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit; padding: 7px 15px; border-radius: 8px; cursor: pointer;
+    background: var(--card); color: var(--ink);
+    border: 1px solid var(--line); transition: .15s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .stamp { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .err { color: var(--danger); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>大肥鱼的心</h1>
+    <span class="sub">七维情绪 · 关系阶段 · 五档语气</span>
+  </header>
+
+  <div class="grid">
+    <!-- 左：状态 + 雷达 -->
+    <div class="card">
+      <h2>此刻</h2>
+      <div class="badges" id="badges">
+        <span class="badge b-calm">载入中…</span>
+      </div>
+      <div class="radar-box"><svg id="radar" width="300" height="270"></svg></div>
+    </div>
+
+    <!-- 右：数值条 -->
+    <div class="card">
+      <h2>七维（竖线是基线）</h2>
+      <div id="bars"></div>
+      <div class="tone" id="tone"></div>
+      <div class="reason" id="reason"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button id="btnRefresh">刷新</button>
+    <button id="btnTick">替她跳一次心跳</button>
+    <button id="btnCalm">把责怪清零</button>
+    <span class="stamp" id="stamp"></span>
+  </div>
+  <div class="err" id="err"></div>
+</div>
+
+<script src="/api/plugin/page/bridge-sdk.js"></script>
+<script>
+const DIMS = ["attachment","intimacy","joy","worry","sad","curious","fatigue"];
+const BASE = { attachment:45, intimacy:40, joy:50, worry:15, sad:10, curious:55, fatigue:20 };
+const API = "/astrbot_plugin_dafeiyu_soul";
+
+let last = null;
+
+/* AstrBot WebUI 的插件接口要带 asset_token，必须走 bridge SDK，
+   不能裸 fetch（裸 fetch 会得到 {"status":"error","message":"未授权"}）。 */
+function apiGet(path) {
+  if (typeof bridge === "undefined") throw new Error("bridge 不可用（请在 AstrBot WebUI 的插件页里打开）");
+  return bridge.apiGet(API + path);
+}
+function apiPost(path, body) {
+  if (typeof bridge === "undefined") throw new Error("bridge 不可用（请在 AstrBot WebUI 的插件页里打开）");
+  return bridge.apiPost(API + path, body || {});
+}
+function unwrap(res) {
+  return res && res.data !== undefined ? res.data : res;
+}
+
+function fmt(n, d=1) {
+  return (Math.round(Number(n) * 10) / 10).toFixed(d);
+}
+
+function badgeClass(key) {
+  return { calm:"b-calm", wronged:"b-wronged", angry:"b-angry", afraid:"b-afraid", shut:"b-shut" }[key] || "b-calm";
+}
+
+function drawRadar(view) {
+  const svg = document.getElementById("radar");
+  const W = 300, H = 270, cx = W/2, cy = H/2 - 4, R = 96;
+  const n = DIMS.length;
+  const ang = i => (Math.PI * 2 * i / n) - Math.PI / 2;
+
+  let s = "";
+  // 网格
+  for (let r = 1; r <= 4; r++) {
+    const rr = R * r / 4;
+    const pts = DIMS.map((_, i) => `${cx + Math.cos(ang(i))*rr},${cy + Math.sin(ang(i))*rr}`).join(" ");
+    s += `<polygon points="${pts}" fill="none" stroke="currentColor" stroke-opacity="0.12" stroke-width="1"/>`;
+  }
+  // 轴线
+  DIMS.forEach((_, i) => {
+    s += `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(ang(i))*R}" y2="${cy + Math.sin(ang(i))*R}" stroke="currentColor" stroke-opacity="0.12"/>`;
+  });
+  // 数据面
+  const pts = DIMS.map((k, i) => {
+    const v = Math.max(0, Math.min(100, Number(view.dims[k]) || 0)) / 100;
+    return `${cx + Math.cos(ang(i)) * R * v},${cy + Math.sin(ang(i)) * R * v}`;
+  }).join(" ");
+  s += `<polygon points="${pts}" fill="var(--accent)" fill-opacity="0.22" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  // 顶点
+  DIMS.forEach((k, i) => {
+    const v = Math.max(0, Math.min(100, Number(view.dims[k]) || 0)) / 100;
+    const x = cx + Math.cos(ang(i)) * R * v;
+    const y = cy + Math.sin(ang(i)) * R * v;
+    s += `<circle cx="${x}" cy="${y}" r="3" fill="var(--accent)"/>`;
+  });
+  // 标签
+  DIMS.forEach((k, i) => {
+    const lx = cx + Math.cos(ang(i)) * (R + 22);
+    const ly = cy + Math.sin(ang(i)) * (R + 18);
+    const label = (view.labels && view.labels[k]) || k;
+    s += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle"
+            font-size="11" fill="currentColor" fill-opacity="0.65">${label}</text>`;
+  });
+  svg.innerHTML = s;
+}
+
+function drawBars(view) {
+  const box = document.getElementById("bars");
+  box.innerHTML = DIMS.map(k => {
+    const v = Math.max(0, Math.min(100, Number(view.dims[k]) || 0));
+    const b = BASE[k];
+    const label = (view.labels && view.labels[k]) || k;
+    const diff = v - b;
+    // 高于基线偏暖，低于偏冷
+    const color = Math.abs(diff) < 3 ? "var(--muted)" : (diff > 0 ? "var(--warm)" : "var(--cold)");
+    return `<div class="row">
+      <span class="n">${label}</span>
+      <div class="track">
+        <div class="fill" style="width:${v}%;background:${color}"></div>
+        <div class="base-mark" style="left:${b}%"></div>
+      </div>
+      <span class="v">${fmt(v)}</span>
+    </div>`;
+  }).join("");
+}
+
+function render(view) {
+  last = view;
+  const badges = document.getElementById("badges");
+  const bandKey = view.bandKey || "calm";
+  let html = `<span class="badge ${badgeClass(bandKey)}">${view.band || "日常"}</span>`;
+  html += `<span class="badge b-stage">${view.stage || "—"}</span>`;
+  if (view.blame > 0) {
+    html += `<span class="badge b-stage">责怪 ${fmt(view.blame, 0)}/100</span>`;
+  }
+  badges.innerHTML = html;
+
+  drawRadar(view);
+  drawBars(view);
+
+  document.getElementById("tone").innerHTML =
+    `<span class="k">倾向：</span>${view.attitude || "—"}`;
+  document.getElementById("reason").textContent =
+    view.lastReason ? `最近：${view.lastReason}` : "";
+
+  const t = view.updatedAt ? new Date(view.updatedAt) : null;
+  document.getElementById("stamp").textContent =
+    t ? `更新 ${t.toLocaleString("zh-CN", { hour12: false })}` : "";
+}
+
+async function load() {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  try {
+    const d = unwrap(await apiGet("/state"));
+    if (!d || d.status === "error") throw new Error((d && d.message) || "接口返回错误");
+    render(d);
+  } catch (e) {
+    err.textContent = "读不到状态：" + e.message;
+  }
+}
+
+async function post(path, btn) {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  btn.disabled = true;
+  try {
+    const d = unwrap(await apiPost(path));
+    if (!d || d.status === "error") throw new Error((d && d.message) || "接口返回错误");
+    render(d);
+  } catch (e) {
+    err.textContent = "操作失败：" + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("btnRefresh").onclick = load;
+document.getElementById("btnTick").onclick = e => post("/tick", e.target);
+document.getElementById("btnCalm").onclick = e => post("/calm", e.target);
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
