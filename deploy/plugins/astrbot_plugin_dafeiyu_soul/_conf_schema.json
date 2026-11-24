@@ -1,0 +1,125 @@
+{
+  "enabled": {
+    "type": "bool",
+    "description": "总开关",
+    "hint": "关掉后不计算、不注入，已有数据保留",
+    "default": true
+  },
+  "inject": {
+    "type": "object",
+    "description": "心境注入",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "把心境写进本轮请求",
+        "hint": "挂在用户消息末尾，不碰 system prompt",
+        "default": true
+      },
+      "min_gap_minutes": {
+        "type": "int",
+        "description": "同档内两次注入的最小间隔（分钟）",
+        "hint": "跨档不受此限；生气档每轮都注",
+        "default": 20
+      }
+    }
+  },
+  "owner": {
+    "type": "object",
+    "description": "服务对象",
+    "items": {
+      "owner_id": {
+        "type": "string",
+        "description": "主人的 QQ 号",
+        "hint": "只认这个号的私聊；群聊和陌生人一律不影响她的心",
+        "default": "630151911"
+      }
+    }
+  },
+  "init": {
+    "type": "object",
+    "description": "初始关系值",
+    "hint": "只在第一次创建状态时生效；之后靠聊天养",
+    "items": {
+      "attachment": {
+        "type": "int",
+        "description": "初始依恋",
+        "default": 45
+      },
+      "intimacy": {
+        "type": "int",
+        "description": "初始亲密",
+        "default": 40
+      }
+    }
+  },
+  "tick": {
+    "type": "object",
+    "description": "心跳",
+    "items": {
+      "base_interval_minutes": {
+        "type": "int",
+        "description": "常规心跳间隔（分钟）",
+        "hint": "用于推进衰减。值越小越精细，但也越费 CPU",
+        "default": 30
+      }
+    }
+  },
+  "perception": {
+    "type": "object",
+    "description": "情绪感知",
+    "items": {
+      "praise_soft": {
+        "type": "bool",
+        "description": "含蓄夸奖也算",
+        "hint": "不错 / 挺好 / 靠谱 这类",
+        "default": true
+      },
+      "praise_fatigue": {
+        "type": "bool",
+        "description": "夸多了会听腻",
+        "hint": "同一人短时间反复夸，增益递减（core 的热度折扣）",
+        "default": true
+      }
+    }
+  },
+  "blame": {
+    "type": "object",
+    "description": "责怪与哄",
+    "items": {
+      "decay_hours": {
+        "type": "int",
+        "description": "责怪每多少小时褪一次",
+        "default": 6
+      },
+      "decay_step": {
+        "type": "int",
+        "description": "每次褪多少点",
+        "default": 8
+      },
+      "floor": {
+        "type": "int",
+        "description": "心结：褪到这里就停（不会自己回日常）",
+        "hint": "40 = 一直记着，直到你哄她或说清楚",
+        "default": 40
+      }
+    }
+  },
+  "panel": {
+    "type": "object",
+    "description": "房间页展示",
+    "items": {
+      "write_soul_json": {
+        "type": "bool",
+        "description": "写 soul.json 供房间页读取",
+        "hint": "房间页通过它显示心情和关系阶段",
+        "default": true
+      }
+    }
+  },
+  "debug": {
+    "type": "bool",
+    "description": "调试日志",
+    "hint": "每次感知、注入都写一条日志（含判断结果，不含聊天原文）",
+    "default": false
+  }
+}

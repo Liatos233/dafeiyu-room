@@ -1,0 +1,31 @@
+name: astrbot_plugin_dafeiyu_soul
+display_name: 大肥鱼的心
+short_desc: 七维情绪 + 关系阶段 + 五档语气，不碰 system prompt
+desc: |
+  给大肥鱼一颗会自己走的心。
+
+  七维：依恋 / 亲密 / 开心 / 担心 / 难过 / 好奇 / 疲惫。
+  依恋和亲密是存量（半衰期 51 小时，掉得慢），其余是情绪（8~10 小时，来得快去得也快）。
+  没人理的时候各自回归基线 —— 但回不到零，也不会一直卡在高位。
+
+  五档：日常 / 委屈 / 生气 / 害怕 / 回避。只看责怪压力，**只影响语气，不影响回不回话**。
+  重责不会一步跳到回避；哄够了就往下走，不要求你必须说「对不起」。
+
+  关系阶段沿用大肥鱼原来的命名：陌生鱼苗 → 眼熟的小鱼 → 愿意搭话 → 嘴硬搭子 → 心软常客 → 黏人。
+
+  心境注入挂在用户消息末尾（extra_user_content_parts），**不改 system prompt** ——
+  不会破坏前缀缓存。跨档必注，同档按间隔节流，生气档每轮都注。
+
+  命令：/心 status、tick、calm、reset
+  数据：data/plugin_data/astrbot_plugin_dafeiyu_soul/state.json
+
+version: 0.1.0
+author: 大肥鱼
+repo: ""
+astrbot_version: ">=4.24.2"
+support_platforms:
+  - aiocqhttp
+tags:
+  - 情绪
+  - 关系
+  - 拟人
