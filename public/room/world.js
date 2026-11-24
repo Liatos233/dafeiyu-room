@@ -434,26 +434,62 @@ function skyTexture(hour, weather = 'clear') {
     else if (dawn) { top = '#3d4f78'; mid = '#a9778f'; low = '#f0b07c'; }
     else if (dusk) { top = '#4e5b7d'; mid = '#c58a7a'; low = '#f4c08a'; }
     else { top = '#6fa9d8'; mid = '#b9d8ee'; low = '#e8f1f4'; }
-    const g = ctx.createLinearGradient(0, 0, 0, hgt * 0.66);
+    // ── 等距柱状贴图的纵向坐标（重要）────────────────────────────────
+    // SphereGeometry 的 v：0=北极、1=南极；而纹理 y=0 对应 v=1（南极），
+    // 所以**纹理 y=0.5 那一行才是视平线（赤道）**，y<0.5 是天空，
+    // y>0.5 落到视平线以下（被地板/房子挡住，站在屋里看不见）。
+    //
+    // 原来这里把海画在 0.62~1.0、山画在 0.63 —— 全在下半球，
+    // 于是窗外只能看到视平线附近那片渐变，就是一块纯色（实测截图确认）。
+    // 现在把海平线放到赤道略下（0.505），天空渐变收到 0.52，山压在海平线上。
+    const HORIZON = 0.505;      // 海平线（赤道略下一点，让地平线在视野里稍低）
+    const g = ctx.createLinearGradient(0, 0, 0, hgt * HORIZON);
     g.addColorStop(0, top); g.addColorStop(0.55, mid); g.addColorStop(1, low);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, hgt * 0.66);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, hgt * HORIZON);
 
     // 海
     const sea0 = spec ? spec.sea[0] : (night ? '#0b1a2b' : (dawn || dusk ? '#5f728e' : '#4c7d99'));
     const sea1 = spec ? spec.sea[1] : (night ? '#050d16' : '#1b3d52');
-    const sea = ctx.createLinearGradient(0, hgt * 0.62, 0, hgt);
+    const sea = ctx.createLinearGradient(0, hgt * HORIZON, 0, hgt * 0.86);
     sea.addColorStop(0, sea0);
     sea.addColorStop(1, sea1);
-    ctx.fillStyle = sea; ctx.fillRect(0, hgt * 0.62, w, hgt * 0.38);
-    ctx.fillStyle = night ? 'rgba(120,170,220,.12)' : 'rgba(255,235,200,.35)';
-    if (spec && night) ctx.fillStyle = 'rgba(120,170,220,.12)';
-    ctx.fillRect(0, hgt * 0.615, w, 3);
-    for (let i = 0; i < 80; i++) {
-      ctx.strokeStyle = `rgba(255,255,255,${0.03 + rnd() * 0.06})`;
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, hgt * HORIZON, w, hgt * (0.86 - HORIZON));
+    // 海平线下方再淡出一层（避免远处海面是一条硬边）
+    const seaFade = ctx.createLinearGradient(0, hgt * 0.86, 0, hgt);
+    seaFade.addColorStop(0, sea1);
+    seaFade.addColorStop(1, spec ? spec.sea[1] : (night ? '#050d16' : '#12293a'));
+    ctx.fillStyle = seaFade; ctx.fillRect(0, hgt * 0.86, w, hgt * 0.14);
+    // 海平线高光
+    ctx.fillStyle = night ? 'rgba(120,170,220,.20)' : 'rgba(255,235,200,.45)';
+    if (spec && night) ctx.fillStyle = 'rgba(120,170,220,.20)';
+    ctx.fillRect(0, hgt * (HORIZON - 0.002), w, 3);
+    // 海面波纹：贴着海平线往下铺，越近越大越稀（透视感来自「近大远小」）。
+    for (let i = 0; i < 130; i++) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.04 + rnd() * 0.08})`;
       ctx.lineWidth = 1;
-      const y = hgt * 0.66 + rnd() * hgt * 0.32;
+      const t2 = rnd() * rnd();
+      const y = hgt * (HORIZON + 0.004) + t2 * hgt * 0.30;
       const x = rnd() * w;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 8 + rnd() * 40, y); ctx.stroke();
+      const len = 8 + rnd() * 40 * (0.3 + t2);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.stroke();
+    }
+    // 远海反光带：贴着海平线下沿铺一层更亮的横向条，模拟远处阳光反射，
+    // 让「海平线」不是一条硬切边 —— 之前下面是纯色块，像一堵墙。
+    const glow = ctx.createLinearGradient(0, hgt * (HORIZON + 0.001), 0, hgt * (HORIZON + 0.045));
+    glow.addColorStop(0, night ? 'rgba(150,190,235,.42)' : 'rgba(255,246,225,.55)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, hgt * (HORIZON + 0.001), w, hgt * 0.044);
+    // 海的深浅变化：横向拖几条很淡的深色带，避免整片死平
+    for (let i = 0; i < 7; i++) {
+      const yy = hgt * (HORIZON + 0.02 + i * 0.045);
+      const band = ctx.createLinearGradient(0, yy, 0, yy + hgt * 0.03);
+      band.addColorStop(0, 'rgba(20,50,75,0)');
+      band.addColorStop(0.5, `rgba(20,50,75,${0.05 + rnd() * 0.06})`);
+      band.addColorStop(1, 'rgba(20,50,75,0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(0, yy, w, hgt * 0.03);
     }
 
     // 极光：整片天空偏绿 + 几条横向柔光带（在球面贴图上更明显）
@@ -574,12 +610,24 @@ function skyTexture(hour, weather = 'clear') {
       }
     }
 
-    // 远山
-    ctx.fillStyle = spec ? spec.mountain : (night ? 'rgba(10,20,34,.7)' : 'rgba(70,96,110,.28)');
-    ctx.beginPath();
-    ctx.moveTo(0, hgt * 0.63);
-    for (let x = 0; x <= w; x += 60) ctx.lineTo(x, hgt * 0.63 - Math.sin(x * 0.008) * 16 - rnd() * 7);
-    ctx.lineTo(w, hgt * 0.65); ctx.lineTo(0, hgt * 0.65); ctx.closePath(); ctx.fill();
+    // 远山：压在海平线上（y≈HORIZON），原来是 0.63 已落到视平线以下看不见。
+    // 山尖高出海平线约 1.5% 的贴图高度 —— 在 260 半径的球上约等于 4°，够看见轮廓
+    // 但不喧宾夺主。用两层不同深浅叠出纵深。
+    const mtnBase = hgt * HORIZON;
+    const mtnH = hgt * 0.016;
+    for (const [dy, alpha, freq, amp] of [[0, 1, 0.006, 1], [mtnH * 0.35, 0.55, 0.011, 0.62]]) {
+      ctx.fillStyle = spec
+        ? spec.mountain.replace(/,\s*[\d.]+\)$/, `,${(alpha * 0.9).toFixed(2)})`)
+        : (night ? `rgba(10,20,34,${0.7 * alpha})` : `rgba(70,96,110,${0.3 * alpha})`);
+      ctx.beginPath();
+      ctx.moveTo(0, mtnBase + dy);
+      for (let x = 0; x <= w; x += 40) {
+        const yv = mtnBase + dy - (Math.sin(x * freq) * 0.6 + Math.sin(x * freq * 2.7) * 0.4) * mtnH * amp
+          - rnd() * mtnH * 0.25 * amp;
+        ctx.lineTo(x, yv);
+      }
+      ctx.lineTo(w, mtnBase + dy); ctx.lineTo(0, mtnBase + dy); ctx.closePath(); ctx.fill();
+    }
   }, { anisotropy: 8, smooth: false });
 }
 
