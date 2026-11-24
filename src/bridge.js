@@ -4661,7 +4661,11 @@ async function main() {
             `${w.fatigue || ''}`.trim(),
             `${w.hunger || ''}`.trim(),
             `${w.thirst || ''}`.trim(),
-            env.weatherLabel ? `天气：${env.weatherLabel}` : '',
+            // 天气是「她那边」的，不是主人那边的。以前这里只写「天气：有雾」，
+            // 没有归属主语，模型会理解成「对方那边的天气」——
+            // 于是问出「你那边台风还在刮吗」这种人称反了的话。
+            // 必须点明：这是她窗外的天气，主人那边未知、不要替主人断言。
+            env.weatherLabel ? `她窗外天气：${env.weatherLabel}` : '',
             mood ? `心情${mood.label}（${mood.mood}/100）` : '',
             view.her.asleep ? '现在睡着了' : '',
             view.her.clip ? `正在播「${view.her.clip}」` : ''
