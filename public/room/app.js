@@ -22,6 +22,9 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const EDIT_MODE = params.get('edit') === '1';   // ?edit=1 打开模型编辑模式
 const SHOT = params.get('shot') === '1';
+// ?shotlive=1：截图模式下保持渲染循环（默认只在 shot 里渲一帧就停）。
+// 给外部审查/调参用：改完灯光/时间/相机后还能继续出帧做对比。
+const SHOT_LIVE = params.get('shotlive') === '1';
 const SHOT_VIEW = params.get('shotView') || (params.get('pov') === '1' ? 'eyes' : 'overview');
 const SHOT_LOOK = params.get('shotLook') || 'forward';
 const INITIAL_CAM = params.get('cam');
@@ -5021,6 +5024,22 @@ async function boot() {
       renderer.render(scene, camera);
       $('loading').classList.add('hide');
       document.title = 'HOME_READY';
+      // ?shotlive=1：截图模式下也把渲染循环开起来。
+      //
+      // 为什么需要：shot=1 原来只渲染一帧就停，于是审查/调参时通过 CDP
+      // 注入改相机、灯光、时间，画面完全不变（实测 5 张截图 MD5 全同），
+      // 只能看静态一张，昼夜/天气/灯开关的效果根本验证不了。
+      // 加了这个开关，外部工具就能改完状态等一帧再截，做真正的动态对比。
+      // 默认关闭，不影响 QQ 发照片那条路径（它只要一张静态图，越省越好）。
+      if (SHOT_LIVE) {
+        // 只重绘，不每帧调 updateEnvironment —— 那会把外部注入的灯光/太阳
+        // 强度立刻覆盖掉，审查时改灯等于白改（实测灯开关截图哈希完全一样）。
+        const loop = () => {
+          renderer.render(scene, camera);
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      }
     }, 350);
     return;
   }

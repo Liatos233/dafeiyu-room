@@ -1772,20 +1772,30 @@ function buildBedroom(world, M, textures) {
     const seam = furniturePiping(p, 2.102, 1.952, 0.055, M.white, 11.5, y, 1.3, 0.005);
     seam.rotation.x = -Math.PI / 2;
   }
-  furnitureSoftBox(p, 2.16, 0.14, 1.45, 0.07, M.fabricCream, 11.5, 0.57, 1.62);
+  // 被芯：盖在床垫靠脚的一端，但不该整块滑到床尾外侧。
+  //
+  // 原来 z=1.62、深 1.45 —— 而床垫中心 1.30（0.325~2.275）、床架 1.25（0.175~2.325），
+  // 被芯落在 0.895~2.345：比床垫前端靠后 0.57m、又超出床架后端 2cm，
+  // 近景就是「被子滑到一边、床垫露出床架」。
+  // 现在收到床垫范围内：z=1.42、深 1.50 → 0.67~2.17，两端都在床垫里。
+  furnitureSoftBox(p, 2.16, 0.14, 1.50, 0.07, M.fabricCream, 11.5, 0.57, 1.42);
   // 一片连续布面形成细小褶皱；褶皱高度限制在一厘米以内。
-  const quiltGeo = new THREE.PlaneGeometry(2.08, 1.37, 24, 20);
+  const quiltGeo = new THREE.PlaneGeometry(2.08, 1.42, 24, 20);
   const quiltPositions = quiltGeo.attributes.position;
   for (let i = 0; i < quiltPositions.count; i++) {
     const u = quiltPositions.getX(i); const v = quiltPositions.getY(i);
-    const fade = Math.sin((u / 2.08 + 0.5) * Math.PI) * Math.sin((v / 1.37 + 0.5) * Math.PI);
+    const fade = Math.sin((u / 2.08 + 0.5) * Math.PI) * Math.sin((v / 1.42 + 0.5) * Math.PI);
     quiltPositions.setXYZ(i, u, 0.008 * Math.sin(u * 19 + v * 8) * fade, -v);
   }
   quiltGeo.computeVertexNormals();
-  addMesh(p, quiltGeo, M.fabricCream, 11.5, 0.641, 1.62);
+  addMesh(p, quiltGeo, M.fabricCream, 11.5, 0.641, 1.42);
+  // 枕后白条（贴着枕头那侧）
   furnitureSoftBox(p, 2.16, 0.035, 0.20, 0.015, M.white, 11.5, 0.65, 0.97);
-  furnitureSoftBox(p, 2.16, 0.05, 0.55, 0.04, M.fabricOchre, 11.5, 0.665, 2.10);
-  for (const z of [1.91, 2.28]) box(p, 2.08, 0.003, 0.014, M.linen, 11.5, 0.692, z);
+  // 被子搭边（脚端那一条）：必须压在床垫范围内（床垫 z ∈ [0.325, 2.275]），
+  // 不能伸出去悬空 —— 之前 z=2.36 深 0.55 落到 [2.09, 2.64]，超出床架 0.32m，
+  // 近景就是「一截被子凭空飘在床尾外面」。
+  furnitureSoftBox(p, 2.16, 0.05, 0.30, 0.04, M.fabricOchre, 11.5, 0.665, 2.10);
+  for (const z of [1.98, 2.22]) box(p, 2.08, 0.003, 0.014, M.linen, 11.5, 0.692, z);
   for (let i = 0; i < 2; i++) {
     const pillow = new THREE.Group(); pillow.position.set(11.04 + i * 0.90, 0.655, 0.60); pillow.rotation.y = i ? -0.04 : 0.035; p.add(pillow);
     furnitureSoftBox(pillow, 0.72, 0.18, 0.42, 0.085, M.white, 0, 0, 0);
