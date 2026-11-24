@@ -157,26 +157,36 @@ test('高频动作都设了冷却（防连发糊成一片）', () => {
   }
 });
 
-test('跑步靠低频加重，不靠抬音高', () => {
-  // 曾经的写法是 rate > 1（音高抬起来）—— 那是错的：
-  // 实测 zcr 会翻到走路的 1.5~2.25 倍，听着像"哒哒"的尖响。
-  // 真正该多的是低频。这条测试守住这个决定，免得以后有人"顺手"加回 rate。
-  assert.equal(EVENTS.run?.rate, undefined, 'run 不该设 rate（抬音高会变尖，用低频加重）');
-  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
-  // 跑步分支里必须有蹬地低频
-  assert.ok(/if \(running\)[\s\S]{0,240}?f0: 7[0-9]/.test(src), '跑步没有加低频蹬地层');
-  // 合成器里不该再用 gait 之类的整体音高因子
-  assert.ok(!/const gait = running/.test(src), '又出现了整体音高抬升（gait）');
+test('脚步贴近 Coopanion 的轻快取向（高频短促，不是低频闷响）', () => {
+  // 这条的取向改过一次，记下来免得再来回：
+  //   第一版 → 加 105→45Hz 脚底低频 + 210Hz 地面共鸣，想表达"木地板有体重"
+  //   用户反馈 → "太闷了，不像参考的那个轻快"
+  //   现在   → 回到 Coopanion 的做法：**基音 440 起、60ms、向下滑**
+  //            低频只留极轻一层地面色（占主音约 1/7）用来区分材质
+  const src = code(path.join(ROOT, 'public', 'room', 'sfx.js'));
+  // 取 step 函数体：从 "step(ctx, dest, {" 到下一个 "  }," （SYNTHS 的方法结束）
+  // 注意注释已在上面的 code() 里剥掉，不会因为注释里的花括号截断
+  const body = /step\(ctx, dest,[\s\S]*?\n  \},/.exec(src);
+  assert.ok(body, '找不到 SYNTHS.step');
+  const b = body[0];
+  // 主音必须落在 440 附近（Coopanion 的基音高度），而不是 105 那种低频
+  assert.ok(/running \? 550 : 440/.test(b), '主音没落在 440/550（Coopanion 的高度）');
+  // 必须很短促
+  assert.ok(/dur: 0\.060/.test(b), '主音不是 60ms 的短促音');
+  // 音高必须向下滑（440→330 就是 ×0.75）
+  assert.ok(/f1: base \* 0\.75/.test(b), '音高没有向下滑');
+  // 不该再有 105/45 那一档低频
+  assert.ok(!/f0: 105/.test(b), '又回到 105Hz 的闷响了');
 });
 
 test('脚步左右脚交替（Coopanion 的 step(run, i) 思路）', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
+  const src = code(path.join(ROOT, 'public', 'room', 'sfx.js'));
   // 交替由 playStep 里翻转 state.foot 实现
   assert.ok(/state\.foot = state\.foot \? 0 : 1/.test(src), '没有左右脚交替');
-  // 两只脚必须真的用不同参数
-  assert.ok(/const side = foot \? 1\.12 : 1/.test(src), '左右脚用同一个基音，等于没交替');
+  // 两只脚必须真的用不同基音（Coopanion 是 440/520，这里 440/500）
+  assert.ok(/const side = foot \? 1\.136 : 1/.test(src), '左右脚用同一个基音，等于没交替');
   // 随机抖动不能太大，否则会"跑调"
-  assert.ok(/0\.015/.test(src), '每步的随机抖动参数不见了');
+  assert.ok(/0\.02/.test(src), '每步的随机抖动参数不见了');
 });
 
 test('脚步是合成的，不再依赖素材文件', () => {
@@ -186,8 +196,41 @@ test('脚步是合成的，不再依赖素材文件', () => {
   assert.equal(EVENTS.step?.synth, 'step', 'step 没接合成器');
 });
 
+test('步幅对得上动画的实测步频（不能凭感觉）', () => {
+  // 动画实测（scripts/measure-gait.mjs）：walk/run_happy/run_hurry 三个 webm
+  // 的下半身运动量自相关都指向 **24 帧**周期（24fps → 1.0s = 左右各一步），
+  // 即三个动画都是 2 步/秒。服务端速度 走 1.05 / 跑 1.45 m/s。
+  // 所以步幅 = 速度 ÷ 2：走 0.53m、跑 0.72m。
+  //
+  // 注意：跑步的步频和走路**一样**（动画就这么画的），
+  // 差别体现在步幅更大（0.72 vs 0.53），不是步频更快。
+  // 早先我按"跑步步频更高"写这条测试，方向就错了。
+  const src = code(path.join(ROOT, 'public', 'room', 'app.js'));
+  const w = /STEP_STRIDE_WALK = ([\d.]+)/.exec(src);
+  const r = /STEP_STRIDE_RUN = ([\d.]+)/.exec(src);
+  assert.ok(w, '找不到 STEP_STRIDE_WALK');
+  assert.ok(r, '找不到 STEP_STRIDE_RUN');
+
+  const walk = Number(w[1]);
+  const run = Number(r[1]);
+  const WALK_SPEED = 1.05;
+  const RUN_SPEED = 1.45;
+
+  const walkHz = WALK_SPEED / walk;
+  const runHz = RUN_SPEED / run;
+
+  // 两者都应是 2 步/秒（动画实测），允许 ±15%
+  for (const [label, hz] of [['走', walkHz], ['跑', runHz]]) {
+    assert.ok(hz >= 1.7 && hz <= 2.3, `${label}步频 ${hz.toFixed(2)}/s 偏离动画实测的 2.0 太多`);
+  }
+  // 跑步步幅必须比走路大（动画一样密，跑得更快 → 步幅更大）
+  assert.ok(run > walk, `跑步步幅 ${run} 不大于走路 ${walk}`);
+  // 步幅不该超过 1m（那是配慢了）
+  assert.ok(walk <= 1.0 && run <= 1.0, '步幅超过 1m，步频明显配慢了');
+});
+
 test('地面参数齐全，且瓷砖比地毯亮', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
+  const src = code(path.join(ROOT, 'public', 'room', 'sfx.js'));
   for (const s of ['wood', 'tile', 'carpet', 'stone', 'grass']) {
     assert.ok(new RegExp(`${s}:\\s*\\{`).test(src), `缺少地面参数 ${s}`);
   }

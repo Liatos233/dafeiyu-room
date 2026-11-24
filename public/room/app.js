@@ -1291,8 +1291,16 @@ let stillMs = 0;
 let stepDist = 0;          // 上次响过之后累计走过的距离（米）
 let stepWasSwimming = false;
 let stepPrevPos = null;    // 独立的上一帧位置，不受 lastDisplayPos 被别处改写的影响
-const STEP_STRIDE_WALK = 0.75;   // 走路每步 0.75m（1.05 m/s → 约 1.4 步/秒）
-const STEP_STRIDE_RUN = 0.55;    // 跑步步子更密
+// 步幅（米/步）。**这两个数是从动画本身量出来的，不是猜的**：
+//   `node scripts/measure-gait.mjs` 对 walk/run_happy/run_hurry 的下半身运动量做自相关，
+//   三个动画的步态周期都是 **24 帧**（24fps → 1.0s 一个完整周期 = 左右各一步），
+//   即步频 2 步/秒。用服务端速度换算步幅：
+//     走：1.05 m/s ÷ 2 步/s = 0.53 m/步
+//     跑：1.45 m/s ÷ 2 步/s = 0.72 m/步
+// 早先用 0.75 / 0.55 —— 走比动画慢 40%、跑快了一倍，走起来就是不跟脚。
+// 数值改了记得同步 scripts/test-sfx.mjs 的「步幅对得上动画实测步频」。
+const STEP_STRIDE_WALK = 0.53;   // 2.0 步/秒 @ 1.05 m/s
+const STEP_STRIDE_RUN = 0.72;    // 2.0 步/秒 @ 1.45 m/s
 
 // 哪些区域是瓷砖/石材。其余（客厅/卧室/餐厅/走廊）铺木地板。
 // 数值必须和 world.js 里 tilePlane(...) 的矩形一致 —— 那里是铺地图纸的真源，

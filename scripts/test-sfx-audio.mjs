@@ -1,4 +1,4 @@
-// 用真实 Chrome + CDP 验证 sfx.js：不是"语法过了"，而是"声音真的出来了"。
+﻿// 用真实 Chrome + CDP 验证 sfx.js：不是"语法过了"，而是"声音真的出来了"。
 //
 // 判据不是听（没法听），而是看**音频图里的信号**：
 //  1. 页面里建一个 AnalyserNode 挂在 destination 之前，测 RMS；
@@ -172,12 +172,15 @@ async function main() {
     if (!p.analyser) return -1;
     const buf = new Float32Array(p.analyser.fftSize);
     let peak = 0;
-    for (let i = 0; i < 12; i += 1) {
+    // 采样窗口要够密：脚步只有 60ms，如果隔 25ms 才采一次，
+    // 可能整段采样都落在音尾之后 —— 表现就是"明明响了却测不到"。
+    // 5ms 一次、共 40 次 = 200ms 窗口，覆盖短促音。
+    for (let i = 0; i < 40; i += 1) {
       p.analyser.getFloatTimeDomainData(buf);
       let s = 0;
       for (let j = 0; j < buf.length; j += 1) s += buf[j] * buf[j];
       peak = Math.max(peak, Math.sqrt(s / buf.length));
-      await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 5));
     }
     return peak;
   })()`;
@@ -197,7 +200,7 @@ async function main() {
         return !!b;
       })()
     `, sessionId);
-    await sleep(60);
+    await sleep(20);
     results[name] = await evaluate(readRms, sessionId);
     await sleep(750);   // 等冷却过去，也等尾巴放完
   }
@@ -211,7 +214,7 @@ async function main() {
     })()
   `, sessionId);
   await evaluate(`(() => { const b=[...document.querySelectorAll('button.sfx')].find(x=>x.dataset.event==='step'); b&&b.click(); return true; })()`, sessionId);
-  await sleep(60);
+  await sleep(20);
   results.panLeft = await evaluate(readRms, sessionId);
   await sleep(600);
 

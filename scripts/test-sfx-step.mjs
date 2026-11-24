@@ -181,7 +181,16 @@ if (!(result.footCorr < result.sameCorr - 0.1)) {
 }
 // 跑步要比走路更厚：能量更大，且过零率不高于走路（更低更闷，不是更尖）
 if (!(result.run.rms > result.walk.rms)) fail.push(`跑步不比走路响（${result.run.rms} vs ${result.walk.rms}）`);
-if (!(result.run.zcr <= result.walk.zcr * 1.15)) fail.push(`跑步听起来太尖（zcr ${result.run.zcr} vs ${result.walk.zcr}）`);
+// 跑步要比走路更"跳"，但方式和上一版不同：
+//   上一版要求"更闷"（zcr 不高于走路）—— 那是按"跑步=更重"调的，
+//   用户听了说闷、不轻快。现在按 Coopanion 的取向：跑步抬音高（×1.25），
+//   所以 zcr 会比走路高，这是**预期**的。只要求它不超过走路的 2.5 倍
+//   （超过就是刺耳的高频噪声，而不是"轻快的嗒"）。
+if (!(result.run.zcr <= result.walk.zcr * 2.5)) {
+  fail.push(`跑步尖得过头（zcr ${result.run.zcr} 是走路的 ${(result.run.zcr / result.walk.zcr).toFixed(1)} 倍，上限 2.5）`);
+}
+// 跑步仍然要比走路响一点
+if (!(result.run.rms >= result.walk.rms)) fail.push(`跑步不比走路响（${result.run.rms} vs ${result.walk.rms}）`);
 // 瓷砖要比地毯亮
 if (!(result.tile.zcr > result.carpet.zcr)) fail.push(`瓷砖不比地毯亮（${result.tile.zcr} vs ${result.carpet.zcr}），地面没区分`);
 // 交替序列必须是 0,1,0,1...
