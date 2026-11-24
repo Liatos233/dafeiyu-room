@@ -1542,6 +1542,60 @@ function buildKitchen(world, M) {
   addHotspot(world, 1.5, 2.7, 0.45, { title: '冰箱', sub: '门上贴着一张便利贴：今天也要好好吃饭', room: 'kitchen', spot: 'fridge', label: '冰箱前' });
   addHotspot(world, 1.3, 1.45, 0.4, { title: '水槽', sub: '水龙头有点松，杯子倒扣在沥水架上', room: 'kitchen', spot: 'sink', label: '水槽前' });
   addHotspot(world, 2.85, 1.45, 0.4, { title: '灶台', sub: '锅还热着，台面上有一小撮盐', room: 'kitchen', spot: 'stove', label: '灶台前' });
+
+  // ══ 厨房微调（H 组）════════════════════════════════════════════════
+  // 厨房本来最丰富（4.17 图元/m²），只补最容易看见的三样。
+
+  // H1. 微波炉（台面右端）
+  {
+    const MX = 3.45, MZ = 1.02, MY = 1.06;
+    box(p, 0.46, 0.27, 0.34, M.dark, MX, MY + 0.135, MZ);
+    box(p, 0.40, 0.21, 0.006, M.black, MX - 0.01, MY + 0.145, MZ + 0.172);   // 门玻璃
+    box(p, 0.06, 0.14, 0.008, M.steel, MX + 0.17, MY + 0.15, MZ + 0.175);    // 把手
+    cyl(p, 0.022, 0.022, 0.012, M.steel, MX - 0.205, MY + 0.175, MZ + 0.176, 12).rotation.x = Math.PI / 2;
+    box(p, 0.07, 0.028, 0.005, M.teal, MX - 0.13, MY + 0.19, MZ + 0.176);    // 小屏
+    for (let i = 0; i < 5; i++) box(p, 0.34, 0.004, 0.012, M.black, MX, MY + 0.274, MZ - 0.10 + i * 0.03);
+  }
+
+  // H2. 台面杂物：调料瓶 / 砧板 / 刀具架
+  {
+    const TX = 0.62, TZ = 1.06, TOP = 0.92;
+    for (let i = 0; i < 3; i++) {
+      const h2 = 0.09 + i * 0.035;
+      cyl(p, 0.026, 0.028, h2, [M.ceramic, M.glass, M.terracotta][i], TX, TOP + h2 / 2, TZ - 0.10 + i * 0.085, 12);
+      cyl(p, 0.020, 0.020, 0.014, M.dark, TX, TOP + h2 + 0.007, TZ - 0.10 + i * 0.085, 10);
+    }
+    const board = rbox(p, 0.32, 0.024, 0.44, 0.014, M.oakLight, TX + 0.20, TOP + 0.22, TZ + 0.20);
+    board.rotation.x = -1.32;
+    box(p, 0.13, 0.10, 0.16, M.walnut, TX + 0.26, TOP + 0.05, TZ - 0.12);
+    for (let i = 0; i < 3; i++) {
+      const kn = box(p, 0.016, 0.11, 0.024, M.black, TX + 0.26 + (i - 1) * 0.032, TOP + 0.155, TZ - 0.12);
+      kn.rotation.z = (i - 1) * 0.10;
+    }
+  }
+
+  // H3. 冰箱贴 + 便签 + 待办清单
+  {
+    const FX = 3.95, FZ = 2.05;
+    for (const [mat, dx, dy] of [[M.terracotta, -0.10, 1.32], [M.blue, 0.06, 1.52],
+      [M.fabricOchre, -0.02, 1.10], [M.teal, 0.12, 1.28], [M.navy, -0.13, 1.48]]) {
+      cyl(p, 0.016, 0.016, 0.008, mat, FX + dx, dy, FZ + 0.012, 10).rotation.x = Math.PI / 2;
+    }
+    for (const [dx, dy, rot] of [[-0.04, 1.40, 0.10], [0.09, 1.18, -0.07]]) {
+      const note = new THREE.Mesh(new THREE.PlaneGeometry(0.10, 0.13),
+        new THREE.MeshStandardMaterial({ map: world.textures.note, roughness: 0.92 }));
+      note.rotation.y = Math.PI;
+      note.rotation.z = rot;
+      note.position.set(FX + dx, dy, FZ + 0.010);
+      p.add(note);
+    }
+    const list = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.16),
+      new THREE.MeshStandardMaterial({ map: world.textures.note, roughness: 0.9 }));
+    list.rotation.y = Math.PI;
+    list.rotation.z = 0.05;
+    list.position.set(FX - 0.16, 1.24, FZ + 0.011);
+    p.add(list);
+  }
 }
 
 function buildDining(world, M) {
@@ -1631,6 +1685,89 @@ function buildDining(world, M) {
   cyl(p, 0.065, 0.065, 0.025, M.dark, 2.1, 2.78, 4.9);
   world.lampMaterials.push(bulb.material);
   addHotspot(world, 2.1, 5.9, 0.42, { title: '餐桌', sub: '桌上有半杯凉掉的水，花瓶里的花该换了', room: 'kitchen', spot: 'dining', label: '餐桌边' });
+
+  // ══ 餐厅（I 组）══════════════════════════════════════════════════════
+  // 16.8m² / 1.90 —— 有餐桌椅餐具，但四周墙是空的。
+
+  // I1. 餐边柜 + 摆件（南墙 z≈7.3，x 2.1）
+  {
+    const CX = 2.1, CZ = 7.28;
+    rbox(p, 1.30, 0.82, 0.36, 0.022, M.oak, CX, 0.42, CZ);
+    // 台面石
+    box(p, 1.34, 0.030, 0.40, M.stone, CX, 0.845, CZ);
+    // 两扇柜门 + 拉手
+    for (const dx of [-0.32, 0.32]) {
+      box(p, 0.60, 0.68, 0.014, M.oakLight, CX + dx, 0.40, CZ - 0.19);
+      cyl(p, 0.013, 0.013, 0.055, M.brass, CX + dx + (dx > 0 ? -0.24 : 0.24), 0.45, CZ - 0.20, 8).rotation.x = Math.PI / 2;
+    }
+    // 柜脚
+    for (const [dx, dz] of [[-0.58, -0.15], [0.58, -0.15], [-0.58, 0.15], [0.58, 0.15]]) {
+      cyl(p, 0.020, 0.017, 0.10, M.walnut, CX + dx, 0.05, CZ + dz, 8);
+    }
+    // 柜面摆件：一组酒瓶/杯子托 + 一个果盘 + 一盆小绿植
+    for (let i = 0; i < 3; i++) {
+      const bh = 0.20 + i * 0.045;
+      cyl(p, 0.028, 0.032, bh, [M.navy, M.teal, M.terracotta][i], CX - 0.42 + i * 0.075, 0.86 + bh / 2, CZ + 0.02, 12);
+      cyl(p, 0.014, 0.014, 0.055, M.dark, CX - 0.42 + i * 0.075, 0.86 + bh + 0.028, CZ + 0.02, 8);
+    }
+    // 果盘
+    cyl(p, 0.13, 0.09, 0.045, M.ceramic, CX + 0.02, 0.883, CZ, 18);
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU;
+      const fr = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8), [M.terracotta, M.fabricOchre, M.plant][i % 3]);
+      fr.position.set(CX + 0.02 + Math.cos(a) * 0.055, 0.925, CZ + Math.sin(a) * 0.045);
+      p.add(fr);
+    }
+    // 小绿植
+    plant(world, CX + 0.50, CZ, 0.42);
+  }
+
+  // I2. 吊灯实体（现在只有 PointLight 在 (2.1,1.9,4.9)，没有灯具）—— 用吊线挂下来
+  {
+    const LX = 2.1, LY = 1.90, LZ = 4.9;
+    // 吊线（到天花板 2.8）
+    cyl(p, 0.005, 0.005, 0.90, M.dark, LX, 2.35, LZ, 5);
+    // 天花板底座
+    cyl(p, 0.055, 0.065, 0.028, M.brass, LX, 2.786, LZ, 14);
+    // 灯罩（宽扁圆台，开口向下）
+    const shade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.30, 0.16, 20, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xf3e4c8, roughness: 0.9, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+    );
+    shade.position.set(LX, LY + 0.07, LZ);
+    p.add(shade);
+    // 灯泡
+    const blb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), M.bulb);
+    blb.position.set(LX, LY, LZ);
+    p.add(blb);
+    world.lampMaterials.push(blb.material);
+    // 罩顶收口
+    cyl(p, 0.045, 0.055, 0.012, M.brass, LX, LY + 0.16, LZ, 12);
+  }
+
+  // I3. 墙上置物架 + 餐具（西墙 x≈0.12）
+  {
+    for (const sy of [1.32, 1.72]) {
+      box(p, 0.16, 0.020, 0.86, M.oak, 0.13, sy, 4.90);
+      for (const dz of [-0.36, 0.36]) box(p, 0.02, 0.09, 0.02, M.steel, 0.20, sy - 0.055, 4.90 + dz);
+    }
+    // 下层：一排碗（叠起）
+    for (let i = 0; i < 3; i++) {
+      for (let k = 0; k < 2; k++) {
+        cyl(p, 0.048, 0.040, 0.030, M.ceramic, 0.13, 1.335 + k * 0.031, 4.64 + i * 0.20, 14);
+      }
+    }
+    // 上层：几个杯子和一个小壶
+    for (let i = 0; i < 3; i++) {
+      cyl(p, 0.032, 0.028, 0.058, M.ceramic, 0.13, 1.735, 4.66 + i * 0.17, 12);
+      // 杯把
+      const hd = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.005, 5, 8, Math.PI * 1.2), M.ceramic);
+      hd.position.set(0.16, 1.735, 4.66 + i * 0.17);
+      hd.rotation.y = Math.PI / 2;
+      p.add(hd);
+    }
+    cyl(p, 0.055, 0.065, 0.11, M.ceramic, 0.13, 1.775, 5.28, 14);
+  }
 }
 
 function chair(world, x, z, ry, M) {
@@ -1752,25 +1889,89 @@ function buildLiving(world, M, textures) {
   }
 
   // 书架（东墙）：开放的柜体，背板在东侧，书脊朝向客厅。
+  //
+  // 第二轮升级（B1~B4）：原来每层固定 6 本、大小随机但排列整齐，看着"简陋"。
+  // 现在：书更多（每层 10~14 本）、允许倾斜和横躺、混进小相框/多肉/收纳盒、
+  // 顶上加行李箱、底下加画册收纳篮。真实书架本来就不整齐。
   const bx = 8.2; const bz = 1.75;
   box(p, 0.024, 2.08, 1.42, M.darkWood, bx + 0.135, 1.075, bz);
   for (const z of [bz - 0.705, bz + 0.705]) box(p, 0.3, 2.15, 0.04, M.oak, bx, 1.075, z);
   box(p, 0.3, 0.04, 1.45, M.oakLight, bx, 2.13, bz);
   box(p, 0.3, 0.07, 1.45, M.oak, bx, 0.07, bz);
-  for (let i = 0; i < 4; i++) {
-    const shelfY = 0.35 + i * 0.48;
-    box(p, 0.3, 0.032, 1.38, M.oak, bx, shelfY, bz);
-    let cursor = bz - 0.58;
-    for (let j = 0; j < 6; j++) {
-      const bw = 0.045 + rnd() * 0.035; const bh = 0.20 + rnd() * 0.11;
-      const colors = [M.terracotta, M.blue, M.fabricOchre, M.teal, M.linen, M.navy];
-      box(p, 0.20, bh, bw, colors[(i + j) % colors.length], bx - 0.02, shelfY + bh / 2 + 0.017, cursor + bw / 2);
-      box(p, 0.004, 0.012, bw * 0.65, M.linen, bx - 0.122, shelfY + bh - 0.026, cursor + bw / 2);
-      cursor += bw + 0.014;
+  {
+    const bookColors = [M.terracotta, M.blue, M.fabricOchre, M.teal, M.linen, M.navy, M.fabricBlue, M.walnut];
+    for (let i = 0; i < 4; i++) {
+      const shelfY = 0.35 + i * 0.48;
+      box(p, 0.3, 0.032, 1.38, M.oak, bx, shelfY, bz);
+      const inner = bz - 0.58;      // 这一层可用区间起点
+      const innerEnd = bz + 0.62;
+      // 预留一段给"非书物件"（每层不同段，避免四层长一个样）
+      const skipFrom = i === 1 ? bz + 0.20 : i === 3 ? bz - 0.30 : 9;
+      const skipTo = i === 1 ? bz + 0.60 : i === 3 ? bz + 0.06 : 9;
+      let cursor = inner;
+      let k = 0;
+      while (cursor < innerEnd - 0.05) {
+        // 落在预留段里就跳过（留给摆件）
+        if (cursor + 0.06 > skipFrom && cursor < skipTo) { cursor = skipTo + 0.02; continue; }
+        const bw = 0.032 + rnd() * 0.028;
+        if (cursor + bw > innerEnd) break;
+        const bh = 0.185 + rnd() * 0.12;
+        const col = bookColors[(i * 3 + k) % bookColors.length];
+        const tilt = rnd() < 0.12 ? (rnd() - 0.5) * 0.22 : 0;   // 偶尔歪一本
+        const b = box(p, 0.195, bh, bw, col, bx - 0.02, shelfY + bh / 2 + 0.017, cursor + bw / 2);
+        if (tilt) { b.rotation.z = tilt; b.position.y += Math.abs(tilt) * 0.09; }
+        // 书脊上的两道细横线（书名区/作者区）
+        box(p, 0.003, 0.008, Math.min(bw * 0.6, 0.03), M.linen, bx - 0.118, shelfY + bh - 0.030, cursor + bw / 2);
+        if (bh > 0.24) box(p, 0.003, 0.006, Math.min(bw * 0.5, 0.026), M.linen, bx - 0.118, shelfY + bh - 0.060, cursor + bw / 2);
+        cursor += bw + 0.008 + rnd() * 0.006;
+        k += 1;
+      }
+      // 每层加 1~2 本横躺的（叠在别的书上面）
+      if (i !== 2) {
+        const lyingW = 0.18;
+        const lz = i === 0 ? inner + 0.14 : innerEnd - 0.34;
+        const base = i === 0 ? 0.24 : 0.22;
+        for (let m = 0; m < 2; m++) {
+          box(p, 0.185, 0.028, lyingW, bookColors[(i + m + 2) % bookColors.length],
+            bx - 0.02, shelfY + 0.017 + base + m * 0.030, lz);
+        }
+      }
+      // 非书摆件：相框 / 多肉 / 收纳盒 / 书立
+      if (i === 1) {
+        // 小相框（立着，略后仰）
+        const fr = box(p, 0.012, 0.152, 0.118, M.walnut, bx - 0.018, shelfY + 0.093, bz + 0.38);
+        fr.rotation.x = -0.06;
+        const pic = new THREE.Mesh(new THREE.PlaneGeometry(0.088, 0.118),
+          new THREE.MeshStandardMaterial({ map: artTexture(2), roughness: 0.85 }));
+        pic.rotation.y = -Math.PI / 2;
+        pic.rotation.x = -0.06;
+        pic.position.set(bx - 0.028, shelfY + 0.093, bz + 0.38);
+        p.add(pic);
+        // 多肉小盆
+        cyl(p, 0.042, 0.036, 0.058, M.terracotta, bx - 0.02, shelfY + 0.046, bz + 0.50, 12);
+        for (let m = 0; m < 5; m++) {
+          const a = m / 5 * TAU;
+          const lf = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), M.plantLight);
+          lf.scale.set(1.2, 0.8, 0.7);
+          lf.position.set(bx - 0.02 + Math.cos(a) * 0.022, shelfY + 0.082, bz + 0.50 + Math.sin(a) * 0.022);
+          p.add(lf);
+        }
+      }
+      if (i === 3) {
+        // 收纳盒（藤编感）+ 书立
+        rbox(p, 0.20, 0.14, 0.26, 0.02, M.fabricOchre, bx - 0.02, shelfY + 0.087, bz - 0.10);
+        rbox(p, 0.19, 0.05, 0.25, 0.015, M.cream, bx - 0.025, shelfY + 0.032, bz - 0.10);
+        box(p, 0.012, 0.13, 0.012, M.steel, bx - 0.02, shelfY + 0.082, bz + 0.10);
+      }
     }
-    if (i % 2 === 0) {
-      box(p, 0.19, 0.045, 0.27, M.teal, bx - 0.02, shelfY + 0.040, bz + 0.39);
-      box(p, 0.18, 0.035, 0.24, M.linen, bx - 0.025, shelfY + 0.08, bz + 0.37);
+    // 书架顶部：行李箱 + 收纳筐（B4）
+    rbox(p, 0.26, 0.19, 0.52, 0.03, M.cream, bx, 2.24, bz - 0.34);
+    for (const dz of [-0.52, -0.16]) box(p, 0.27, 0.012, 0.05, M.brass, bx, 2.245, bz + dz);
+    rbox(p, 0.24, 0.17, 0.38, 0.025, M.fabricOchre, bx, 2.235, bz + 0.40);
+    // 书架底部：画册收纳篮
+    rbox(p, 0.26, 0.24, 0.60, 0.03, M.terracotta, bx, 0.19, bz - 0.28);
+    for (let m = 0; m < 3; m++) {
+      box(p, 0.24, 0.20, 0.026, [M.linen, M.fabricBlue, M.cream][m], bx, 0.20 + m * 0.005, bz - 0.44 + m * 0.055);
     }
   }
   cyl(p, 0.045, 0.075, 0.18, M.ceramic, bx - 0.02, 1.90, bz + 0.43, 24);
@@ -1801,6 +2002,130 @@ function buildLiving(world, M, textures) {
   addHotspot(world, 6.3, 3.0, 0.5, { title: '电视', sub: '屏幕里在放海，声音开得很小', room: 'living', spot: 'tv', label: '电视前' });
   // seeOnly：茶几能看不能站上去，菜单会显示「去不了这里」——那是正确提示。
   addHotspot(world, 6.3, 3.8, 0.4, { title: '茶几', sub: '杯子剩半杯，书翻到一半扣着', room: 'living', spot: 'coffee_table', label: '茶几旁', seeOnly: true });
+
+  // ══ 客厅「生活痕迹」（C 组）════════════════════════════════════════
+  // 31.9m² 只有 1.75 图元/m²，比小玄关还稀。下面是真实客厅里会有的零碎。
+
+  // C1. 落地灯实体：原来只有一盏 PointLight 在 (7.82,1.56,4.7)，
+  //     没有灯具模型 —— 夜里「光凭空出现」。现在给它一个灯杆 + 布罩。
+  {
+    const LX = 7.82, LZ = 4.7;
+    cyl(p, 0.13, 0.15, 0.035, M.dark, LX, 0.017, LZ, 16);            // 底盘
+    cyl(p, 0.021, 0.021, 1.50, M.brass, LX, 0.77, LZ, 10);            // 灯杆
+    // 布罩（圆台，开口向下）
+    const shade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.20, 0.26, 0.30, 20, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xf2e6cf, roughness: 0.94, side: THREE.DoubleSide, transparent: true, opacity: 0.94 })
+    );
+    shade.position.set(LX, 1.60, LZ);
+    p.add(shade);
+    // 罩内灯泡（随灯开关亮）
+    const bulbLive = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), M.bulb);
+    bulbLive.position.set(LX, 1.50, LZ);
+    p.add(bulbLive);
+    world.lampMaterials.push(bulbLive.material);
+    // 罩顶收口
+    cyl(p, 0.055, 0.055, 0.012, M.brass, LX, 1.755, LZ, 12);
+  }
+
+  // C2. 茶几杂物：遥控器 / 摊开的杂志 / 水杯 / 小多肉
+  {
+    const TX = 6.3, TZ = 3.8, TOP = 0.42;   // 茶几面高度沿用现有家具
+    box(p, 0.16, 0.018, 0.055, M.black, TX - 0.22, TOP + 0.009, TZ + 0.13);      // 遥控器
+    box(p, 0.10, 0.012, 0.035, M.dark, TX - 0.22, TOP + 0.024, TZ + 0.13);       // 上面的按键区
+    // 摊开的杂志（两页微微翘起）
+    const mag = box(p, 0.24, 0.008, 0.30, M.cream, TX + 0.15, TOP + 0.004, TZ - 0.06);
+    mag.rotation.y = 0.22;
+    box(p, 0.22, 0.004, 0.27, M.linenBlue, TX + 0.15, TOP + 0.012, TZ - 0.06).rotation.y = 0.22;
+    // 水杯（剩一点水）
+    cyl(p, 0.038, 0.033, 0.088, M.glass, TX + 0.02, TOP + 0.044, TZ + 0.18, 16);
+    cyl(p, 0.033, 0.033, 0.030, M.linenBlue, TX + 0.02, TOP + 0.020, TZ + 0.18, 16);
+    // 小多肉
+    cyl(p, 0.045, 0.038, 0.055, M.terracotta, TX - 0.05, TOP + 0.028, TZ - 0.22, 12);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * TAU;
+      const lf = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), M.plantLight);
+      lf.scale.set(1.3, 0.75, 0.7);
+      lf.position.set(TX - 0.05 + Math.cos(a) * 0.021, TOP + 0.066, TZ - 0.22 + Math.sin(a) * 0.021);
+      p.add(lf);
+    }
+  }
+
+  // C3. 沙发搭毯（卷在扶手上）
+  {
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.52, 14), M.fabricOchre);
+    roll.rotation.z = Math.PI / 2;
+    roll.rotation.y = 0.12;
+    roll.position.set(5.28, 0.60, 5.12);
+    p.add(roll);
+    // 垂下来的一角
+    const hang = box(p, 0.30, 0.44, 0.015, M.fabricOchre, 5.12, 0.39, 5.30);
+    hang.rotation.x = 0.10;
+    hang.rotation.z = -0.06;
+  }
+
+  // C6. 沙发扶手旁的小边几 + 台灯（呼应落地灯，但独立开关感）
+  {
+    const SX = 5.05, SZ = 5.75;
+    cyl(p, 0.20, 0.20, 0.032, M.walnut, SX, 0.50, SZ, 20);
+    cyl(p, 0.022, 0.026, 0.48, M.steel, SX, 0.25, SZ, 8);
+    cyl(p, 0.13, 0.14, 0.022, M.dark, SX, 0.011, SZ, 14);
+    // 小台灯
+    cyl(p, 0.055, 0.062, 0.020, M.brass, SX, 0.526, SZ, 12);
+    cyl(p, 0.012, 0.012, 0.26, M.brass, SX, 0.66, SZ, 8);
+    const shade2 = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.075, 0.11, 0.16, 16, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xffeedd, roughness: 0.9, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    shade2.position.set(SX, 0.845, SZ);
+    p.add(shade2);
+  }
+
+  // C4. 电视柜下方：游戏机 + 卡带盒 + 线缆
+  {
+    const GX = 6.3, GZ = 2.72, GY = 0.06;
+    rbox(p, 0.34, 0.055, 0.24, 0.012, M.dark, GX - 0.28, GY + 0.028, GZ);        // 主机（横放）
+    box(p, 0.30, 0.006, 0.008, M.blue, GX - 0.28, GY + 0.045, GZ + 0.118);       // 指示灯条
+    for (let i = 0; i < 3; i++) {                                                // 三个卡带盒
+      rbox(p, 0.055, 0.09, 0.012, 0.004, [M.terracotta, M.teal, M.navy][i],
+        GX + 0.06 + i * 0.062, GY + 0.048, GZ - 0.02);
+    }
+    // 手柄（放在主机旁）
+    const pad = rbox(p, 0.13, 0.035, 0.075, 0.018, M.dark, GX + 0.30, GY + 0.02, GZ + 0.06);
+    pad.rotation.y = 0.4;
+    // 线缆（几根细圆柱，从主机后方绕出来）
+    for (let i = 0; i < 3; i++) {
+      const cable = cyl(p, 0.0048, 0.0048, 0.34 + i * 0.06, M.black, GX - 0.28 - 0.02 + i * 0.03, GY + 0.03, GZ - 0.17, 6);
+      cable.rotation.x = Math.PI / 2 + (i - 1) * 0.18;
+    }
+  }
+
+  // C5. 第二/三幅画 + 挂钟（world.clockHands 之前定义了但没用上）
+  {
+    // 东墙（x≈8.35）两幅小画
+    for (const [az, kind] of [[3.3, 0], [4.0, 3]]) {
+      const a2 = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.34),
+        new THREE.MeshStandardMaterial({ map: artTexture(kind), roughness: 0.82 }));
+      a2.rotation.y = -Math.PI / 2;
+      a2.position.set(8.34, 1.62, az);
+      p.add(a2);
+      box(p, 0.03, 0.42, 0.54, M.walnut, 8.36, 1.62, az);
+    }
+    // 北墙挂钟（x 6.9, z 0.12 附近的实墙）
+    const CX = 6.9, CZ = 0.095, CY = 2.05;
+    cyl(p, 0.155, 0.155, 0.032, M.cream, CX, CY, CZ, 26).rotation.x = Math.PI / 2;
+    cyl(p, 0.145, 0.145, 0.006, M.white, CX, CY, CZ + 0.020, 26).rotation.x = Math.PI / 2;
+    // 指针（挂在 world.clockHands 上，交给 updateEnvironment 按时间转）
+    for (const [len, wdt, mat] of [[0.115, 0.010, M.dark], [0.078, 0.014, M.dark]]) {
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(wdt, len, 0.004), mat);
+      hand.position.set(CX, CY, CZ + 0.026);
+      hand.geometry.translate(0, len / 2, 0);   // 以中心为转轴
+      p.add(hand);
+      world.clockHands.push(hand);
+    }
+    // 中心轴帽
+    cyl(p, 0.012, 0.012, 0.010, M.brass, CX, CY, CZ + 0.030, 10).rotation.x = Math.PI / 2;
+  }
 }
 
 function buildBedroom(world, M, textures) {
@@ -1962,6 +2287,86 @@ function buildBedroom(world, M, textures) {
   addHotspot(world, 9.7, 0.9, 0.45, { title: '书桌', sub: '屏幕还亮着，杯子里剩半杯凉茶', room: 'her_room', spot: 'desk', label: '书桌前' });
   addHotspot(world, 12.1, 3.4, 0.4, { title: '衣柜', sub: '柜门没关严，露出一截蓝白的裙角', room: 'her_room', spot: 'wardrobe', label: '衣柜前' });
   addHotspot(world, 12.55, 2.75, 0.4, { title: '窗边', sub: '能看见海，窗台上有一小盆多肉', room: 'her_room', spot: 'window', label: '窗边' });
+
+  // ══ 卧室（J 组）══════════════════════════════════════════════════════
+  // 21.1m² / 2.13。已有床/衣柜/书桌/窗帘/鲸鱼玩偶，补「早上起来会用到的」那些。
+
+  // J1. 床尾凳（换衣凳）
+  {
+    const BX = 11.5, BZ = 2.78;
+    rbox(p, 1.10, 0.12, 0.40, 0.05, M.fabricCream, BX, 0.44, BZ);
+    // 凳面软包
+    rbox(p, 1.06, 0.06, 0.36, 0.035, M.linenBlue, BX, 0.50, BZ);
+    // 四条木腿
+    for (const [dx, dz] of [[-0.47, -0.15], [0.47, -0.15], [-0.47, 0.15], [0.47, 0.15]]) {
+      cyl(p, 0.020, 0.017, 0.38, M.walnut, BX + dx, 0.19, BZ + dz, 8);
+    }
+    // 凳上：一件叠好的衣服
+    rbox(p, 0.34, 0.055, 0.26, 0.02, M.fabricBlue, BX - 0.18, 0.557, BZ);
+    rbox(p, 0.32, 0.035, 0.24, 0.015, M.linen, BX - 0.18, 0.597, BZ);
+  }
+
+  // J2. 梳妆台 + 镜子（西墙 x≈8.6，靠床侧）
+  {
+    const DX = 8.75, DZ = 2.42;
+    rbox(p, 0.34, 0.62, 1.00, 0.02, M.oak, DX, 0.32, DZ);
+    box(p, 0.36, 0.028, 1.04, M.stone, DX, 0.645, DZ);
+    // 抽屉 ×2
+    for (const dy of [0.20, 0.42]) {
+      box(p, 0.014, 0.18, 0.94, M.oakLight, DX + 0.175, dy, DZ);
+      cyl(p, 0.012, 0.012, 0.055, M.brass, DX + 0.19, dy, DZ, 8).rotation.z = Math.PI / 2;
+    }
+    // 镜面（贴着东侧 = 朝床）
+    const mirr = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.80), M.mirror);
+    mirr.rotation.y = Math.PI / 2;
+    mirr.position.set(DX - 0.02, 1.20, DZ);
+    p.add(mirr);
+    box(p, 0.03, 0.86, 0.68, M.walnut, DX - 0.03, 1.20, DZ);
+    // 台上：口红/香水/梳子/小镜
+    for (let i = 0; i < 3; i++) {
+      cyl(p, 0.013, 0.013, 0.062 + i * 0.012, [M.navy, M.terracotta, M.brass][i], DX + 0.06, 0.695, DZ - 0.30 + i * 0.055, 8);
+    }
+    box(p, 0.10, 0.012, 0.14, M.fabricOchre, DX + 0.04, 0.665, DZ + 0.24);
+    cyl(p, 0.055, 0.05, 0.022, M.ceramic, DX + 0.05, 0.67, DZ + 0.10, 14);
+    // 小凳子（塞在台子下面）
+    rbox(p, 0.32, 0.045, 0.30, 0.02, M.linenBlue, DX + 0.26, 0.42, DZ + 0.30);
+    for (const [dx, dz] of [[-0.12, -0.11], [0.12, -0.11], [-0.12, 0.11], [0.12, 0.11]]) {
+      cyl(p, 0.014, 0.012, 0.40, M.walnut, DX + 0.26 + dx, 0.20, DZ + 0.30 + dz, 6);
+    }
+  }
+
+  // J5. 床头柜杂物（书 / 眼镜 / 水杯）
+  {
+    const CX = 10.10, CZ = 0.62, TOP = 0.56;
+    // 摊着的一本书
+    const bk = box(p, 0.14, 0.020, 0.20, M.navy, CX - 0.06, TOP + 0.012, CZ + 0.06);
+    bk.rotation.y = 0.30;
+    box(p, 0.13, 0.005, 0.19, M.linen, CX - 0.06, TOP + 0.025, CZ + 0.06).rotation.y = 0.30;
+    // 眼镜（两个镜片 + 镜腿）
+    for (const dx of [-0.028, 0.028]) {
+      const lens = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.004, 5, 10), M.dark);
+      lens.rotation.x = Math.PI / 2;
+      lens.position.set(CX + 0.10 + dx, TOP + 0.010, CZ - 0.04);
+      p.add(lens);
+    }
+    box(p, 0.012, 0.004, 0.075, M.dark, CX + 0.10, TOP + 0.010, CZ - 0.10);
+    // 水杯
+    cyl(p, 0.034, 0.030, 0.075, M.glass, CX + 0.02, TOP + 0.040, CZ - 0.12, 14);
+    cyl(p, 0.029, 0.029, 0.030, M.linenBlue, CX + 0.02, TOP + 0.020, CZ - 0.12, 14);
+    // 手机（屏朝下放）
+    rbox(p, 0.062, 0.008, 0.125, 0.008, M.dark, CX - 0.12, TOP + 0.006, CZ - 0.08, 0.2);
+  }
+
+  // J4. 床边小毯（比大地毯更贴身的一块）
+  {
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.60),
+      new THREE.MeshStandardMaterial({ map: world.textures.rugBed, roughness: 0.99, envMapIntensity: 0.08 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.rotation.z = 0.06;
+    rug.position.set(10.45, 0.016, 1.62);
+    rug.receiveShadow = true;
+    p.add(rug);
+  }
 }
 
 function buildBathroom(world, M) {
@@ -2025,6 +2430,98 @@ function buildBathroom(world, M) {
   addHotspot(world, 12.0, 6.45, 0.4, { title: '洗手台', sub: '镜子上有一点水汽，牙杯里插着两支牙刷', room: 'bathroom', spot: 'sink', label: '洗手台前' });
   addHotspot(world, 11.9, 6.2, 0.38, { title: '马桶', sub: '旁边放着手机，看来刚才在这里坐了一会儿', room: 'bathroom', spot: 'toilet', label: '马桶边' });
   addHotspot(world, 11.5, 7.1, 0.4, { title: '淋浴', sub: '喷头还挂着水珠，地漏上有一小撮头发', room: 'bathroom', spot: 'shower', label: '淋浴间' });
+
+  // ══ 卫生间（K 组）════════════════════════════════════════════════════
+  // 6.2m² / 3.37，本来不空，补「用过的痕迹」。
+
+  // K1. 洗手台杂物：牙刷杯 / 香皂 / 毛巾 / 小瓶
+  {
+    const SX = 11.62, SZ = 6.48, TOP = 0.86;   // 洗手台面
+
+    // 牙刷杯（两只牙刷，一高一低）
+    cyl(p, 0.038, 0.034, 0.10, M.ceramic, SX - 0.20, TOP + 0.05, SZ + 0.10, 12);
+    for (const [dx, rz, dh] of [[-0.012, 0.10, 0], [0.014, -0.06, 0.02]]) {
+      const stem = cyl(p, 0.006, 0.006, 0.17 - dh, [M.fabricBlue, M.terracotta][dh ? 1 : 0], SX - 0.20 + dx, TOP + 0.08, SZ + 0.10, 6);
+      stem.rotation.z = rz;
+      // 刷头
+      box(p, 0.014, 0.032, 0.010, M.white, SX - 0.20 + dx + rz * 0.09, TOP + 0.165 - dh, SZ + 0.10);
+    }
+
+    // 香皂（放在小碟上）
+    cyl(p, 0.062, 0.056, 0.014, M.ceramic, SX + 0.16, TOP + 0.007, SZ + 0.14, 16);
+    rbox(p, 0.085, 0.032, 0.058, 0.026, M.cream, SX + 0.16, TOP + 0.030, SZ + 0.14);
+
+    // 洗手液瓶（按压头）
+    cyl(p, 0.030, 0.033, 0.13, M.glass, SX + 0.18, TOP + 0.065, SZ - 0.10, 12);
+    cyl(p, 0.010, 0.010, 0.045, M.steel, SX + 0.18, TOP + 0.152, SZ - 0.10, 8);
+    box(p, 0.030, 0.010, 0.014, M.steel, SX + 0.155, TOP + 0.178, SZ - 0.10);
+
+    // 挂着的毛巾（毛巾杆在洗手台侧面）
+    const bar = cyl(p, 0.008, 0.008, 0.36, M.steel, SX - 0.30, TOP + 0.26, SZ - 0.14, 8);
+    bar.rotation.z = Math.PI / 2;
+    const towel = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.34, 4, 4),
+      new THREE.MeshStandardMaterial({ color: 0xe1d6c4, roughness: 0.98, side: THREE.DoubleSide }));
+    const tp = towel.geometry.attributes.position;
+    for (let i = 0; i < tp.count; i++) {
+      const u = tp.getX(i) / 0.20;
+      tp.setZ(i, Math.sin(u * 4) * 0.010);
+    }
+    towel.geometry.computeVertexNormals();
+    towel.position.set(SX - 0.30, TOP + 0.09, SZ - 0.15);
+    p.add(towel);
+
+    // 台面上的小托盘（放发圈/夹子）
+    cyl(p, 0.075, 0.070, 0.012, M.ceramic, SX - 0.02, TOP + 0.006, SZ - 0.16, 16);
+    for (let i = 0; i < 3; i++) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.004, 5, 10), [M.navy, M.terracotta, M.fabricBlue][i]);
+      band.rotation.x = Math.PI / 2;
+      band.position.set(SX - 0.05 + i * 0.028, TOP + 0.014, SZ - 0.16);
+      p.add(band);
+    }
+  }
+
+  // K2. 浴帘（淋浴区前，半拉开）
+  {
+    const CX = 11.50, CZ = 6.95;
+    // 帘杆
+    const rod = cyl(p, 0.010, 0.010, 0.92, M.steel, CX, 2.02, CZ, 8);
+    rod.rotation.z = Math.PI / 2;
+    // 帘子（褶皱，只拉了一半）
+    const curtainGeo = new THREE.PlaneGeometry(0.58, 1.90, 14, 1);
+    const cp = curtainGeo.attributes.position;
+    for (let i = 0; i < cp.count; i++) {
+      const u = cp.getX(i) / 0.58 + 0.5;
+      cp.setZ(i, Math.sin(u * Math.PI * 5) * 0.028);
+    }
+    curtainGeo.computeVertexNormals();
+    const curtain = new THREE.Mesh(curtainGeo,
+      new THREE.MeshStandardMaterial({ color: 0xd8e2e6, roughness: 0.96, side: THREE.DoubleSide, transparent: true, opacity: 0.94 }));
+    curtain.position.set(CX - 0.16, 1.06, CZ);
+    p.add(curtain);
+    // 挂环
+    for (let i = 0; i < 7; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.013, 0.003, 4, 8), M.steel);
+      ring.position.set(CX - 0.45 + i * 0.083, 2.01, CZ);
+      ring.rotation.y = Math.PI / 2;
+      p.add(ring);
+    }
+  }
+
+  // K3. 置物架 + 洗浴用品（淋浴区墙面）
+  {
+    for (const [sy, sz] of [[1.16, 0.30], [1.52, 0.28]]) {
+      box(p, 0.24, 0.018, sz, M.steel, 11.02, sy, 6.95);
+    }
+    // 下层：三瓶洗浴用品
+    for (let i = 0; i < 3; i++) {
+      const h2 = 0.12 + i * 0.03;
+      cyl(p, 0.030, 0.032, h2, [M.blue, M.teal, M.cream][i], 11.02, 1.17 + h2 / 2, 6.88 + i * 0.075, 10);
+      cyl(p, 0.012, 0.012, 0.022, M.white, 11.02, 1.17 + h2 + 0.011, 6.88 + i * 0.075, 8);
+    }
+    // 上层：一块海绵 + 一个小桶
+    rbox(p, 0.06, 0.045, 0.075, 0.015, M.fabricOchre, 11.02, 1.545, 6.90);
+    cyl(p, 0.055, 0.045, 0.09, M.terracotta, 11.02, 1.57, 7.04, 12);
+  }
 }
 
 function buildCorridor(world, M) {
@@ -2064,6 +2561,60 @@ function buildCorridor(world, M) {
     world.lampMaterials.push(bulb.material);
   }
   addHotspot(world, 9.8, 4.68, 0.5, { title: '画廊墙', sub: '四幅画，最右边那幅是蓝鲸，画框有点歪', room: 'corridor', spot: 'gallery', label: '画廊墙前' });
+
+  // ══ 走廊补细节（E 组）════════════════════════════════════════════════
+  // 5.8m² / 0.87 图元/m²，几乎纯通道。走廊窄，只做贴墙的东西。
+
+  // E2. 窄边柜 + 一盆植物（南墙，x 9.0 附近）
+  {
+    const SX = 9.15, SZ = 5.42;
+    rbox(p, 0.86, 0.66, 0.20, 0.02, M.oak, SX, 0.34, SZ);
+    for (const dx of [-0.34, 0.34]) box(p, 0.02, 0.58, 0.022, M.walnut, SX + dx, 0.34, SZ + 0.10);
+    // 柜门拉手
+    for (const dx of [-0.16, 0.16]) cyl(p, 0.014, 0.014, 0.05, M.brass, SX + dx, 0.36, SZ - 0.095, 8).rotation.x = Math.PI / 2;
+    // 柜面：一盆小植物 + 一个小托盘（放钥匙）
+    plant(world, SX - 0.24, SZ - 0.02, 0.52);
+    cyl(p, 0.10, 0.095, 0.016, M.ceramic, SX + 0.22, 0.678, SZ - 0.02, 16);
+    // 托盘里两把钥匙
+    for (const [dx, rz] of [[0.04, 0.4], [-0.03, -0.2]]) {
+      box(p, 0.045, 0.006, 0.014, M.steel, SX + 0.22 + dx, 0.690, SZ - 0.02).rotation.y = rz;
+    }
+  }
+
+  // E3. 壁灯 ×2（走廊太暗，补两盏，与画廊墙那四盏呼应）
+  {
+    for (const wx of [9.55, 11.65]) {
+      // 底座
+      cyl(p, 0.055, 0.055, 0.018, M.brass, wx, 1.90, 4.44, 14).rotation.x = Math.PI / 2;
+      // 短臂
+      const arm = cyl(p, 0.010, 0.010, 0.12, M.brass, wx, 1.90, 4.50, 8);
+      arm.rotation.x = Math.PI / 2;
+      // 锥形灯罩（朝下）
+      const shade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.085, 0.10, 14, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xf6e3c4, roughness: 0.92, side: THREE.DoubleSide })
+      );
+      shade.position.set(wx, 1.845, 4.56);
+      p.add(shade);
+      // 灯泡
+      const b2 = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), M.bulbWarm);
+      b2.position.set(wx, 1.812, 4.56);
+      p.add(b2);
+      world.lampMaterials.push(b2.material);
+    }
+  }
+
+  // E4. 长条地毯（1.6×0.5，横在画廊墙前，踩上去有落脚感）
+  {
+    const runner = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 0.62),
+      new THREE.MeshStandardMaterial({ map: world.textures.rugLiving, roughness: 0.99, envMapIntensity: 0.08 }));
+    runner.rotation.x = -Math.PI / 2;
+    runner.position.set(11.0, 0.012, 4.86);
+    runner.receiveShadow = true;
+    p.add(runner);
+    // 两端收边
+    for (const dx of [-1.175, 1.175]) box(p, 0.02, 0.008, 0.60, M.linenBlue, 11.0 + dx, 0.012, 4.86);
+  }
 }
 
 /**
@@ -2145,6 +2696,117 @@ function buildLaundry(world, M) {
   }
   // 家政间小窗
   addHotspot(world, 9.7, 6.5, 0.55, { title: '洗衣机', sub: '还有二十多分钟才洗完，滚筒里转着几件蓝白色的衣服', room: 'laundry', spot: 'washer', label: '洗衣机前' });
+
+  // ══ 家政间补细节（F 组）════════════════════════════════════════════
+  {
+    const DX = 9.6, DZ = 6.9;
+
+    // F1. 洗衣篮（藤编，装着待洗的衣服）
+    cyl(p, 0.20, 0.165, 0.36, M.fabricOchre, DX - 0.62, 0.18, DZ - 0.30, 16);
+    cyl(p, 0.175, 0.175, 0.016, M.soil, DX - 0.62, 0.268, DZ - 0.30, 16);
+    // 露出来的几件衣服
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU + 0.3;
+      const cl = box(p, 0.10, 0.012, 0.13, [M.fabricBlue, M.linen, M.cream, M.linenBlue][i],
+        DX - 0.62 + Math.cos(a) * 0.05, 0.28 + (i % 2) * 0.014, DZ - 0.30 + Math.sin(a) * 0.05);
+      cl.rotation.y = a;
+    }
+
+    // F2. 熨衣板 + 熨斗（靠东墙立着）
+    {
+      const BX = 10.52, BZ = 6.52;
+      const board = rbox(p, 0.40, 0.022, 0.94, 0.02, M.fabricCream, BX, 0.86, BZ);
+      board.rotation.x = -0.06;
+      // 板面布套条纹
+      for (let i = 0; i < 3; i++) {
+        box(p, 0.36, 0.004, 0.05, M.linenBlue, BX, 0.872 + i * 0.002, BZ - 0.28 + i * 0.28);
+      }
+      // 四条折叠腿
+      for (const [dx, dz] of [[-0.15, -0.36], [0.15, -0.36], [-0.15, 0.36], [0.15, 0.36]]) {
+        cyl(p, 0.011, 0.009, 0.84, M.steel, BX + dx, 0.42, BZ + dz, 6);
+      }
+      // 熨斗（放在板尾）
+      rbox(p, 0.10, 0.055, 0.16, 0.018, M.dark, BX, 0.906, BZ + 0.30);
+      rbox(p, 0.055, 0.035, 0.055, 0.012, M.steel, BX, 0.945, BZ + 0.30);
+      // 电线
+      const cord = cyl(p, 0.0035, 0.0035, 0.30, M.black, BX + 0.06, 0.92, BZ + 0.16, 5);
+      cord.rotation.x = Math.PI / 2.4;
+    }
+
+    // F3. 清洁用品架（墙面层板 + 瓶瓶罐罐）
+    {
+      const SX = 10.55, SZ = 6.05;
+      for (const sy of [1.02, 1.38]) {
+        box(p, 0.24, 0.022, 0.62, M.white, SX, sy, SZ);
+        // 支架
+        for (const dz of [-0.26, 0.26]) box(p, 0.02, 0.10, 0.02, M.steel, SX + 0.10, sy - 0.06, SZ + dz);
+      }
+      // 下层：三个喷雾瓶
+      for (let i = 0; i < 3; i++) {
+        const bz2 = SZ - 0.18 + i * 0.18;
+        cyl(p, 0.035, 0.038, 0.16, [M.teal, M.blue, M.fabricOchre][i], SX - 0.02, 1.11, bz2, 10);
+        cyl(p, 0.014, 0.014, 0.055, M.white, SX - 0.02, 1.22, bz2, 8);
+        // 喷头
+        box(p, 0.045, 0.016, 0.016, M.white, SX - 0.045, 1.245, bz2);
+      }
+      // 上层：抹布叠 + 刷子罐
+      for (let i = 0; i < 3; i++) {
+        box(p, 0.16, 0.012, 0.12, [M.linen, M.linenBlue, M.cream][i], SX - 0.02, 1.398 + i * 0.014, SZ - 0.16);
+      }
+      cyl(p, 0.038, 0.034, 0.10, M.ceramic, SX - 0.02, 1.44, SZ + 0.16, 10);
+      for (let i = 0; i < 4; i++) {
+        const br = cyl(p, 0.005, 0.005, 0.19, M.darkWood, SX - 0.02 + (i - 1.5) * 0.012, 1.58, SZ + 0.16, 5);
+        br.rotation.z = (i - 1.5) * 0.07;
+      }
+    }
+
+    // F4. 挂衣钩 + 围裙（门后墙）
+    {
+      const HX = 9.05, HZ = 7.28;
+      for (let i = 0; i < 3; i++) {
+        const hz2 = HZ - 0.22 + i * 0.22;
+        box(p, 0.05, 0.05, 0.03, M.brass, HX, 1.62, hz2);
+        const hook = cyl(p, 0.006, 0.006, 0.07, M.brass, HX + 0.035, 1.60, hz2, 6);
+        hook.rotation.z = Math.PI / 2;
+      }
+      // 围裙（挂在中间那个钩上）
+      const apron = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.46, 5, 5),
+        new THREE.MeshStandardMaterial({ color: 0x6f89a5, roughness: 0.96, side: THREE.DoubleSide }));
+      const ap = apron.geometry.attributes.position;
+      for (let i = 0; i < ap.count; i++) {
+        const u = ap.getX(i) / 0.30;
+        ap.setZ(i, Math.sin(u * 5) * 0.012);
+      }
+      apron.geometry.computeVertexNormals();
+      apron.rotation.y = Math.PI / 2;
+      apron.position.set(HX + 0.05, 1.36, HZ);
+      p.add(apron);
+      // 围裙口袋
+      box(p, 0.012, 0.10, 0.18, M.navy, HX + 0.055, 1.26, HZ);
+    }
+
+    // F5. 拖把桶（角落，拖把斜靠墙上）
+    {
+      const MX = 8.72, MZ = 6.20;
+      // 桶身（上宽下窄）
+      cyl(p, 0.155, 0.125, 0.30, M.fabricOchre, MX, 0.15, MZ, 16);
+      cyl(p, 0.158, 0.158, 0.018, M.soil, MX, 0.31, MZ, 16);
+      // 绞水篮（半圆凸起）
+      box(p, 0.10, 0.14, 0.14, M.steel, MX + 0.06, 0.24, MZ);
+      // 拖把杆（斜插）
+      const mop = cyl(p, 0.014, 0.014, 1.10, M.oakLight, MX + 0.02, 0.62, MZ + 0.02, 8);
+      mop.rotation.z = 0.22;
+      mop.rotation.x = -0.10;
+      // 拖把头
+      const head = cyl(p, 0.055, 0.075, 0.10, M.cream, MX - 0.09, 0.16, MZ + 0.06, 10);
+      head.rotation.z = 0.2;
+      // 桶边的把手
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.008, 6, 12, Math.PI), M.steel);
+      handle.position.set(MX, 0.31, MZ);
+      handle.rotation.y = Math.PI / 2;
+      p.add(handle);
+    }
+  }
 }
 
 function buildBalcony(world, M) {
@@ -2205,6 +2867,212 @@ function buildBalcony(world, M) {
   addHotspot(world, 3.0, 8.45, 0.5, { title: '阳台栏杆', sub: '风从海那边过来，栏杆上有一点盐霜', room: 'balcony', spot: 'chair', label: '栏杆边' });
   addHotspot(world, 2.67, 8.22, 0.5, { title: '躺椅', sub: '搭着一条蓝毯子，扶手上放着半杯柠檬水', room: 'balcony', spot: 'chair', label: '躺椅上' });
   addHotspot(world, 1.2, 8.2, 0.45, { title: '花盆', sub: '薄荷长得有点疯，叶子上还挂着水', room: 'balcony', spot: 'chair', label: '花盆边' });
+
+  // ══ 阳台「户外生活」（D 组）════════════════════════════════════════
+  // 18.5m² / 1.14 图元/m²，有躺椅有栏杆，但缺「住过」的痕迹。
+
+  // D1. 晾衣绳 + 4 件衣服：最强的「有人住」信号，一眼就懂
+  {
+    const Z = 8.30;
+    // 两端固定点（西墙 / 东侧栏杆柱）
+    cyl(p, 0.012, 0.012, 0.06, M.steel, 0.30, 2.00, Z, 8).rotation.x = Math.PI / 2;
+    cyl(p, 0.012, 0.012, 0.06, M.steel, 4.75, 2.00, Z, 8).rotation.x = Math.PI / 2;
+    // 绳子（略微下垂：用两段折线近似）
+    for (const [x0, x1, y0, y1] of [[0.30, 2.52, 1.99, 1.93], [2.52, 4.75, 1.93, 1.99]]) {
+      const dx = x1 - x0, dy = y1 - y0;
+      const len = Math.hypot(dx, dy);
+      const rope = cyl(p, 0.0045, 0.0045, len, M.linen, (x0 + x1) / 2, (y0 + y1) / 2, Z, 6);
+      rope.rotation.z = Math.PI / 2 + Math.atan2(dy, dx);
+    }
+    // 四件晾着的衣服（不同长度/颜色）
+    const garments = [
+      { x: 0.85, w: 0.30, h: 0.46, mat: M.fabricBlue },     // 衬衫
+      { x: 1.55, w: 0.24, h: 0.34, mat: M.cream },          // 短袖
+      { x: 2.30, w: 0.20, h: 0.52, mat: M.fabricCream },    // 裤子（窄）
+      { x: 3.15, w: 0.44, h: 0.30, mat: M.linenBlue }       // 小毛巾/床单
+    ];
+    for (const g of garments) {
+      const cloth = new THREE.Mesh(
+        new THREE.PlaneGeometry(g.w, g.h, 6, 6),
+        new THREE.MeshStandardMaterial({ color: g.mat.color, roughness: 0.96, side: THREE.DoubleSide })
+      );
+      // 让布面有一点自然起伏（顶点微扰）
+      const pos = cloth.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const u = pos.getX(i) / g.w;
+        pos.setZ(i, Math.sin(u * 6) * 0.018);
+      }
+      cloth.geometry.computeVertexNormals();
+      const topY = 1.99 - (g.x - 0.30) * 0.026;
+      cloth.position.set(g.x, topY - g.h / 2, Z);
+      p.add(cloth);
+      // 两个夹子
+      for (const dx of [-g.w * 0.32, g.w * 0.32]) {
+        box(p, 0.022, 0.048, 0.014, M.terracotta, g.x + dx, topY - 0.014, Z + 0.004);
+      }
+    }
+  }
+
+  // D2. 藤椅 + 小圆桌（现在只有躺椅，没有坐着喝茶的选择）
+  {
+    const CX = 3.72, CZ = 8.52;
+    const rattan = (cx, cz, ry) => {
+      const g = new THREE.Group();
+      g.position.set(cx, 0, cz);
+      g.rotation.y = ry;
+      p.add(g);
+      // 座框 + 编织面
+      rbox(g, 0.52, 0.055, 0.48, 0.05, M.oakLight, 0, 0.40, 0);
+      for (let i = 0; i < 5; i++) rbox(g, 0.50, 0.012, 0.030, 0.006, M.oak, 0, 0.432, -0.17 + i * 0.085);
+      for (let i = 0; i < 5; i++) rbox(g, 0.030, 0.012, 0.46, 0.006, M.oak, -0.20 + i * 0.10, 0.444, 0);
+      // 靠背（弧形，用 5 段拼）
+      for (let i = 0; i < 5; i++) {
+        const a = -0.55 + i * 0.275;
+        const seg = rbox(g, 0.028, 0.40, 0.062, 0.008, M.oakLight,
+          Math.sin(a) * 0.26, 0.62, Math.cos(a) * 0.26);
+        seg.rotation.y = a;
+      }
+      // 四腿
+      for (const [dx, dz] of [[-0.21, -0.20], [0.21, -0.20], [-0.21, 0.20], [0.21, 0.20]]) {
+        cyl(g, 0.016, 0.014, 0.40, M.oak, dx, 0.20, dz, 8);
+      }
+      // 坐垫
+      rbox(g, 0.44, 0.055, 0.40, 0.03, M.fabricCream, 0, 0.47, 0);
+    };
+    rattan(CX, CZ, Math.PI);       // 面向屋内
+    // 小圆桌
+    cyl(p, 0.24, 0.24, 0.030, M.oakLight, CX, 0.52, CZ + 0.72, 20);
+    cyl(p, 0.020, 0.024, 0.50, M.steel, CX, 0.26, CZ + 0.72, 8);
+    cyl(p, 0.15, 0.15, 0.018, M.dark, CX, 0.009, CZ + 0.72, 14);
+    // 桌上：茶杯 + 一小碟饼干
+    cyl(p, 0.045, 0.040, 0.055, M.ceramic, CX - 0.06, 0.563, CZ + 0.68, 14);
+    cyl(p, 0.042, 0.042, 0.006, M.cream, CX - 0.06, 0.592, CZ + 0.68, 14);
+    cyl(p, 0.075, 0.070, 0.012, M.ceramic, CX + 0.08, 0.541, CZ + 0.78, 16);
+    for (let i = 0; i < 3; i++) {
+      cyl(p, 0.024, 0.024, 0.010, M.fabricOchre, CX + 0.08 + (i - 1) * 0.032, 0.552, CZ + 0.78 + (i % 2) * 0.028, 10);
+    }
+  }
+
+  // D3. 遮阳篷：从北墙斜向伸出，罩住躺椅那片
+  {
+    const Z0 = 7.62;        // 贴墙
+    const Z1 = 8.34;        // 外沿
+    const Y0 = 2.32, Y1 = 2.10;
+    // 篷布（带条纹）
+    const canopy = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.80, 12, 1),
+      new THREE.MeshStandardMaterial({ color: 0xdfb98d, roughness: 0.94, side: THREE.DoubleSide }));
+    canopy.rotation.x = -Math.PI / 2 + 0.28;
+    canopy.position.set(1.95, (Y0 + Y1) / 2 + 0.02, (Z0 + Z1) / 2);
+    p.add(canopy);
+    // 篷布上的两条深色条纹
+    for (const dx of [-0.62, 0.62]) {
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.79, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0xc9855a, roughness: 0.95, side: THREE.DoubleSide }));
+      stripe.rotation.copy(canopy.rotation);
+      stripe.position.set(1.95 + dx, (Y0 + Y1) / 2 + 0.022, (Z0 + Z1) / 2);
+      p.add(stripe);
+    }
+    // 两根支撑斜杆
+    for (const dx of [-1.15, 1.15]) {
+      const rod = cyl(p, 0.016, 0.016, 1.10, M.steel, 1.95 + dx, 2.20, Z0 + 0.30, 8);
+      rod.rotation.x = -0.62;
+    }
+    // 外沿垂边
+    box(p, 2.60, 0.10, 0.014, M.fabricOchre, 1.95, Y1 - 0.03, Z1);
+  }
+
+  // D4. 吊兰 ×2（挂在遮阳篷下沿）
+  {
+    const hang = (hx, hz) => {
+      // 吊绳
+      cyl(p, 0.0035, 0.0035, 0.34, M.linen, hx, 1.90, hz, 5);
+      // 吊盆
+      cyl(p, 0.075, 0.058, 0.10, M.terracotta, hx, 1.66, hz, 12);
+      // 垂下来的 6 条叶子
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * TAU + rnd() * 0.4;
+        const len = 0.24 + rnd() * 0.18;
+        const lf = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 5), M.plantLight);
+        lf.scale.set(0.030, len, 0.020);
+        lf.position.set(hx + Math.cos(a) * 0.055, 1.60 - len * 0.5, hz + Math.sin(a) * 0.055);
+        lf.rotation.z = Math.cos(a) * 0.35;
+        lf.rotation.x = -Math.sin(a) * 0.35;
+        p.add(lf);
+      }
+    };
+    hang(1.20, 8.05);
+    hang(2.72, 8.05);
+  }
+
+  // D6. 风铃（遮阳篷外沿，最后一根挂绳上）
+  {
+    const FX = 3.42, FY = 2.06, FZ = 8.30;
+    cyl(p, 0.0030, 0.0030, 0.16, M.linen, FX, FY - 0.08, FZ, 5);
+    cyl(p, 0.075, 0.075, 0.008, M.brass, FX, FY - 0.17, FZ, 14).rotation.x = Math.PI / 2;
+    // 4 根金属管（长短不一）
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU;
+      const len = 0.13 + i * 0.028;
+      cyl(p, 0.006, 0.006, len, M.brass, FX + Math.cos(a) * 0.055, FY - 0.20 - len / 2, FZ + Math.sin(a) * 0.055, 6);
+    }
+    // 中间垂片
+    box(p, 0.028, 0.10, 0.004, M.cream, FX, FY - 0.26, FZ);
+  }
+
+  // D5. 香草/番茄盆栽（呼应屋后菜园）
+  {
+    const herb = (hx, hz, scale, leafMat) => {
+      const g = new THREE.Group();
+      g.position.set(hx, 0, hz);
+      g.scale.setScalar(scale);
+      p.add(g);
+      cyl(g, 0.13, 0.155, 0.24, M.terracotta, 0, 0.12, 0, 14);
+      cyl(g, 0.135, 0.135, 0.018, M.soil, 0, 0.238, 0, 14);
+      // 一堆小叶子
+      for (let i = 0; i < 16; i++) {
+        const a = rnd() * TAU;
+        const r = rnd() * 0.10;
+        const lf = new THREE.Mesh(new THREE.SphereGeometry(0.032 + rnd() * 0.016, 7, 5), leafMat);
+        lf.scale.set(1.3, 0.7, 1.0);
+        lf.position.set(Math.cos(a) * r, 0.26 + rnd() * 0.17, Math.sin(a) * r);
+        g.add(lf);
+      }
+    };
+    herb(0.68, 8.62, 0.92, M.plantLight);   // 香草（浅绿）
+    herb(1.02, 8.66, 0.82, M.plant);        // 另一盆（深绿）
+  }
+
+  // D7. 地上的拖鞋（小物件但很有效）
+  {
+    for (const [dx, ry] of [[-0.055, 0.14], [0.065, -0.10]]) {
+      const slipper = rbox(p, 0.088, 0.028, 0.20, 0.028, M.fabricBlue, 2.86 + dx, 0.014, 8.10, ry);
+      // 鞋面
+      rbox(p, 0.082, 0.030, 0.075, 0.022, M.navy, 2.86 + dx, 0.040, 8.10 + 0.052, ry);
+    }
+  }
+
+  // D8. 望远镜（朝海，呼应「看海」设定；没有就太可惜）
+  {
+    const TX = 3.05, TZ = 8.42;
+    // 三脚架
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * TAU + 0.4;
+      const leg = cyl(p, 0.011, 0.009, 0.92, M.dark, TX + Math.cos(a) * 0.15, 0.46, TZ + Math.sin(a) * 0.15, 6);
+      leg.rotation.z = -Math.cos(a) * 0.26;
+      leg.rotation.x = Math.sin(a) * 0.26;
+    }
+    // 云台
+    cyl(p, 0.038, 0.042, 0.055, M.steel, TX, 0.95, TZ, 10);
+    // 镜筒（朝海方向 -z，略微抬高）
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.038, 0.42, 14), M.brass);
+    tube.rotation.x = Math.PI / 2 - 0.18;
+    tube.position.set(TX, 1.02, TZ - 0.14);
+    p.add(tube);
+    // 目镜
+    cyl(p, 0.024, 0.020, 0.055, M.dark, TX, 1.06, TZ + 0.06, 10).rotation.x = Math.PI / 2 - 0.18;
+    // 前端口径圈
+    cyl(p, 0.050, 0.050, 0.010, M.brass, TX, 0.985, TZ - 0.33, 14).rotation.x = Math.PI / 2 - 0.18;
+  }
 }
 
 // 户外泳池露台：从阳台东侧往外延伸出去，无墙、朝海
@@ -2679,6 +3547,213 @@ function buildPoolDeck(world, M) {
       rbox(g, 0.36, 0.06, 0.26, 0.018, i ? M.fabricBlue : M.fabricCream, 0, 0.78 + i * 0.062, 0);
     }
   }
+
+  // ══ 露台度假村化（第二轮补齐）══════════════════════════════════════
+  // 58.7m² 只有 0.39 图元/m²，是全屋最空的地方。这一批按「池边建筑 → 家具 →
+  // 氛围」三层补，全部贴边缘放，中间走道保持净宽 ≥0.9m。
+
+  // A1. 凉棚 / 廊架：露台西端（x 0.3~3.3，横跨泳池北侧空地）
+  {
+    const PX0 = 0.35, PX1 = 3.45;          // 跨度
+    const PZ = POOL_Z0 - 1.55;             // 压在泳池北侧那块空地上
+    const PH = 2.42;                        // 立柱高
+    const posts = [PX0, PX1];
+    for (const px of posts) {
+      for (const pz of [PZ - 0.95, PZ + 0.95]) {
+        // 柱脚石墩 + 立柱
+        cyl(p, 0.14, 0.16, 0.09, M.stone, px, DECK_TOP + 0.045, pz, 14);
+        cyl(p, 0.062, 0.058, PH, M.oak, px, DECK_TOP + PH / 2, pz, 10);
+      }
+    }
+    // 两根横梁（沿 x 和沿 z）
+    for (const pz of [PZ - 0.95, PZ + 0.95]) {
+      rbox(p, PX1 - PX0 + 0.34, 0.10, 0.10, 0.02, M.walnut, (PX0 + PX1) / 2, DECK_TOP + PH + 0.05, pz);
+    }
+    for (const px of posts) {
+      rbox(p, 0.10, 0.08, 2.04, 0.018, M.walnut, px, DECK_TOP + PH + 0.13, PZ);
+    }
+    // 椽条（沿 x 方向一排）
+    for (let i = 0; i < 9; i++) {
+      const rx = PX0 + 0.18 + i * (PX1 - PX0 - 0.36) / 8;
+      rbox(p, 0.055, 0.06, 2.10, 0.014, M.oakLight, rx, DECK_TOP + PH + 0.19, PZ);
+    }
+    // 爬藤：沿两根横梁绕几缕
+    for (let i = 0; i < 14; i++) {
+      const vx = PX0 + 0.2 + rnd() * (PX1 - PX0 - 0.4);
+      const vz = PZ + (rnd() < 0.5 ? -0.95 : 0.95);
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.055 + rnd() * 0.03, 8, 6), M.plant);
+      leaf.position.set(vx, DECK_TOP + PH + 0.02 + rnd() * 0.1, vz + (rnd() - 0.5) * 0.12);
+      leaf.scale.set(1.2, 0.7, 1.1);
+      p.add(leaf);
+    }
+  }
+
+  // A5. 秋千椅：挂在凉棚横梁下（靠西的一跨）
+  {
+    const SX = 1.15, SZ = POOL_Z0 - 1.55, SY = 2.12;
+    // 两根吊绳
+    for (const dz of [-0.34, 0.34]) {
+      cyl(p, 0.008, 0.008, SY - 0.62, M.linen, SX - 0.42, DECK_TOP + (SY + 0.62) / 2, SZ + dz, 6);
+      cyl(p, 0.008, 0.008, SY - 0.62, M.linen, SX + 0.42, DECK_TOP + (SY + 0.62) / 2, SZ + dz, 6);
+    }
+    // 座面 + 靠背
+    rbox(p, 0.92, 0.07, 0.62, 0.03, M.oak, SX, DECK_TOP + 0.60, SZ);
+    rbox(p, 0.88, 0.06, 0.56, 0.025, M.fabricCream, SX, DECK_TOP + 0.645, SZ);
+    const back = new THREE.Group();
+    back.position.set(SX - 0.40, DECK_TOP + 0.62, SZ);
+    back.rotation.z = 0.30;
+    p.add(back);
+    rbox(back, 0.06, 0.52, 0.60, 0.025, M.oak, 0, 0.26, 0);
+    rbox(back, 0.05, 0.46, 0.54, 0.02, M.fabricCream, -0.03, 0.26, 0);
+    // 坐垫
+    rbox(p, 0.34, 0.09, 0.34, 0.04, M.fabricOchre, SX + 0.22, DECK_TOP + 0.72, SZ);
+  }
+
+  // A2. 户外餐桌 + 4 把折叠椅（露台东侧空地 x 10.6~12.4, z 9.2~9.9）
+  {
+    const TX = 11.35, TZ = POOL_Z0 - 1.42;
+    // 桌面（圆形）+ 单柱 + 十字底
+    cyl(p, 0.52, 0.52, 0.045, M.oakLight, TX, DECK_TOP + 0.715, TZ, 28);
+    cyl(p, 0.48, 0.48, 0.012, M.cream, TX, DECK_TOP + 0.742, TZ, 28);
+    cyl(p, 0.045, 0.05, 0.70, M.steel, TX, DECK_TOP + 0.35, TZ, 10);
+    for (const a of [0, Math.PI / 2]) {
+      const foot = rbox(p, 0.56, 0.035, 0.055, 0.015, M.steel, TX, DECK_TOP + 0.018, TZ, a);
+    }
+    // 桌上：托盘 + 两个杯子 + 小盆栽
+    cyl(p, 0.19, 0.19, 0.018, M.walnut, TX, DECK_TOP + 0.756, TZ, 18);
+    for (const [dx, dz] of [[-0.07, 0.04], [0.08, -0.05]]) {
+      cyl(p, 0.038, 0.032, 0.085, M.ceramic, TX + dx, DECK_TOP + 0.808, TZ + dz, 14);
+    }
+    cyl(p, 0.05, 0.045, 0.06, M.terracotta, TX + 0.24, DECK_TOP + 0.795, TZ + 0.2, 12);
+
+    // 4 把折叠椅（围绕圆桌）
+    const chair = (cx, cz, ry) => {
+      const g = new THREE.Group();
+      g.position.set(cx, DECK_TOP, cz);
+      g.rotation.y = ry;
+      p.add(g);
+      // 座面（木条）
+      for (let i = 0; i < 5; i++) rbox(g, 0.40, 0.022, 0.062, 0.008, M.oakLight, 0, 0.44, -0.14 + i * 0.07);
+      // 靠背（斜）
+      const bk = new THREE.Group(); bk.position.set(0, 0.47, 0.20); bk.rotation.x = -0.22; g.add(bk);
+      for (let i = 0; i < 3; i++) rbox(bk, 0.40, 0.05, 0.018, 0.006, M.oakLight, 0, 0.04 + i * 0.10, 0);
+      rbox(bk, 0.40, 0.028, 0.024, 0.008, M.oak, 0, 0.26, 0);
+      // 四腿 + 横撑
+      for (const [dx, dz] of [[-0.17, -0.16], [0.17, -0.16], [-0.17, 0.16], [0.17, 0.16]]) {
+        cyl(g, 0.014, 0.012, 0.44, M.steel, dx, 0.22, dz, 8);
+      }
+      for (const dz of [-0.16, 0.16]) cyl(g, 0.010, 0.010, 0.34, M.steel, 0, 0.14, dz, 6).rotation.z = Math.PI / 2;
+    };
+    chair(TX - 0.78, TZ, Math.PI / 2);
+    chair(TX + 0.78, TZ, -Math.PI / 2);
+    chair(TX, TZ - 0.78, 0);
+    chair(TX, TZ + 0.78, Math.PI);
+  }
+
+  // A3. 池边地灯 ×4：矮柱灯笼，夜里随室内灯联动（材质进 lampMaterials）
+  {
+    const lampPos = [
+      [POOL_X0 - 0.36, POOL_Z0 - 0.42],
+      [POOL_X1 + 0.36, POOL_Z0 - 0.42],
+      [POOL_X0 - 0.36, POOL_Z1 + 0.42],
+      [POOL_X1 + 0.36, POOL_Z1 + 0.42]
+    ];
+    for (const [lx, lz] of lampPos) {
+      cyl(p, 0.075, 0.095, 0.06, M.stoneDark, lx, DECK_TOP + 0.03, lz, 12);
+      cyl(p, 0.028, 0.028, 0.46, M.steel, lx, DECK_TOP + 0.29, lz, 8);
+      // 灯笼外壳（半透明暖光罩）
+      const shade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.10, 0.115, 0.20, 10, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xfff0d0, roughness: 0.6, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      );
+      shade.position.set(lx, DECK_TOP + 0.60, lz);
+      p.add(shade);
+      // 灯芯（发光球，受 indoor 系数控制）
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe0b0 }));
+      core.position.set(lx, DECK_TOP + 0.60, lz);
+      p.add(core);
+      world.lampMaterials.push(core.material);
+      // 顶盖
+      cyl(p, 0.02, 0.13, 0.05, M.steel, lx, DECK_TOP + 0.725, lz, 10);
+    }
+  }
+
+  // A4. 盆栽棕榈 ×2：有体量感（1.3~1.5m），填泳池长边
+  {
+    const palm = (px, pz, scale) => {
+      const g = new THREE.Group();
+      g.position.set(px, DECK_TOP, pz);
+      g.scale.setScalar(scale);
+      p.add(g);
+      // 陶盆
+      cyl(g, 0.24, 0.30, 0.36, M.terracotta, 0, 0.18, 0, 14);
+      cyl(g, 0.25, 0.25, 0.025, M.soil, 0, 0.365, 0, 14);
+      // 主干（略弯：分 3 段）
+      const trunk = [];
+      for (let i = 0; i < 3; i++) {
+        const seg = cyl(g, 0.055 - i * 0.008, 0.062 - i * 0.008, 0.30, M.darkWood,
+          i * 0.025, 0.50 + i * 0.29, 0, 8);
+        seg.rotation.z = -0.06 * (i + 1);
+        trunk.push(seg);
+      }
+      // 棕榈叶：8 片，向外下垂
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + rnd() * 0.3;
+        const len = 0.52 + rnd() * 0.16;
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), M.plant);
+        leaf.scale.set(0.36 * len, 0.028, 0.075 * len);
+        leaf.position.set(Math.cos(a) * len * 0.42 + 0.06, 1.44 + rnd() * 0.06, Math.sin(a) * len * 0.42);
+        leaf.rotation.y = -a;
+        leaf.rotation.z = -0.34 + rnd() * 0.14;
+        g.add(leaf);
+      }
+      // 顶心
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), M.plantLight);
+      crown.position.set(0.06, 1.42, 0);
+      g.add(crown);
+    };
+    palm(4.15, POOL_Z1 + 0.62, 1.0);
+    palm(8.05, POOL_Z1 + 0.62, 0.88);
+  }
+
+  // A7. 水面漂浮物：浮圈 + 浮板（漂在池面上，和挂在柱子上的救生圈不同）
+  {
+    const floats = [
+      { x: 3.1, z: 11.05, r: 0.0, kind: 'ring' },
+      { x: 6.4, z: 11.9, r: 0.7, kind: 'ring' },
+      { x: 8.4, z: 10.7, r: 0.3, kind: 'board' }
+    ];
+    const WATER_Y = DECK_TOP - 0.09;   // 水面略低于露台完成面
+    for (const f of floats) {
+      if (f.kind === 'ring') {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.075, 10, 24), M.fabricOchre);
+        ring.rotation.x = -Math.PI / 2;
+        ring.rotation.z = f.r;
+        ring.position.set(f.x, WATER_Y, f.z);
+        p.add(ring);
+        // 白色条纹
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.078, 8, 10, Math.PI / 2.6), M.fabricCream);
+        band.rotation.copy(ring.rotation);
+        band.position.copy(ring.position);
+        p.add(band);
+      } else {
+        rbox(p, 0.46, 0.045, 0.30, 0.06, M.fabricBlue, f.x, WATER_Y, f.z, f.r);
+      }
+    }
+  }
+
+  // A8. 沙滩巾晾在栏杆上（北侧栏杆，z≈DECK_Z0 那条）
+  {
+    const towels = [M.fabricOchre, M.fabricBlue, M.fabricCream, M.linenBlue];
+    for (let i = 0; i < 4; i++) {
+      const tx = 5.6 + i * 0.52;
+      const tz = DECK_Z0 + 0.10;
+      const t = rbox(p, 0.42, 0.62, 0.018, 0.006, towels[i], tx, DECK_TOP + 0.86, tz);
+      t.rotation.x = 0.06;        // 略微外翻，像刚搭上去
+      // 栏杆压住的那条横杆
+      if (i === 0) cyl(p, 0.012, 0.012, 2.1, M.steel, tx + 0.78, DECK_TOP + 1.16, tz, 8).rotation.z = Math.PI / 2;
+    }
+  }
 }
 
 
@@ -2774,6 +3849,218 @@ function buildSky(world, M, renderer) {
     world.envTexture = rt.texture;
     pmrem.dispose();
   } catch { /* 没有环境贴图也能看 */ }
+
+  buildSeaProps(world, M);
+}
+
+/**
+ * 海面远景锚点（G 组）。
+ *
+ * 修好海平线之后，海面是空的 —— 一条干净的渐变线反而显假。
+ * 这里放几样东西给视线一个落点：远处礁岛、帆船、灯塔、海鸥。
+ *
+ * 全部放在半径 60~140 的远处、不参与碰撞和导航，只做视觉。
+ * 材质用 MeshBasicMaterial（不受光照/雾影响太强），颜色贴近海平线，
+ * 这样在不同天气下都不会跳色。
+ */
+function buildSeaProps(world, M) {
+  const scene = world.scene;
+  const props = new THREE.Group();
+  props.renderOrder = -90;          // 在天空之后、场景之前
+  scene.add(props);
+  world.seaProps = props;
+
+  // ── 远处礁岛 ×3：低多边形剪影，越远越淡 ──
+  const islands = [
+    { x: -68, z: -86, r: 11, h: 5.2, color: 0x6b8296, alpha: 0.72 },
+    { x: 34, z: -118, r: 8.5, h: 3.6, color: 0x7c93a6, alpha: 0.58 },
+    { x: 108, z: -74, r: 6.5, h: 2.6, color: 0x8ba2b4, alpha: 0.48 }
+  ];
+  for (const is of islands) {
+    // 岛体：扁的半圆丘（用球体压扁）
+    const hill = new THREE.Mesh(
+      new THREE.SphereGeometry(is.r, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: is.color, transparent: true, opacity: is.alpha, fog: false })
+    );
+    hill.scale.set(1, is.h / is.r, 1);
+    hill.position.set(is.x, 0.4, is.z);
+    props.add(hill);
+    // 岛上的几个小凸起（让轮廓不平）
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + 0.7;
+      const bump = new THREE.Mesh(
+        new THREE.SphereGeometry(is.r * 0.28, 8, 6),
+        new THREE.MeshBasicMaterial({ color: is.color, transparent: true, opacity: is.alpha * 0.9, fog: false })
+      );
+      bump.scale.set(1, 0.7, 1);
+      bump.position.set(is.x + Math.cos(a) * is.r * 0.45, is.h * 0.55, is.z + Math.sin(a) * is.r * 0.35);
+      props.add(bump);
+    }
+  }
+
+  // ── 帆船 ×2：三角帆 + 船身，远看只是两个白点 ──
+  const boats = [];
+  for (const [bx, bz, sc, rot] of [[-22, -52, 1.0, 0.3], [16, -74, 0.82, -0.5]]) {
+    const g = new THREE.Group();
+    g.position.set(bx, 0.6, bz);
+    g.scale.setScalar(sc);
+    g.rotation.y = rot;
+    props.add(g);
+    boats.push(g);
+    // 船身（扁长条）
+    const hull = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.28, 1.9, 8, 1, false, 0, Math.PI),
+      new THREE.MeshBasicMaterial({ color: 0xdde5ec, side: THREE.DoubleSide, fog: false })
+    );
+    hull.rotation.z = Math.PI / 2;
+    hull.rotation.y = Math.PI / 2;
+    hull.scale.set(0.42, 1, 1);
+    g.add(hull);
+    // 桅杆
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 2.6, 6),
+      new THREE.MeshBasicMaterial({ color: 0x9aa7b2, fog: false }));
+    mast.position.set(0, 1.35, 0);
+    g.add(mast);
+    // 主帆（三角形，程序化 Shape）
+    const sailShape = new THREE.Shape();
+    sailShape.moveTo(0, 0); sailShape.lineTo(0, 2.35); sailShape.lineTo(1.15, 0.15); sailShape.closePath();
+    const sail = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(sailShape, { depth: 0.02, bevelEnabled: false }),
+      new THREE.MeshBasicMaterial({ color: 0xfbfdff, side: THREE.DoubleSide, fog: false })
+    );
+    sail.position.set(0.05, 0.25, 0);
+    g.add(sail);
+    // 前帆（小三角）
+    const jibShape = new THREE.Shape();
+    jibShape.moveTo(0, 0); jibShape.lineTo(0, 1.7); jibShape.lineTo(-0.78, 0.1); jibShape.closePath();
+    const jib = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(jibShape, { depth: 0.018, bevelEnabled: false }),
+      new THREE.MeshBasicMaterial({ color: 0xf2f6fa, side: THREE.DoubleSide, fog: false })
+    );
+    jib.position.set(-0.02, 0.3, 0);
+    g.add(jib);
+  }
+  world.seaBoats = boats;
+
+  // ── 灯塔（左侧海岬，夜里可闪）──
+  {
+    const g = new THREE.Group();
+    g.position.set(-96, 0.5, -58);
+    props.add(g);
+    // 礁石基座
+    const rock = new THREE.Mesh(new THREE.SphereGeometry(7, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x6f8294, transparent: true, opacity: 0.85, fog: false }));
+    rock.scale.set(1, 0.42, 1);
+    g.add(rock);
+    // 塔身（上细下粗）
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.65, 13, 10),
+      new THREE.MeshBasicMaterial({ color: 0xf0ece4, fog: false }));
+    tower.position.set(0, 6.8, 0);
+    g.add(tower);
+    // 红白环带 ×2
+    for (const [ty, th] of [[4.4, 2.6], [9.4, 2.2]]) {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(1.35 - ty * 0.045, 1.45 - ty * 0.045, th, 10, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xc85a48, fog: false }));
+      band.position.set(0, ty, 0);
+      g.add(band);
+    }
+    // 灯室
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 1.5, 10),
+      new THREE.MeshBasicMaterial({ color: 0xfff2cf, transparent: true, opacity: 0.9, fog: false }));
+    lamp.position.set(0, 14.0, 0);
+    g.add(lamp);
+    // 顶帽
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.1, 10),
+      new THREE.MeshBasicMaterial({ color: 0xc85a48, fog: false }));
+    cap.position.set(0, 15.3, 0);
+    g.add(cap);
+    // 光晕（大一点，夜里更明显）
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffe8b0, transparent: true, opacity: 0.28, fog: false }));
+    glow.position.set(0, 14.0, 0);
+    g.add(glow);
+    world.lighthouseGlow = glow;
+    world.lighthouse = g;
+  }
+
+  // ── 海鸥 ×4：V 形双翼，缓慢绕飞 ──
+  const gulls = [];
+  for (let i = 0; i < 4; i++) {
+    const g = new THREE.Group();
+    const a0 = (i / 4) * Math.PI * 2;
+    const radius = 26 + i * 5;
+    g.position.set(Math.cos(a0) * radius - 10, 12 + i * 2.2, Math.sin(a0) * radius - 34);
+    props.add(g);
+    gulls.push({ g, a0, radius, speed: 0.055 + i * 0.008, y: 12 + i * 2.2, phase: i * 1.3 });
+    // 两侧翼（薄三角）
+    for (const side of [-1, 1]) {
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(0, 0);
+      wingShape.lineTo(side * 1.5, 0.30);
+      wingShape.lineTo(side * 1.35, -0.10);
+      wingShape.closePath();
+      const wing = new THREE.Mesh(
+        new THREE.ExtrudeGeometry(wingShape, { depth: 0.06, bevelEnabled: false }),
+        new THREE.MeshBasicMaterial({ color: 0xf7fafc, side: THREE.DoubleSide, fog: false })
+      );
+      wing.position.set(0, 0, 0);
+      g.add(wing);
+      wing.userData.side = side;
+    }
+    // 身体
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xf2f6fa, fog: false }));
+    body.scale.set(0.55, 0.5, 1.5);
+    g.add(body);
+  }
+  world.gulls = gulls;
+
+  // 每帧更新：帆船漂移 / 海鸥绕飞 / 灯塔夜闪。
+  // 都只动 position/rotation，不重建几何，开销可忽略。
+  let seaT = 0;
+  let gullT = 0;
+  world.updateSeaProps = (dt, hour) => {
+    seaT += dt;
+    gullT += dt;
+
+    // 帆船：极慢地绕一个小圈（模拟随流漂），再叠一点上下起伏
+    if (world.seaBoats) {
+      for (let i = 0; i < world.seaBoats.length; i++) {
+        const b = world.seaBoats[i];
+        const phase = seaT * 0.02 + i * 2.1;
+        b.position.x += Math.cos(phase) * dt * 0.06;
+        b.position.z += Math.sin(phase * 0.8) * dt * 0.045;
+        b.position.y = 0.6 + Math.sin(seaT * 0.9 + i) * 0.05;
+        b.rotation.z = Math.sin(seaT * 0.7 + i * 1.4) * 0.035;   // 轻微摇晃
+      }
+    }
+
+    // 海鸥：绕圈飞 + 翅膀缓慢扇动（scale.y 抖动模拟）
+    if (world.gulls) {
+      for (const item of world.gulls) {
+        const a = item.a0 + gullT * item.speed;
+        item.g.position.set(
+          Math.cos(a) * item.radius - 10,
+          item.y + Math.sin(gullT * 0.5 + item.phase) * 1.2,
+          Math.sin(a) * item.radius - 34
+        );
+        // 朝向切线方向
+        item.g.rotation.y = -a + Math.PI / 2;
+        // 翅膀扇动：每只按自己的相位
+        const flap = Math.sin(gullT * 2.1 + item.phase) * 0.28;
+        for (const child of item.g.children) {
+          if (child.userData?.side) child.rotation.z = flap * child.userData.side;
+        }
+      }
+    }
+
+    // 灯塔：只有夜里亮，慢速脉冲（不是转动的航标光，省得不自然）
+    if (world.lighthouseGlow) {
+      const isNight = hour >= 19 || hour < 6;
+      const pulse = 0.5 + 0.5 * Math.sin(seaT * 1.1);
+      world.lighthouseGlow.material.opacity = isNight ? 0.18 + pulse * 0.42 : 0.10;
+    }
+  };
 }
 
 // 房子整体底座：和菜园地面差不多厚的薄板，房子不再“浮”在水上

@@ -4679,6 +4679,8 @@ function frame(now) {
       poolRippleAcc = 0;
     }
   }
+  // 海面远景：帆船缓慢漂、海鸥绕飞、灯塔夜里闪（G 组）
+  try { world.updateSeaProps?.(dt, dt * 0 + (typeof displayHour === 'number' ? displayHour : 12)); } catch { /* 忽略 */ }
   if (window.__SKYDEBUG) {
     window.__skyDebug = {
       hour: +displayHour.toFixed(3),
