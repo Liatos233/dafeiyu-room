@@ -3340,39 +3340,151 @@ function buildPoolDeck(world, M) {
   // 58.7m² 只有 0.39 图元/m²，是全屋最空的地方。这一批按「池边建筑 → 家具 →
   // 氛围」三层补，全部贴边缘放，中间走道保持净宽 ≥0.9m。
 
-  // A1. 凉棚 / 廊架：露台西端（x 0.3~3.3，横跨泳池北侧空地）
+  // A1. 凉棚 / 廊架（露台西端，罩住泳池西北角那一小片）
+  //
+  // ⚠ 两个必须守住的约束，改坐标前先读：
+  //
+  //  1. **一根柱脚都不许落在 z < 9.0**。北边 z<9.0 是阳台(7.6~9.0)、
+  //     再往北是客厅(0~7.6)。之前北侧柱摆到 z=7.3，直接穿进客厅墙里，
+  //     从阳台看过去就是四根柱子插进屋。
+  //
+  //  2. **不许压住环池步道 z≈9.72**。那是 pk_nw→pk_ne→pk_se 的连续通道，
+  //     而且她要在 pH 上绕池走。所以四根柱子全部缩到露台**西侧**这一小块，
+  //     东西向只占 x 0.35~3.2，南北向只占 z 9.35~10.85，中间留出 x>3.2 的走道。
+  //
+  // 另外：原来的凉棚只有骨架、没有顶面，所以既不挡雨、也没有"棚"的感觉。
+  //    现在补一块微微起拱的布顶（和阳台遮阳篷同一套做法），
+  //    并用斜撑把布顶、横梁、立柱连成受力闭合的框。
   {
-    const PX0 = 0.35, PX1 = 3.45;          // 跨度
-    const PZ = POOL_Z0 - 1.80;             // 将南侧柱脚退离北侧环池步道
-    const PH = 2.42;                        // 立柱高
-    const posts = [PX0, PX1];
-    for (const px of posts) {
-      for (const pz of [PZ - 0.95, PZ + 0.95]) {
-        // 柱脚石墩 + 立柱
-        cyl(p, 0.14, 0.16, 0.09, M.stone, px, DECK_TOP + 0.045, pz, 14);
-        cyl(p, 0.062, 0.058, PH, M.oak, px, DECK_TOP + PH / 2, pz, 10);
+    const PX0 = 0.35, PX1 = 3.20;      // 东西跨度（西侧靠墙，东侧留出通往泳池的走道）
+    const PZ0 = 9.35, PZ1 = 10.85;     // 南北跨度（全部在露台内，不越过 z=9.0）
+    const PH = 2.34;                    // 立柱高
+    const BEAM_Y = DECK_TOP + PH;       // 横梁顶
+    const RIDGE = 0.08;                 // 布顶中间起拱高度（高跨比约 1:36，像真实绷紧的布棚）
+
+    const pergola = buildUnit(p, '泳池凉棚');
+
+    // ── 柱脚石墩 + 四根立柱 ──
+    for (const px of [PX0, PX1]) {
+      for (const pz of [PZ0, PZ1]) {
+        cyl(pergola, 0.145, 0.165, 0.085, M.stone, px, DECK_TOP + 0.042, pz, 14);
+        cyl(pergola, 0.062, 0.058, PH, M.oak, px, DECK_TOP + PH / 2, pz, 10);
+        // 柱脚金属包头，让柱子看起来是"装上去"的而不是插进地板
+        cyl(pergola, 0.072, 0.078, 0.055, M.steel, px, DECK_TOP + 0.11, pz, 12);
       }
     }
-    // 两根横梁（沿 x 和沿 z）
-    for (const pz of [PZ - 0.95, PZ + 0.95]) {
-      rbox(p, PX1 - PX0 + 0.34, 0.10, 0.10, 0.02, M.walnut, (PX0 + PX1) / 2, DECK_TOP + PH + 0.05, pz);
+
+    // ── 四面横梁：闭合方框（原来只有两根，东西向是断的）──
+    for (const pz of [PZ0, PZ1]) {
+      rbox(pergola, PX1 - PX0 + 0.30, 0.105, 0.105, 0.02, M.walnut,
+        (PX0 + PX1) / 2, BEAM_Y + 0.052, pz);
     }
-    for (const px of posts) {
-      rbox(p, 0.10, 0.08, 2.04, 0.018, M.walnut, px, DECK_TOP + PH + 0.13, PZ);
+    for (const px of [PX0, PX1]) {
+      rbox(pergola, 0.105, 0.09, PZ1 - PZ0 + 0.10, 0.018, M.walnut,
+        px, BEAM_Y + 0.045, (PZ0 + PZ1) / 2);
     }
-    // 椽条（沿 x 方向一排）
-    for (let i = 0; i < 9; i++) {
-      const rx = PX0 + 0.18 + i * (PX1 - PX0 - 0.36) / 8;
-      rbox(p, 0.055, 0.06, 2.10, 0.014, M.oakLight, rx, DECK_TOP + PH + 0.19, PZ);
+
+    // ── 斜撑：从柱子上部 45° 顶到横梁，让方框不"浮"在柱顶 ──
+    for (const px of [PX0, PX1]) {
+      for (const pz of [PZ0, PZ1]) {
+        const sx = px === PX0 ? 1 : -1;
+        const sz = pz === PZ0 ? 1 : -1;
+        const brace = cyl(pergola, 0.020, 0.016, 0.34, M.oak,
+          px + sx * 0.10, BEAM_Y - 0.15, pz + sz * 0.10, 8);
+        brace.rotation.z = sx * 0.62;
+        brace.rotation.x = -sz * 0.62;
+      }
     }
-    // 爬藤：沿两根横梁绕几缕
-    for (let i = 0; i < 14; i++) {
-      const vx = PX0 + 0.2 + rnd() * (PX1 - PX0 - 0.4);
-      const vz = PZ + (rnd() < 0.5 ? -0.95 : 0.95);
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.055 + rnd() * 0.03, 8, 6), M.plant);
-      leaf.position.set(vx, DECK_TOP + PH + 0.02 + rnd() * 0.1, vz + (rnd() - 0.5) * 0.12);
-      leaf.scale.set(1.2, 0.7, 1.1);
-      p.add(leaf);
+
+    // ── 椽条：压在两面横梁上，两端**收在布顶内侧** ──
+    //
+    // 椽条 z 跨度必须 ≤ 布顶 z 跨度（CZ0~CZ1，即 PZ±0.0525）。
+    // 原来伸到 PZ±0.11，比布顶长 11cm，斜看就是一排木头断面戳出布边。
+    const RAFTERS = 9;
+    const RAFTER_Z0 = PZ0 - 0.045, RAFTER_Z1 = PZ1 + 0.045;
+    for (let i = 0; i < RAFTERS; i++) {
+      const rx = PX0 + 0.16 + i * (PX1 - PX0 - 0.32) / (RAFTERS - 1);
+      rbox(pergola, 0.052, 0.058, RAFTER_Z1 - RAFTER_Z0, 0.012, M.oakLight,
+        rx, BEAM_Y + 0.145, (RAFTER_Z0 + RAFTER_Z1) / 2);
+    }
+
+    // ── 布顶：一块**平**的绷紧布，四边压在横梁外沿上 ──
+    //
+    // 走过三次弯路，记下来别再犯：
+    //  1. 第一版没有顶面 → 不挡雨（用户报的问题）。
+    //  2. 第二版做弧形 + 直的中脊压条 → 压条是直线、布是曲线，
+    //     两端悬空 8cm，斜看像一根木棍浮在布上面。
+    //  3. 第三版外扩 0.16m → 布比横梁宽一圈，斜看像床单搭在架子上。
+    //
+    // 低多边形风格里，**平**才是对的：真实的凉棚遮阳布也是绷平的。
+    // 四边坐标严格对齐横梁外沿，不多出、不少出。
+    {
+      const RAFTER_TOP = BEAM_Y + 0.145 + 0.029;   // 椽条顶面
+      const CLOTH_Y = RAFTER_TOP + 0.008;          // 布坐在椽条上，8mm 布厚
+
+      // 横梁外沿：x 方向 ±0.15（横梁比柱距宽 0.30），z 方向 ±0.0525（横梁厚 0.105）
+      const CX0 = PX0 - 0.15, CX1 = PX1 + 0.15;
+      const CZ0 = PZ0 - 0.0525, CZ1 = PZ1 + 0.0525;
+
+      const cloth = new THREE.Mesh(
+        new THREE.PlaneGeometry(CX1 - CX0, CZ1 - CZ0, 1, 1),
+        new THREE.MeshStandardMaterial({
+          color: 0xe8d6b8, roughness: 0.95, side: THREE.DoubleSide
+        })
+      );
+      cloth.rotation.x = -Math.PI / 2;
+      cloth.position.set((CX0 + CX1) / 2, CLOTH_Y, (CZ0 + CZ1) / 2);
+      cloth.castShadow = true;
+      cloth.receiveShadow = true;
+      pergola.add(cloth);
+
+      // 压边条：四条，贴着布的边缘，把布「钉」在横梁上。
+      // 高度跟着布走（同一条水平线），所以压得实、不会浮。
+      const EDGE_Y = CLOTH_Y + 0.012;
+      for (const pz of [CZ0, CZ1]) {
+        rbox(pergola, CX1 - CX0 + 0.02, 0.018, 0.038, 0.008, M.walnut,
+          (CX0 + CX1) / 2, EDGE_Y, pz);
+      }
+      for (const px of [CX0, CX1]) {
+        rbox(pergola, 0.038, 0.018, CZ1 - CZ0 + 0.02, 0.008, M.walnut,
+          px, EDGE_Y, (CZ0 + CZ1) / 2);
+      }
+    }
+
+    // ── 爬藤：只绕着横梁走，不悬空 ──
+    for (let i = 0; i < 16; i++) {
+      const onLong = rnd() < 0.5;
+      let vx, vz;
+      if (onLong) {
+        vx = PX0 + 0.18 + rnd() * (PX1 - PX0 - 0.36);
+        vz = PZ0 + (rnd() < 0.5 ? 0.05 : PZ1 - PZ0 - 0.05);
+      } else {
+        vx = PX0 + (rnd() < 0.5 ? 0.05 : PX1 - PX0 - 0.05);
+        vz = PZ0 + 0.15 + rnd() * (PZ1 - PZ0 - 0.30);
+      }
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.048 + rnd() * 0.026, 8, 6), M.plant);
+      leaf.position.set(vx, BEAM_Y + 0.06 + rnd() * 0.08, vz);
+      leaf.scale.set(1.25, 0.65, 1.1);
+      pergola.add(leaf);
+    }
+
+    // ── 棚下挂一串小灯（夜里随室内灯一起亮）──
+    {
+      const LZ = PZ1 - 0.12;
+      const wire = cyl(pergola, 0.004, 0.004, PX1 - PX0, M.dark,
+        (PX0 + PX1) / 2, BEAM_Y - 0.02, LZ, 5);
+      wire.rotation.z = Math.PI / 2;
+      for (let i = 0; i < 5; i++) {
+        const bx = PX0 + 0.35 + i * (PX1 - PX0 - 0.70) / 4;
+        cyl(pergola, 0.003, 0.003, 0.13, M.dark, bx, BEAM_Y - 0.09, LZ, 4);
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.026, 8, 6),
+          new THREE.MeshStandardMaterial({ color: 0xffe6bd, emissive: 0x000000, roughness: 0.6 })
+        );
+        bulb.position.set(bx, BEAM_Y - 0.175, LZ);
+        pergola.add(bulb);
+        world.lampMaterials.push(bulb.material);
+      }
     }
   }
 
