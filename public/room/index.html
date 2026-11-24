@@ -59,6 +59,7 @@
   .tc-weather{border:0;background:transparent;font-size:14px;line-height:1;cursor:pointer;padding:2px;
     color:#eaf4ff;border-radius:8px}
   .tc-weather:hover{background:rgba(143,193,255,.16)}
+  .tc-weather.open{background:linear-gradient(135deg,#b7d8ff,#8fc1ff);box-shadow:0 0 0 1px rgba(255,255,255,.35)}
   .tc-bar{position:relative;width:132px;height:10px;border-radius:99px;cursor:pointer;
     background:linear-gradient(90deg,#141b2c 0%,#243a5e 18%,#f0a06a 26%,#9fd0ff 36%,#cfe9ff 50%,#ffd08a 64%,#ff8a5c 76%,#2a2f4a 88%,#141b2c 100%)}
   .tc-fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:rgba(255,255,255,.14);width:50%}
@@ -692,9 +693,8 @@
         <button class="act" data-act="water">去喝水</button>
         <button class="act" data-act="wash">洗脸刷牙</button>
         <button class="act" data-act="shower">洗澡</button>
-        <button class="act" data-act="toilet">去卫生间</button>
+        <button class="act" data-act="toilet">上卫生间</button>
         <button class="act" id="sleep" data-act="sleep">哄她睡</button>
-        <button class="act" id="lamp" data-act="lamp">关灯</button>
       </div>
     </div>
     <div class="act-group">
@@ -711,6 +711,7 @@
       <span class="act-title">屋子</span>
       <div class="actions">
         <button class="act" data-act="garden">进入菜园</button>
+        <button class="act" id="lamp" data-act="lamp">关灯</button>
       </div>
     </div>
     <div class="affection"><span>和小屋的亲近</span><span><b id="affection">—</b> · <span id="affStage">刚搬进来</span></span></div>

@@ -2829,7 +2829,7 @@ document.querySelectorAll('[data-act]').forEach((btn) => {
     // 洗脸刷牙和洗澡力度不同（−0.45 保底 0.10 / −0.90），脏透了要点后者。
     if (a === 'wash') { act('command', { room: 'bathroom', spot: 'sink', label: '洗脸刷牙' }); return; }
     if (a === 'shower') { act('command', { room: 'bathroom', spot: 'shower', label: '洗澡' }); return; }
-    if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet', label: '卫生间' }); return; }
+    if (a === 'toilet') { act('command', { room: 'bathroom', spot: 'toilet', label: '上卫生间' }); return; }
     if (a === 'garden') { gardenController?.toggle?.(); return; }
     if (a === 'roomchat') { setRoomChatOpen(!chatOpen); return; }
     act(a);
@@ -4048,8 +4048,15 @@ if (params.get('skymenu') === '1') setTimeout(openSkyMenu, 1500);
 $('skyTimeChip')?.addEventListener('click', () => {
   skyRealTime = !skyRealTime;
   localStorage.setItem('home-sky-time', skyRealTime ? '1' : '0');
+  if (skyRealTime) {
+    // 清掉手动时间：主循环里 customHour 的优先级高于 skyRealTime，
+    // 不清的话天空和时间条都会卡在手动值上。
+    customHour = null;
+    displayHour = null;   // 下一帧直接从系统时间起算
+  }
   applySkyPref();
   refreshSky();
+  updateTimeUI();        // 立刻把时间条/文字刷回真实时间
   toast(skyRealTime ? '光照跟随电脑时间（天气不变）' : '光照固定在你拖的时间');
 });
 

@@ -82,7 +82,7 @@ export function createGardenClient({world,renderer,camera,api,onOpen,onClose}) {
   function setOpen(value) {
     opened=!!value;ui.setOpen(opened);border.visible=opened;
     const chip=document.getElementById('gardenChip');
-    if(chip){const label=opened?'返回小屋':'进入菜园';chip.textContent=(opened?'🏡 ':'🌱 ')+label;chip.setAttribute('aria-label',label);chip.setAttribute('aria-pressed',String(opened));chip.title=opened?'返回小蓝鱼的小屋':'进入屋后菜园';}
+    if(chip){const label=opened?'返回小屋':'进入菜园';chip.textContent=(opened?'🏡 ':'🌱 ')+label;chip.setAttribute('aria-label',label);chip.setAttribute('aria-pressed',String(opened));chip.title=opened?'返回小蓝鱼的小屋':'进入屋后菜园';chip.classList.toggle('active',opened);}
     if(opened){onOpen();connection(view?'':'正在读取菜园…');refresh(true);}else{connection('');onClose();}
   }
   function handlePointer(e) {
