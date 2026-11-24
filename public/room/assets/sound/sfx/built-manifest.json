@@ -1,0 +1,112 @@
+[
+  {
+    "file": "assets/sound/sfx/step-1.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.15,
+    "rmsDb": -20.8,
+    "targetRmsDb": -20,
+    "peakDb": -1.4,
+    "bytes": 6239
+  },
+  {
+    "file": "assets/sound/sfx/step-2.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.17,
+    "rmsDb": -20.2,
+    "targetRmsDb": -20,
+    "peakDb": -1.5,
+    "bytes": 6639
+  },
+  {
+    "file": "assets/sound/sfx/step-3.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.32,
+    "rmsDb": -20.1,
+    "targetRmsDb": -20,
+    "peakDb": -1.6,
+    "bytes": 7528
+  },
+  {
+    "file": "assets/sound/sfx/step-4.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.33,
+    "rmsDb": -20.1,
+    "targetRmsDb": -20,
+    "peakDb": -1.4,
+    "bytes": 7706
+  },
+  {
+    "file": "assets/sound/sfx/step-5.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.31,
+    "rmsDb": -20.2,
+    "targetRmsDb": -20,
+    "peakDb": -1.6,
+    "bytes": 7682
+  },
+  {
+    "file": "assets/sound/sfx/step-6.ogg",
+    "kind": "step",
+    "label": "走路单步",
+    "seconds": 0.25,
+    "rmsDb": -20.2,
+    "targetRmsDb": -20,
+    "peakDb": -4.2,
+    "bytes": 6705
+  },
+  {
+    "file": "assets/sound/sfx/swim-1.ogg",
+    "kind": "swim",
+    "label": "划水",
+    "seconds": 0.36,
+    "rmsDb": -22,
+    "targetRmsDb": -21.5,
+    "peakDb": 0,
+    "bytes": 6925
+  },
+  {
+    "file": "assets/sound/sfx/swim-2.ogg",
+    "kind": "swim",
+    "label": "划水",
+    "seconds": 0.32,
+    "rmsDb": -22.4,
+    "targetRmsDb": -21.5,
+    "peakDb": 0,
+    "bytes": 8150
+  },
+  {
+    "file": "assets/sound/sfx/swim-3.ogg",
+    "kind": "swim",
+    "label": "划水",
+    "seconds": 0.45,
+    "rmsDb": -21.1,
+    "targetRmsDb": -21.5,
+    "peakDb": 0,
+    "bytes": 10059
+  },
+  {
+    "file": "assets/sound/sfx/swim-4.ogg",
+    "kind": "swim",
+    "label": "划水",
+    "seconds": 0.45,
+    "rmsDb": -21.2,
+    "targetRmsDb": -21.5,
+    "peakDb": 0,
+    "bytes": 10534
+  },
+  {
+    "file": "assets/sound/sfx/splash-enter.ogg",
+    "kind": "splash",
+    "label": "入水",
+    "seconds": 0.9,
+    "rmsDb": -21.7,
+    "targetRmsDb": -21.5,
+    "peakDb": 0,
+    "bytes": 15065
+  }
+]

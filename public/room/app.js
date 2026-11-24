@@ -1284,6 +1284,15 @@ let motionWalking = false;   // 真正在移动（按画面位移判断，不依
 let lastMotionWalking = false;
 let walkPrevPos = null;
 let stillMs = 0;
+// ── 脚步声：按走过的弧长打拍子，不是按时间 ──────────────────────
+// 用固定时间间隔会让步频和画面里的移动速度脱节（慢走时像小跑、快跑时像拖步）。
+// 改成「每走过 STEP_STRIDE 米响一步」，速度一变步频自己就跟上了，
+// 停下时因为不再累计弧长，自然就停了 —— 不需要额外的启停判断。
+let stepDist = 0;          // 上次响过之后累计走过的距离（米）
+let stepWasSwimming = false;
+let stepPrevPos = null;    // 独立的上一帧位置，不受 lastDisplayPos 被别处改写的影响
+const STEP_STRIDE_WALK = 0.75;   // 走路每步 0.75m（1.05 m/s → 约 1.4 步/秒）
+const STEP_STRIDE_RUN = 0.55;    // 跑步步子更密
 let sleepPhase = 'none';
 let lastOnceKey = '';
 let lastOnceAt = 0;
@@ -1362,7 +1371,9 @@ bindAmbienceUi();
 
 const clickSfx = new Audio('assets/sound/click-duck.wav');
 clickSfx.preload = 'auto';
-clickSfx.volume = 0.38;
+// 基准音量。实际播放时再乘全局音量（见 playClick）——
+// 原来直接用固定 0.38，导致总音量拉到 0 时点击还在响。
+const CLICK_BASE_VOL = 0.38;
 
 function unlockAudio() {
   if (!soundOn) return;
@@ -1376,9 +1387,13 @@ function unlockAudio() {
 
 function playClick() {
   if (!soundOn) return;
+  // 跟着环境音的总音量走：音量拉到 0 时点击要跟着静音，
+  // 这是原来的缺陷（固定 0.38 让点击永远能听见，跟音效开关对不上）。
+  const vol = CLICK_BASE_VOL * (ambience.enabled ? ambience.volume : 0);
+  if (vol <= 0) return;
   try {
     const a = new Audio(clickSfx.src);
-    a.volume = clickSfx.volume;
+    a.volume = Math.min(1, vol);
     a.play().catch(() => {});
   } catch { /* 忽略 */ }
 }
@@ -4295,6 +4310,82 @@ function updateCompass() {
   compassEl.style.transform = `rotate(${deg.toFixed(1)}deg)`;
 }
 
+/**
+ * 动作音效：脚步与入水出水。
+ *
+ * 步频按**走过的弧长**打拍子而不是按时间：固定时间间隔会让步频和画面里的
+ * 移动速度脱节（慢走像小跑、快跑像拖步）。按弧长的话速度一变步频自己跟上，
+ * 停下时不再累计、自然就停，不需要额外的启停判断。
+ *
+ * 判「跑」用 her.speed（服务端 route 的真实速度：走 1.05 / urgent 跑 1.45），
+ * 不用某个 clip 名 —— 片段会被情绪、装扮、背面跑等一堆分支改掉，
+ * 速度是唯一稳定的量。
+ */
+function updateFootsteps({ displayPos, swimmingNow, dragging }) {
+  if (!displayPos) { stepPrevPos = null; return; }
+  if (dragging) { stepPrevPos = displayPos.slice(); return; }   // 被鼠标拎着走不算脚步
+
+  const prev = stepPrevPos;
+  stepPrevPos = displayPos.slice();
+  if (!prev) return;
+
+  const moved = Math.hypot(displayPos[0] - prev[0], displayPos[1] - prev[1]);
+
+  // 瞬移（切房间、快照跳变、拖动释放）不要连成一片脚步
+  if (moved > 1.2) { stepDist = 0; return; }
+
+  const speed = Number(state?.her?.speed) || 0;
+  const running = speed > 1.25;   // 快于普通走路速度（1.05），低于跑步（1.45）
+  const stride = running ? STEP_STRIDE_RUN : STEP_STRIDE_WALK;
+
+  // ── 游泳：没有脚步，而是划水；入水/出水各响一次 ──────────────
+  if (swimmingNow) {
+    if (!stepWasSwimming) {
+      stepWasSwimming = true;
+      stepDist = 0;
+      ambience.sfx.play('splashEnter');
+    }
+    stepDist += moved;
+    if (stepDist >= 0.85) {        // 划水比脚步稀
+      stepDist = 0;
+      ambience.sfx.play('swim');
+    }
+    return;
+  }
+  if (stepWasSwimming) {
+    stepWasSwimming = false;
+    stepDist = 0;
+    ambience.sfx.play('splashExit');
+  }
+
+  // ── 陆地：按弧长踩步 ─────────────────────────────────────────
+  stepDist += moved;
+  if (stepDist >= stride) {
+    stepDist = 0;
+    // 跑步时声音更靠下、更响一点；gain 变化幅度小，避免一步一个音量
+    ambience.sfx.playStep({ running });
+  }
+}
+
+/**
+ * 动作音效的声像：她在画面里偏左/偏右时，声音轻微跟过去。
+ *
+ * 为什么从「屏幕位置」算而不是从世界坐标算：听感是跟着**画面**走的 ——
+ * 镜头一转，同一个人在世界里没动，但在画面上换到左边了，声音就该跟着偏左。
+ * 用世界坐标算会得到反过来的结果。
+ *
+ * 上限 0.25 在 sfx.js 里（panMax）：轻到有方位感、又不至于因为镜头移动
+ * 让声音大幅甩来甩去。
+ */
+function updateSfxPan(displayPos) {
+  if (!displayPos) return;
+  try {
+    const p = new THREE.Vector3(displayPos[0], (state?.her?.elev || 0) + 0.85, displayPos[1]).project(camera);
+    // p.x 是 NDC，-1…1；除以它自己的范围就得到 -1…1 的归一化横向位置
+    ambience.setSfxPan(Math.max(-1, Math.min(1, p.x)));
+  } catch { /* 相机还没准备好，这一帧不定位 */ }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.06, (now - prevT) / 1000);
@@ -4473,6 +4564,9 @@ function frame(now) {
       walkWasMoving = moving;
     }
     lastDisplayPos = displayPos;
+    // ── 动作音效：脚步（按弧长）、入水/出水 ────────────────────
+    updateFootsteps({ displayPos, swimmingNow, dragging });
+    updateSfxPan(displayPos);
     const backNow = isBackView();
     // 镜头/方向变化时把立绘切到对应姿态（正面/侧面/背面）
     const viewZone = her.walking ? (isSideRun(her) ? 'side' : 'front') : (backNow ? 'back' : 'front');

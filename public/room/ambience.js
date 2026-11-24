@@ -7,6 +7,8 @@
 //   ambience.setScene({ weather: 'rain', room: 'living' })
 //   ambience.setSpeaking(true)          // 她说话时自动压低
 
+import { sfx } from './sfx.js';
+
 const AC = window.AudioContext || window.webkitAudioContext;
 
 const OUTDOOR_ROOMS = new Set(['pool', 'garden', 'balcony', 'yard', 'corridor']);
@@ -265,6 +267,7 @@ const state = {
   bedBus: null,
   shotBus: null,
   roomBus: null,
+  sfxBus: null,
   enabled: false,
   volume: 0.45,
   speaking: false,
@@ -506,9 +509,16 @@ export const ambience = {
     state.bedBus = gainNode(state.ctx, 1);
     state.shotBus = gainNode(state.ctx, 0.9);
     state.roomBus = gainNode(state.ctx, 1);
+    // 动作音效（脚步/水声，见 sfx.js）：**绕开 roomFilter** 直连 master。
+    // roomFilter 是给风雨声「进屋」用的（室内低通到 1200Hz），
+    // 脚步要是也过它，会被闷成敲纸盒 —— 而脚步声恰恰是最需要清楚的中频。
+    // 接 master 意味着它照样受总音量、静音、说话压低管，不会出现
+    // 「环境音静音了、脚步还在响」。
+    state.sfxBus = gainNode(state.ctx, 1);
     state.bedBus.connect(state.roomFilter);
     state.shotBus.connect(state.roomFilter);
     state.roomBus.connect(state.roomFilter);
+    state.sfxBus.connect(state.master);
     state.roomFilter.connect(state.master);
     state.analyser = state.ctx.createAnalyser();
     state.analyser.fftSize = 1024;
@@ -518,6 +528,8 @@ export const ambience = {
     applyLevels();
     scheduleShots();
     loadSamples();
+    // 把上下文和总线交给动作音效模块；素材预载在 attach 里发生
+    sfx.attach(state.ctx, state.sfxBus);
     return true;
   },
   setEnabled(v) {
@@ -526,6 +538,8 @@ export const ambience = {
       this.init();
       if (state.ctx?.state === 'suspended') state.ctx.resume().catch(() => {});
     }
+    // 静音时连音符都别再排（master 归零也能挡住声音，但没必要白算节点）
+    sfx.setEnabled(state.enabled);
     applyLevels();
   },
   toggle() {
@@ -558,6 +572,10 @@ export const ambience = {
     state.speaking = !!v;
     applyLevels();
   },
+  /** 动作音效：直接透出，免得 app.js 到处 import 两个模块。 */
+  sfx,
+  /** 她在画面里的横向位置 -1…1，动作音效轻微跟过去。 */
+  setSfxPan(v) { sfx.setPan(v); },
   // 调试用
   debug() {
     const an = state.ctx ? state.master : null;
@@ -571,6 +589,7 @@ export const ambience = {
       beds: state.beds.length,
       roomLayer: !!state.roomLayer,
       hasAnalyser: !!an,
+      sfx: sfx.debug(),
       rms: (() => {
         const a = state.analyser;
         if (!a) return 0;

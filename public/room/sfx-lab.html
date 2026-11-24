@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>音效试听台 · 大肥鱼的房间</title>
+<style>
+  :root {
+    --paper: #f7f3ea; --ink: #2b2620; --muted: #8a8175;
+    --line: #d9d2c4; --accent: #4a7c59; --card: #fffdf8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#1c1a17; --ink:#eae4d8; --muted:#8a8175; --line:#3a352d; --accent:#7fb08f; --card:#252220; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 60px;
+    background: var(--paper); color: var(--ink);
+    font: 15px/1.6 -apple-system, "Segoe UI", "Noto Sans SC", sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
+  }
+  .panel h2 { font-size: 14px; margin: 0 0 14px; font-weight: 600; letter-spacing: .02em; }
+  .row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  label { font-size: 13px; color: var(--muted); min-width: 76px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .val { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 54px; text-align: right; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  button.sfx {
+    appearance: none; border: 1px solid var(--line); background: var(--paper);
+    color: var(--ink); border-radius: 9px; padding: 11px 12px; cursor: pointer;
+    font: inherit; font-size: 13px; text-align: left; transition: .12s;
+  }
+  button.sfx:hover:not(:disabled) { border-color: var(--accent); }
+  button.sfx:active:not(:disabled) { transform: translateY(1px); }
+  button.sfx:disabled { opacity: .38; cursor: not-allowed; }
+  button.sfx .name { font-weight: 600; display: block; }
+  button.sfx .meta { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 20px;
+    background: var(--line); color: var(--muted); margin-left: 5px; vertical-align: 1px;
+  }
+  .badge.file { background: #dbe9df; color: #2f5c3f; }
+  .badge.synth { background: #e9e2d4; color: #6b5a36; }
+  .log {
+    font: 12px/1.55 ui-monospace, Consolas, monospace; color: var(--muted);
+    max-height: 170px; overflow: auto; white-space: pre-wrap; margin: 0;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .state { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
+  .ok { color: var(--accent); }
+  .bad { color: #b4523f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>音效试听台</h1>
+  <div class="sub">
+    逐个触发 <code>sfx.js</code> 里的事件，判断音色、响度、变体是否合适。
+    这是验收工具，不影响房间本身；正式进房前的默认参数也都在这里调。
+  </div>
+
+  <div class="panel">
+    <h2>总控</h2>
+    <div class="row">
+      <label>总音量</label>
+      <input type="range" id="vol" min="0" max="100" value="60" />
+      <span class="val" id="volVal">60%</span>
+    </div>
+    <div class="row">
+      <label>声像位置</label>
+      <input type="range" id="pan" min="-100" max="100" value="0" />
+      <span class="val" id="panVal">居中</span>
+    </div>
+    <div class="row">
+      <label>声像上限</label>
+      <input type="range" id="panMax" min="0" max="100" value="25" />
+      <span class="val" id="panMaxVal">0.25</span>
+    </div>
+    <div class="hint">
+      声像上限默认 0.25（轻微）。想听清楚左右差别，先把「声像位置」推到底，
+      再拿上限滑块来回比。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>单个触发</h2>
+    <div class="grid" id="grid"></div>
+    <div class="hint">
+      <span class="badge file">采样</span> 用 <code>assets/sound/sfx/</code> 里的录音；
+      <span class="badge synth">合成</span> 用代码现算（没有素材，或素材缺失时兜底）。
+      灰色不可点的条目还没接素材 —— 那是预留的事件名，等素材到位就自动可用。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>连续走 / 跑</h2>
+    <div class="row">
+      <button class="sfx" id="btnWalk" style="flex:1">▶ 连走 3 秒（1.05 m/s 步频）</button>
+      <button class="sfx" id="btnRun" style="flex:1">▶ 连跑 3 秒（1.45 m/s 步频）</button>
+      <button class="sfx" id="btnStop" style="flex:0 0 90px">停</button>
+    </div>
+    <div class="hint">
+      按真实步幅模拟：走每 0.75m 一步、跑每 0.55m 一步，换算成定时器触发。
+      这样能在几秒内听出「步频是否踩得舒服」，比单点一下有用得多。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>状态 / 日志</h2>
+    <div class="state" id="state">初始化中…</div>
+    <pre class="log" id="log"></pre>
+  </div>
+</div>
+
+<script type="module">
+import { sfx } from './sfx.js';
+
+const $ = (id) => document.getElementById(id);
+const logEl = $('log');
+function log(msg) {
+  const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  logEl.textContent = `[${t}] ${msg}\n${logEl.textContent}`.slice(0, 4000);
+}
+
+// ── 自建一条最小音频链，模拟 ambience 的总线结构 ──────────────
+// 试听页不加载整个 ambience（它要天气、房间、素材一大堆），
+// 但**接线方式必须和正式的一样**：sfxBus → master → destination。
+// 否则这里听着正常、进游戏就变形。
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx = null, master = null, bus = null;
+
+function initAudio() {
+  if (ctx) return true;
+  if (!AC) { log('这个浏览器没有 Web Audio'); return false; }
+  ctx = new AC();
+  master = ctx.createGain();
+  master.gain.value = 0.6;
+  bus = ctx.createGain();
+  bus.gain.value = 1;
+  bus.connect(master);
+  master.connect(ctx.destination);
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  sfx.attach(ctx, bus);
+  sfx.setEnabled(true);
+  // 给自动化测试留的抓点：测试脚本据此在真实链路上并接 analyser，
+  // 测「到底有没有出声」。生产页面没有这个，也不该有。
+  window.__sfxGraph = { ctx, bus, master };
+  window.__sfxInstance = sfx;
+  refreshState();
+  return true;
+}
+
+// 浏览器要求用户手势后才能出声
+document.addEventListener('pointerdown', initAudio, { once: true });
+document.addEventListener('keydown', initAudio, { once: true });
+
+// ── 控件 ──────────────────────────────────────────────────────
+$('vol').addEventListener('input', (e) => {
+  initAudio();
+  const v = +e.target.value / 100;
+  if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+  $('volVal').textContent = `${e.target.value}%`;
+});
+$('pan').addEventListener('input', (e) => {
+  initAudio();
+  const v = +e.target.value / 100;
+  sfx.setPan(v);
+  const label = Math.abs(v) < 0.05 ? '居中' : (v < 0 ? `左 ${Math.round(-v * 100)}%` : `右 ${Math.round(v * 100)}%`);
+  $('panVal').textContent = label;
+});
+$('panMax').addEventListener('input', (e) => {
+  initAudio();
+  const v = +e.target.value / 100;
+  sfx.setPanMax(v);
+  $('panMaxVal').textContent = v.toFixed(2);
+});
+
+// ── 事件按钮 ──────────────────────────────────────────────────
+const LABEL = {
+  step: '走一步', run: '跑一步', swim: '划水', splashEnter: '入水', splashExit: '出水',
+  doorOpen: '开门', doorClose: '关门', sitDown: '坐下', standUp: '起身',
+  uiClick: '点击', uiPop: '弹出',
+};
+
+for (const name of sfx.events) {
+  const info = sfx.describe(name);
+  const b = document.createElement('button');
+  b.className = 'sfx';
+  b.dataset.event = name;
+  const usable = info.hasFile || !!info.synth;
+  b.disabled = !usable;
+  const variants = info.file ? info.file.length : 0;
+  const kindBadge = info.hasFile
+    ? `<span class="badge file">采样${variants > 1 ? ` ×${variants}` : ''}</span>`
+    : (info.synth ? '<span class="badge synth">合成</span>' : '<span class="badge">预留</span>');
+  // meta 压短、用 · 分隔，避免在窄卡片里断成「…冷却」/「260ms」两行
+  const bits = [info.gain != null ? `增益 ${info.gain}` : null, info.cooldown ? `${info.cooldown}ms` : null].filter(Boolean);
+  b.innerHTML = `<span class="name">${LABEL[name] || name}${kindBadge}</span>`
+    + `<span class="meta">${name}${bits.length ? ` · ${bits.join(' · ')}` : ''}</span>`;
+  b.addEventListener('click', () => {
+    initAudio();
+    const ok = sfx.play(name);
+    b.style.borderColor = ok ? 'var(--accent)' : '#b4523f';
+    setTimeout(() => { b.style.borderColor = ''; }, 260);
+    log(`${name} → ${ok ? '响' : '没响（冷却中 / 素材未就绪）'}`);
+    refreshState();
+  });
+  $('grid').appendChild(b);
+}
+
+// ── 连续走/跑 ─────────────────────────────────────────────────
+let loopTimer = 0;
+function startLoop(running) {
+  stopLoop();
+  initAudio();
+  // 按真实步幅换算间隔：走 0.75m/speed、跑 0.55m/speed
+  const speed = running ? 1.45 : 1.05;
+  const stride = running ? 0.55 : 0.75;
+  const intervalMs = (stride / speed) * 1000;
+  log(`连${running ? '跑' : '走'}：每步 ${stride}m / ${speed}m·s⁻¹ = ${intervalMs.toFixed(0)}ms 一步`);
+  const tick = () => {
+    const ok = sfx.playStep({ running });
+    if (!ok) log(`${running ? 'run' : 'step'} 没响（冷却或素材未就绪）`);
+  };
+  tick();
+  loopTimer = setInterval(tick, intervalMs);
+  setTimeout(stopLoop, 3000);
+}
+function stopLoop() { if (loopTimer) { clearInterval(loopTimer); loopTimer = 0; log('停'); } }
+$('btnWalk').addEventListener('click', () => startLoop(false));
+$('btnRun').addEventListener('click', () => startLoop(true));
+$('btnStop').addEventListener('click', stopLoop);
+
+// ── 状态 ──────────────────────────────────────────────────────
+function refreshState() {
+  const d = sfx.debug();
+  const parts = [
+    `就绪 <span class="${d.ready ? 'ok' : 'bad'}">${d.ready ? '是' : '否'}</span>`,
+    `已解码 ${d.loaded}`,
+    `声像 ${d.pan.toFixed(2)}（上限 ${d.panMax}）`,
+    `ctx ${d.ctxState}`,
+  ];
+  if (d.failed.length) parts.push(`<span class="bad">解码失败 ${d.failed.join(', ')}</span>`);
+  $('state').innerHTML = parts.join(' · ');
+}
+setInterval(refreshState, 800);
+refreshState();
+log('点任意位置开始（浏览器要求用户手势后才能播放音频）');
+</script>
+</body>
+</html>
