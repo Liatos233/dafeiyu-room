@@ -567,6 +567,8 @@ export function emptyHomeState(now = Date.now()) {
     command: null,
     lastPhoneAt: 0,
     lastDefaultSpot: '',
+    // 连续在卫生间/家政间做空闲动作的次数（>=2 时下一次强制换场）
+    freestyleInBanned: 0,
     visits: 0,
     lastVisitAt: 0,
     counts: { pet: 0, poke: 0, feed: 0, water: 0, play: 0, talk: 0, help: 0, wake: 0 },
@@ -729,6 +731,7 @@ export function normalizeHomeState(raw, now = Date.now()) {
   out.bedsideWater = out.bedsideWater !== false;
   out.lastPhoneAt = Math.max(0, Number(out.lastPhoneAt) || 0);
   out.lastDefaultSpot = sanitizeText(out.lastDefaultSpot, 32);
+  out.freestyleInBanned = Math.max(0, Number(raw.freestyleInBanned) || 0);
   out.visits = Math.max(0, Number(out.visits) || 0);
   out.lastVisitAt = Math.max(0, Number(out.lastVisitAt) || 0);
   out.counts = { ...base.counts };
@@ -1753,7 +1756,28 @@ const FREESTYLE_SPOTS = {
   living: { room: 'living', spot: 'rug' },
   balcony: { room: 'balcony', spot: 'chair' },
   pool: { room: 'pool', spot: 'lounger' },
+  // 菜园：以前缺这个 key，CATALOG 里标 garden 的动作在 filter 时被丢掉，
+  // 于是「户外玩耍（排球/风筝/雪仗）」永远不会跑位，只会在原地演。
+  garden: { room: 'garden', spot: 'gate' },
 };
+
+// 「anywhere」不覆盖的场所：卫生间、家政间。闲剧元素不该在这里发生。
+const FREESTYLE_BANNED_ROOMS = new Set(['bathroom', 'laundry']);
+
+/** 某个 spot key 属于哪个房间（没有该 spot 时返回 undefined）。 */
+function roomOfFreestyleSpot(spotKey) {
+  return FREESTYLE_SPOTS[spotKey]?.room;
+}
+
+/**
+ * 这个动作能不能在「当前所在房间」就地做？
+ * spots 含 'anywhere' → 除禁止场所外任意；否则要求 spots 里某个 spot 属于当前房间。
+ */
+function freestyleFitsHere(item, room) {
+  const spots = item.spots || [];
+  if (spots.includes('anywhere')) return !FREESTYLE_BANNED_ROOMS.has(room);
+  return spots.some((s) => roomOfFreestyleSpot(s) === room);
+}
 
 function pickFreestyle(state, now, env = {}) {
   const hour = localHour(now);
@@ -1783,8 +1807,25 @@ function pickFreestyle(state, now, env = {}) {
   }
   if (!scored.length) return null;
 
-  scored.sort((a, b) => b[0] - a[0]);
-  const top = scored.slice(0, 8);
+  // ── 分池：能在当前场所就地做的 vs 需要走过去的 ──────────────────────
+  // 旧逻辑是「50% 概率走位，否则原地做」，于是抽中「吃午餐」时另 50% 就在卫生间吃了。
+  // 现在改成：优先抽「当前场所兼容」的动作（就地做，不跑动）；
+  // 只有小概率抽到不兼容的动作、并强制走过去。位置永远对得上。
+  const here = scored.filter(([, item]) => freestyleFitsHere(item, state.room));
+  const away = scored.filter(([, item]) => !freestyleFitsHere(item, state.room)
+    && (item.spots || []).some((s) => s !== 'anywhere' && FREESTYLE_SPOTS[s]));
+
+  // 连续两次困在卫生间/家政间 → 强制换场，免得整天困在洗手台前
+  const stuckAtBanned = FREESTYLE_BANNED_ROOMS.has(state.room)
+    && (Number(state.freestyleInBanned) || 0) >= 2;
+
+  const useHere = !stuckAtBanned && here.length > 0
+    && (!away.length || Math.random() < FREESTYLE_DEFAULTS.hereChance);
+  const pool = useHere || !away.length ? (here.length ? here : scored) : away;
+
+  pool.sort((a, b) => b[0] - a[0]);
+  // 就地池取 8 个候选；换场池限制更小（可选项本来就少），但也别一次算太多
+  const top = pool.slice(0, useHere ? 8 : 6);
   const sum = top.reduce((a, [w]) => a + w, 0);
   let r = Math.random() * sum;
   let picked = top[top.length - 1][1];
@@ -1793,9 +1834,11 @@ function pickFreestyle(state, now, env = {}) {
     if (r <= 0) { picked = item; break; }
   }
 
-  // 是否走到匹配点位
+  // 是否走到匹配点位：就地池里抽到的动作本来就适配当前房间 → 不走；
+  // 换场池抽到的必须走过去，否则又会「在卫生间吃饭」。
   const spots = (picked.spots || []).filter((x) => x !== 'anywhere' && FREESTYLE_SPOTS[x]);
-  const travel = spots.length > 0 && Math.random() < FREESTYLE_DEFAULTS.travelChance;
+  const fitsNow = freestyleFitsHere(picked, state.room);
+  const travel = !fitsNow && spots.length > 0;
   const place = travel ? FREESTYLE_SPOTS[spots[Math.floor(Math.random() * spots.length)]] : null;
 
   // 已经在那个点位就当作就地做
@@ -1940,6 +1983,10 @@ function decideTarget(state, now, env) {
         const recent = Array.isArray(state.recentFreestyle) ? state.recentFreestyle.slice() : [];
         recent.unshift(act.clip);
         state.recentFreestyle = recent.slice(0, FREESTYLE_DEFAULTS.recentWindow);
+        // 连续在卫生间/家政间做空闲动作的计数器：达到 2 次会在下一次强制换场
+        state.freestyleInBanned = FREESTYLE_BANNED_ROOMS.has(act.room)
+          ? (Number(state.freestyleInBanned) || 0) + 1
+          : 0;
         state.freestylePick = act.reason;
         emit(state, 'freestyle', `自己找了点事：${act.clip}`, now, {
           room: act.room, spot: act.spot, activity: act.actText, clip: act.clip, kind: 'freestyle', pose: act.pose

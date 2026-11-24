@@ -78,6 +78,8 @@
     "harden-acl": "node scripts/harden-state-acl.mjs",
     "test:garden:logic": "node scripts/run-garden-tests.mjs --logic-only",
     "test:project": "node scripts/test-project.mjs",
+    "test:clip-spots": "node scripts/test-clip-spots.mjs",
+    "test:freestyle-fit": "node scripts/test-freestyle-fit.mjs",
     "test:all": "node scripts/test-all.mjs",
     "perf:check": "node scripts/perf-check.mjs"
   },

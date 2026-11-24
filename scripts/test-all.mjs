@@ -6,6 +6,8 @@ const suites = [
   ['房间状态', 'test:room'],
   ['大平层状态', 'test:home'],
   ['菜园', 'test:garden'],
+  ['动画场所标签', 'test:clip-spots'],
+  ['空闲抽卡适配', 'test:freestyle-fit'],
   ['项目自检', 'test:project']
 ];
 
