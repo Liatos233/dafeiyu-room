@@ -2464,9 +2464,24 @@ export function applyHomeAction(state, input = {}) {
       && Math.hypot(here[0] - waterSpot.pos[0], here[1] - waterSpot.pos[1]) > 0.3;
     if (far && !s.asleep) {
       // 先去饮水机旁，到了再喝（client 会播举杯动画）
+      //
+      // 这里必须走和 command 一样的那套清理，不能只写 command + kind：
+      //   · 她原本可能坐在沙发上（pose='sit'，elev=0.49）——
+      //     只把 kind 改成 'walk' 而不动 pose/elev，客户端会同时看到
+      //     「在走路」和「在家具上」，于是 onFurniture 成立 → 每帧 snap，
+      //     画面就是「坐在沙发上鬼畜抖动」。
+      //   · 旧 route / freeTarget / dismounting 也要清，否则两套目标源打架。
       s.command = { room: 'living', spot: 'water', until: now + 30_000, by: '访客' };
       s.dwell = null;
+      s.freeTarget = null;
+      s.dismounting = null;
+      s.pose = 'stand';
+      s.elev = 0;
+      s.walking = false;     // 真正的出发由 advance → beginRoute 来置位
       s.kind = 'walk';
+      s.activity = '去饮水机接杯水';
+      s.nextDecisionAt = 0;
+      s.reactionUntil = 0;
       emit(s, 'water', '你让她去接杯水', now);
       event = { type: 'water', text: '你让她去接杯水' };
     } else {

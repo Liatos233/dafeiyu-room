@@ -622,6 +622,40 @@ test('上座过渡明显长于客户端轮询间隔，否则会「停下→闪�
     'homeView().her.elev 在上座期间必须是插值后的值，不能一直是 0');
 });
 
+test('在家具上点「去喝水」不许残留 pose/elev（否则客户端每帧 snap 鬼畜）', () => {
+  // 真 bug：water 分支只写了 s.command + s.kind = 'walk'，
+  // 没动 pose / elev / walking / freeTarget / route / dismounting。
+  // 她坐在沙发上（pose='sit', elev=0.49）时点喝水，客户端会同时看到
+  // 「在走路」（kind=walk）和「在家具上」（pose=sit 且 elev>0.05），
+  // 于是 onFurniture 成立 → snap=true → **每帧把位置硬拷到目标点**，
+  // 画面就是「坐在沙发上鬼畜抖动」。
+  const s0 = atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.492, nextDecisionAt: T0 });
+  let s = applyHomeAction(s0, { action: 'water', at: T0 }).state;
+
+  // 立刻检查：不许还带着 sit / 座面高度
+  assert.notEqual(s.pose, 'sit', '点喝水后 pose 不该还留在 sit');
+  assert.ok(!(Number(s.elev) > 0.05), `点喝水后 elev 不该还是座面高度（实际 ${s.elev}）`);
+  assert.equal(s.freeTarget, null, '点喝水应清掉 freeTarget');
+  assert.equal(s.dismounting, null, '点喝水应清掉半截的下座状态');
+
+  // 逐帧确认高度单调下降到地面，不出现「卡在座面又在走路」
+  let t = T0;
+  let prevElev = Number(s.elev) || 0;
+  let stuckOnSeat = 0;
+  for (let i = 0; i < 40; i += 1) {
+    t += 100;
+    s = advanceHomeState(s, t, {}).state;
+    const elev = Number(s.elev) || 0;
+    // 「还在家具上 + 说自己在走」同时成立就是那个鬼畜场景
+    if (elev > 0.05 && s.kind === 'walk' && !s.dismounting) stuckOnSeat += 1;
+    assert.ok(elev <= prevElev + 1e-9 || s.dismounting || s.mounting,
+      `高度不该在下去的过程中回升：${prevElev} → ${elev}`);
+    prevElev = elev;
+  }
+  assert.equal(stuckOnSeat, 0,
+    `有 ${stuckOnSeat} 帧同时「在家具上」和「在走路」，客户端会每帧 snap`);
+});
+
 test('下座过渡期间 spot 不许提前改成目标点（否则家具上会闪一下）', () => {
   // 真 bug：beginRoute 里无条件 state.spot = target.spot。
   // 从坐具起身（dismounting）时人还在座点上，这一改会让所有「按 spot 推高度」
