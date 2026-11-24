@@ -674,7 +674,9 @@ export class SpriteActor {
       new THREE.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, opacity: 0.9 })
     );
     this.floorShadow.rotation.x = -Math.PI / 2;
-    this.floorShadow.position.y = 0.008;
+    // Floors in tiled rooms sit at y=0.008; keep the transparent decal a few
+    // millimeters above them to prevent depth-buffer flicker (z-fighting).
+    this.floorShadow.position.y = 0.012;
     this.floorShadow.scale.set(0.62, 0.38, 1);
     scene.add(this.floorShadow);
     this.surfaceShadow = this.floorShadow.clone();
@@ -931,7 +933,7 @@ export class SpriteActor {
     for (const l of this.layers) l.tick(dt);
 
     // 阴影
-    this.floorShadow.position.set(this._pos.x, 0.008, this._pos.y);
+    this.floorShadow.position.set(this._pos.x, 0.012, this._pos.y);
     this.floorShadow.scale.setScalar(walking ? 0.6 + Math.sin(this._time * 7.2) * 0.03 : 0.62);
     const sitting = this._elev > 0.1;
     this.surfaceShadow.visible = this.visible && sitting;

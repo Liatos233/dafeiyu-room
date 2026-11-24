@@ -62,17 +62,26 @@ export function createDevEditor({ world, camera, canvas, view }) {
   // ── 聚类：整组选择 ────────────────────────────────────────
   const clusters = new Map();       // mesh -> cluster 数组
   const flatIgnore = new Set();     // 地板/墙/天花板这类大平面：不参与聚类，也不给点选
+  let objectUnits = [];
+  let objectLabels = null;
+  let objectIdsOn = new URLSearchParams(location.search).get('objectIds') === '1';
   function buildClusters() {
     const items = [];
+    const named = new Map();
     let nextEid = 0;
     world.root.updateMatrixWorld(true);
     world.root.traverse((o) => {
       if (!o.isMesh || o.isInstancedMesh) return;
       if (ignore.has(o) || o.userData?.ignorePick) return;
-      if (explicitUnit(o)) return;   // 命名单元单独处理
       const mat = o.material;
       if (mat?.transparent && (mat.opacity ?? 1) < 0.5) return;
       if (!Number.isFinite(o.userData.eid)) o.userData.eid = nextEid++;
+      const unit = explicitUnit(o);
+      if (unit) {
+        if (!named.has(unit)) named.set(unit, []);
+        named.get(unit).push(o);
+        return;                       // 命名单元优先作为完整家具/物件
+      }
       const box = new THREE.Box3().setFromObject(o);
       if (!isFinite(box.min.x)) return;
       const sx = box.max.x - box.min.x;
@@ -80,6 +89,10 @@ export function createDevEditor({ world, camera, canvas, view }) {
       const sy = box.max.y - box.min.y;
       // 大平面（地板/墙/地毯/天花板）单独处理，避免把整间房并成一坨
       if (sx * sz > 2.2 || sy < 0.006) { flatIgnore.add(o); return; }
+      // 薄台面、柜门面和挂画是家具的表面零件，不作为独立编号目标。
+      // 命名单元（如冰箱、遮阳篷）在上方单独成组，不受此过滤。
+      const dims = [sx, sy, sz].sort((a, b) => a - b);
+      if (dims[0] < 0.06 && dims[1] * dims[2] > 0.25) { flatIgnore.add(o); return; }
       items.push({ o, box });
     });
 
@@ -96,11 +109,90 @@ export function createDevEditor({ world, camera, canvas, view }) {
       if (!groups.has(r)) groups.set(r, []);
       groups.get(r).push(it.o);
     });
+    const autoUnits = [];
     for (const members of groups.values()) {
       const arr = members.filter((m) => !ignore.has(m));
-      if (arr.length < 3) continue;
+      if (!arr.length) continue;
+      autoUnits.push({ members: arr, name: null });
       for (const m of arr) clusters.set(m, arr);
     }
+    const namedUnits = [...named].map(([group, members]) => ({
+      members, name: group.userData.unitName, group
+    }));
+    objectUnits = [...namedUnits, ...autoUnits].sort((a, b) => {
+      const eid = (u) => Math.min(...u.members.map((m) => Number.isFinite(m.userData.eid) ? m.userData.eid : Infinity));
+      return eid(a) - eid(b);
+    });
+    objectUnits.forEach((unit, i) => {
+      unit.id = `F${String(i + 1).padStart(3, '0')}`;
+      for (const mesh of unit.members) mesh.userData.objectId = unit.id;
+      if (unit.group) unit.group.userData.objectId = unit.id;
+    });
+    if (objectIdsOn) refreshObjectIds();
+  }
+
+  function makeObjectIdSprite(id) {
+    const canvas2 = document.createElement('canvas');
+    canvas2.width = 128; canvas2.height = 56;
+    const ctx = canvas2.getContext('2d');
+    ctx.fillStyle = 'rgba(12,20,28,.9)'; ctx.fillRect(0, 0, 128, 56);
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, 124, 52);
+    ctx.fillStyle = '#fff1b8'; ctx.font = 'bold 34px ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(id, 64, 29);
+    const texture = new THREE.CanvasTexture(canvas2);
+    texture.minFilter = THREE.LinearFilter;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture, transparent: true, depthTest: true, depthWrite: false
+    }));
+    sprite.renderOrder = 999;
+    sprite.userData.objectIdLabel = true;
+    return sprite;
+  }
+
+  function refreshObjectIds() {
+    if (!objectIdsOn) return;
+    if (!objectLabels) {
+      objectLabels = new THREE.Group();
+      objectLabels.name = 'dev-object-id-labels';
+      world.scene.add(objectLabels);
+    }
+    objectLabels.traverse((o) => {
+      if (!o.isSprite) return;
+      o.material?.map?.dispose?.();
+      o.material?.dispose?.();
+    });
+    objectLabels.clear();
+    world.root.updateMatrixWorld(true);
+    for (const unit of objectUnits) {
+      const bounds = new THREE.Box3();
+      for (const mesh of unit.members) bounds.expandByObject(mesh);
+      if (!Number.isFinite(bounds.max.y)) continue;
+      const marker = makeObjectIdSprite(unit.id);
+      marker.position.set(...bounds.getCenter(new THREE.Vector3()).toArray());
+      marker.position.y = bounds.max.y + 0.10;
+      const distance = camera.position.distanceTo(marker.position);
+      const size = THREE.MathUtils.clamp(distance * 0.010, 0.038, 0.145);
+      marker.scale.set(size, size * 0.43, 1);
+      marker.userData.objectName = unit.name || nearestHotspotName(marker.position) ||
+        (unit.members.length === 1 ? labelOf(unit.members[0]) : `组合×${unit.members.length}`);
+      objectLabels.add(marker);
+    }
+    objectLabels.visible = true;
+  }
+
+  function setObjectIds(on) {
+    objectIdsOn = !!on;
+    if (objectIdsOn) {
+      if (!objectUnits.length) {
+        pruneLegacyPatches();
+        buildClusters();
+        applySavedPatches();
+      }
+      refreshObjectIds();
+    } else if (objectLabels) {
+      objectLabels.visible = false;
+    }
+    return objectIdsOn;
   }
 
   function pick(ev) {
@@ -255,7 +347,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       const overlap = r[0] < dx1 && r[2] > dx0 && r[1] < dz1 && r[3] > dz0;
       if (overlap) kKeepouts.push({ i, rect: r.slice() });
     });
-    selected = { pivot, members, label: name, base, idx: -1, key, named, nearHotspots, kKeepouts };
+    selected = { pivot, members, label: name, objectId: mesh.userData.objectId || named?.userData.objectId || '', base, idx: -1, key, named, nearHotspots, kKeepouts };
     helper = new THREE.BoxHelper(pivot, 0xffcc55);
     helper.material.depthTest = false;
     helper.renderOrder = 999;
@@ -360,6 +452,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       }
       if (trace.length < 8) trace.push({ dt: +dt.toFixed(3), dx: +dx.toFixed(3), dy: +dy.toFixed(3), dz: +dz.toFixed(3), keys: [...keys], frames });
       helper?.update();
+      refreshObjectIds();
       setInfo();
     }
   }
@@ -443,7 +536,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     }
     const p = selected.pivot.position;
     const ry = Math.round(THREE.MathUtils.radToDeg(selected.pivot.rotation.y));
-    info.textContent = `${selected.label}  (${selected.members.length} 件)\npos  ${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}\nrotY ${ry}°`;
+    info.textContent = `${selected.objectId ? `${selected.objectId} · ` : ''}${selected.label}  (${selected.members.length} 件)\npos  ${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}\nrotY ${ry}°`;
   }
 
   // ── 事件 ────────────────────────────────────────────────
@@ -483,6 +576,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       const step = ev.shiftKey ? Math.PI / 36 : ROT_STEP;
       selected.pivot.rotation.y += ev.code === 'KeyQ' ? step : -step;
       helper?.update();
+      refreshObjectIds();
       setInfo();
       record();
     }
@@ -580,6 +674,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
     delete patches[selected.key || unitKey(selected.members)];
     savePatches(patches);
     helper?.update();
+    refreshObjectIds();
     setInfo();
   });
   ui.querySelector('#deClear')?.addEventListener('click', () => {
@@ -607,6 +702,7 @@ export function createDevEditor({ world, camera, canvas, view }) {
       if (!grid) grid = buildGrid();
       grid.visible = true;
       if (!clusters.size) { pruneLegacyPatches(); buildClusters(); applySavedPatches(); }
+      if (objectIdsOn) refreshObjectIds();
       setInfo();
       rafId = requestAnimationFrame(tick);
     } else {
@@ -617,15 +713,19 @@ export function createDevEditor({ world, camera, canvas, view }) {
     }
   }
 
-  window.addEventListener('keydown', (ev) => {
-    if (ev.code === 'KeyE' && (ev.ctrlKey || ev.metaKey)) {
-      ev.preventDefault();
-      setEnabled(!enabled);
-    }
-  });
+  if (new URLSearchParams(location.search).get('edit') === '1') {
+    window.addEventListener('keydown', (ev) => {
+      if (ev.code === 'KeyE' && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        setEnabled(!enabled);
+      }
+    });
+  }
 
   const api = {
     setEnabled,
+    setObjectIds,
+    get objectIdsEnabled() { return objectIdsOn; },
     get enabled() { return enabled; },
     busy: () => false,
     selectObject: (o) => { if (enabled && o) beginSelection(o); },
@@ -639,5 +739,6 @@ export function createDevEditor({ world, camera, canvas, view }) {
     clusters
   };
   window.__devEditor = api;
+  if (objectIdsOn) setObjectIds(true);
   return api;
 }

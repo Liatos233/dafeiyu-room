@@ -1301,7 +1301,8 @@ function buildShell(world, M, textures) {
   skirt(10.82, 5.62, 13.18, 5.645);
 
   // 门外的小平台（视觉锚点）
-  const threshold = box(p, 0.9, 0.02, 0.18, M.stoneDark, 0.08, 0.01, 6.25);
+  // Threshold follows the door opening: narrow in x, full opening width along z.
+  const threshold = box(p, 0.18, 0.02, 0.9, M.stoneDark, 0.08, 0.01, 6.25);
   threshold.receiveShadow = true;
 }
 
@@ -1411,6 +1412,11 @@ function addHotspot(world, x, z, radius, data) {
 
 function buildKitchen(world, M) {
   const p = world.root;
+  // Back-wall worktop run is translated as a unit so counters, sink and stove
+  // sit 1cm clear of the interior wall face (z=0.08) without shifting the room.
+  const backRun = new THREE.Group();
+  backRun.position.z = -0.20;
+  p.add(backRun);
   // Joinery stays inside the original worktop footprint. The reveals, inset
   // doors and recessed plinth give the cabinet mass a readable construction.
   const panel = (parent, width, height, x, y, z) => {
@@ -1424,42 +1430,42 @@ function buildKitchen(world, M) {
     return mesh;
   };
   const counterTop = M.stone;
-  box(p, 3.6, 0.56, 0.58, M.cream, 2.1, 0.43, 0.58);
-  box(p, 3.6, 0.16, 0.025, M.cream, 2.1, 0.79, 0.3025);
-  for (const x of [0.3125, 3.8875]) box(p, 0.025, 0.16, 0.58, M.cream, x, 0.79, 0.58);
-  box(p, 3.46, 0.13, 0.47, M.darkWood, 2.1, 0.085, 0.53);
+  box(backRun, 3.6, 0.56, 0.58, M.cream, 2.1, 0.43, 0.58);
+  box(backRun, 3.6, 0.16, 0.025, M.cream, 2.1, 0.79, 0.3025);
+  for (const x of [0.3125, 3.8875]) box(backRun, 0.025, 0.16, 0.58, M.cream, x, 0.79, 0.58);
+  box(backRun, 3.46, 0.13, 0.47, M.darkWood, 2.1, 0.085, 0.53);
   // Four stone pieces form a real sink opening instead of covering the bowl.
-  rbox(p, 0.59, 0.045, 0.62, 0.009, counterTop, 0.585, 0.9, 0.58);
-  rbox(p, 2.39, 0.045, 0.62, 0.009, counterTop, 2.715, 0.9, 0.58);
-  box(p, 0.64, 0.045, 0.09, counterTop, 1.2, 0.9, 0.315);
-  box(p, 0.64, 0.045, 0.11, counterTop, 1.2, 0.9, 0.835);
-  box(p, 3.6, 0.09, 0.025, counterTop, 2.1, 0.96, 0.286);
+  rbox(backRun, 0.59, 0.045, 0.62, 0.009, counterTop, 0.585, 0.9, 0.58);
+  rbox(backRun, 2.39, 0.045, 0.62, 0.009, counterTop, 2.715, 0.9, 0.58);
+  box(backRun, 0.64, 0.045, 0.09, counterTop, 1.2, 0.9, 0.315);
+  box(backRun, 0.64, 0.045, 0.11, counterTop, 1.2, 0.9, 0.835);
+  box(backRun, 3.6, 0.09, 0.025, counterTop, 2.1, 0.96, 0.286);
   // A fine shadow gap separates the counter and doors; every front is aligned.
-  box(p, 3.55, 0.022, 0.018, M.darkWood, 2.1, 0.855, 0.878);
-  for (let i = 0; i < 4; i++) panel(p, 0.872, 0.65, 0.765 + i * 0.89, 0.5, 0.885);
+  box(backRun, 3.55, 0.022, 0.018, M.darkWood, 2.1, 0.855, 0.878);
+  for (let i = 0; i < 4; i++) panel(backRun, 0.872, 0.65, 0.765 + i * 0.89, 0.5, 0.885);
 
   // Recessed stainless basin, separate rolled rim, drain and gooseneck faucet.
-  rbox(p, 0.61, 0.018, 0.4, 0.008, M.steel, 1.2, 0.785, 0.57);
-  box(p, 0.018, 0.125, 0.4, M.steel, 0.9, 0.848, 0.57);
-  box(p, 0.018, 0.125, 0.4, M.steel, 1.5, 0.848, 0.57);
-  box(p, 0.6, 0.125, 0.018, M.steel, 1.2, 0.848, 0.375);
-  box(p, 0.6, 0.125, 0.018, M.steel, 1.2, 0.848, 0.765);
-  for (const x of [0.886, 1.514]) box(p, 0.032, 0.013, 0.436, M.steel, x, 0.929, 0.57);
-  for (const z of [0.36, 0.78]) box(p, 0.6, 0.013, 0.032, M.steel, 1.2, 0.929, z);
-  cyl(p, 0.032, 0.032, 0.004, M.dark, 1.2, 0.797, 0.57, 20);
-  ring(0.029, 0.004, M.steel, 1.2, 0.802, 0.57);
-  cyl(p, 0.039, 0.039, 0.018, M.brass, 1.2, 0.934, 0.31, 20);
+  rbox(backRun, 0.61, 0.018, 0.4, 0.008, M.steel, 1.2, 0.785, 0.57);
+  box(backRun, 0.018, 0.125, 0.4, M.steel, 0.9, 0.848, 0.57);
+  box(backRun, 0.018, 0.125, 0.4, M.steel, 1.5, 0.848, 0.57);
+  box(backRun, 0.6, 0.125, 0.018, M.steel, 1.2, 0.848, 0.375);
+  box(backRun, 0.6, 0.125, 0.018, M.steel, 1.2, 0.848, 0.765);
+  for (const x of [0.886, 1.514]) box(backRun, 0.032, 0.013, 0.436, M.steel, x, 0.929, 0.57);
+  for (const z of [0.36, 0.78]) box(backRun, 0.6, 0.013, 0.032, M.steel, 1.2, 0.929, z);
+  cyl(backRun, 0.032, 0.032, 0.004, M.dark, 1.2, 0.797, 0.57, 20);
+  ring(0.029, 0.004, M.steel, 1.2, 0.802, 0.57, backRun);
+  cyl(backRun, 0.039, 0.039, 0.018, M.brass, 1.2, 0.934, 0.31, 20);
   const tapCurve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(1.2, 0.94, 0.31), new THREE.Vector3(1.2, 1.17, 0.31),
     new THREE.Vector3(1.2, 1.24, 0.4), new THREE.Vector3(1.2, 1.2, 0.52),
     new THREE.Vector3(1.2, 1.12, 0.53)
   ]);
-  addMesh(p, new THREE.TubeGeometry(tapCurve, 16, 0.017, 8, false), M.brass, 0, 0, 0);
-  rbox(p, 0.075, 0.018, 0.024, 0.006, M.brass, 1.26, 1.0, 0.31);
+  addMesh(backRun, new THREE.TubeGeometry(tapCurve, 16, 0.017, 8, false), M.brass, 0, 0, 0);
+  rbox(backRun, 0.075, 0.018, 0.024, 0.006, M.brass, 1.26, 1.0, 0.31);
 
   // Flush induction top with a narrow brushed trim and readable cooking zones.
   // 灶面 + 四个灶圈 + 控制条是一个整体单元（移动时一起走）
-  const stoveUnit = buildUnit(p, '灶台');
+  const stoveUnit = buildUnit(backRun, '灶台');
   rbox(stoveUnit, 0.74, 0.018, 0.51, 0.008, M.steel, 2.9, 0.93, 0.58);
   box(stoveUnit, 0.71, 0.012, 0.48, M.black, 2.9, 0.944, 0.58);
   for (let ix = 0; ix < 2; ix++) for (let iz = 0; iz < 2; iz++) {
@@ -1467,77 +1473,89 @@ function buildKitchen(world, M) {
   }
   for (let i = 0; i < 3; i++) box(stoveUnit, 0.032, 0.002, 0.009, M.steel, 2.82 + i * 0.075, 0.953, 0.77);
   // Hood now has its own opening between the upper cabinets, not through them.
-  rbox(p, 0.82, 0.12, 0.48, 0.02, M.steel, 2.8, 1.739, 0.4);
-  rbox(p, 0.27, 0.86, 0.25, 0.012, M.steel, 2.8, 2.209, 0.4);
-  box(p, 0.73, 0.012, 0.35, M.dark, 2.8, 1.673, 0.42);
-  box(p, 0.53, 0.008, 0.22, M.steel, 2.8, 1.665, 0.4);
-  for (const x of [2.49, 3.11]) cyl(p, 0.028, 0.028, 0.008, M.bulbWarm, x, 1.646, 0.56);
+  const hoodCanopy = new THREE.Group();
+  hoodCanopy.position.z = -0.08;
+  p.add(hoodCanopy);
+  rbox(hoodCanopy, 0.82, 0.12, 0.48, 0.02, M.steel, 2.8, 1.739, 0.4);
+  box(hoodCanopy, 0.73, 0.012, 0.35, M.dark, 2.8, 1.673, 0.42);
+  box(hoodCanopy, 0.53, 0.008, 0.22, M.steel, 2.8, 1.665, 0.4);
+  for (const x of [2.49, 3.11]) cyl(hoodCanopy, 0.028, 0.028, 0.008, M.bulbWarm, x, 1.646, 0.56);
+  const hoodFlue = new THREE.Group();
+  hoodFlue.position.z = -0.195;
+  p.add(hoodFlue);
+  rbox(hoodFlue, 0.27, 0.86, 0.25, 0.012, M.steel, 2.8, 2.209, 0.4);
   // 吊柜缩短到窗左侧，别把北墙的窗整个挡住
   box(p, 0.62, 0.72, 0.34, M.cream, 0.39, 1.94, 0.25);
   panel(p, 0.674, 0.674, 0.39, 1.94, 0.44);
-  box(p, 0.52, 0.72, 0.34, M.cream, 3.64, 1.94, 0.42);
-  panel(p, 0.494, 0.674, 3.64, 1.94, 0.6);
+  const eastUpper = new THREE.Group();
+  eastUpper.position.z = -0.17;
+  p.add(eastUpper);
+  box(eastUpper, 0.52, 0.72, 0.34, M.cream, 3.64, 1.94, 0.42);
+  panel(eastUpper, 0.494, 0.674, 3.64, 1.94, 0.6);
   box(p, 0.66, 0.025, 0.36, M.oak, 0.40, 1.57, 0.25);
-  box(p, 0.5, 0.025, 0.36, M.oak, 3.64, 1.57, 0.42);
+  box(eastUpper, 0.5, 0.025, 0.36, M.oak, 3.64, 1.57, 0.42);
 
   // West return: the same fronts turned toward the aisle.
-  box(p, 0.6, 0.72, 1.4, M.cream, 0.58, 0.51, 1.55);
-  box(p, 0.48, 0.13, 1.34, M.darkWood, 0.53, 0.085, 1.55);
-  rbox(p, 0.64, 0.045, 1.44, 0.009, counterTop, 0.58, 0.9, 1.55);
+  const westRun = new THREE.Group();
+  westRun.position.x = -0.18;
+  p.add(westRun);
+  box(westRun, 0.6, 0.72, 1.58, M.cream, 0.58, 0.51, 1.46);
+  box(westRun, 0.48, 0.13, 1.55, M.darkWood, 0.53, 0.085, 1.445);
+  rbox(westRun, 0.64, 0.045, 1.60, 0.009, counterTop, 0.58, 0.9, 1.47);
   for (let i = 0; i < 2; i++) {
     const front = new THREE.Group();
-    front.position.set(0.885, 0, 1.2 + i * 0.7);
+    front.position.set(0.885, 0, 1.05 + i * 0.7);
     front.rotation.y = Math.PI / 2;
-    p.add(front);
+    westRun.add(front);
     panel(front, 0.674, 0.65, 0, 0.5, 0);
   }
-  // Compact espresso machine: inset brewing bay and a separate drip tray.
-  rbox(p, 0.28, 0.36, 0.26, 0.025, M.steel, 0.56, 1.1, 1.3);
-  rbox(p, 0.215, 0.22, 0.013, 0.012, M.black, 0.56, 1.075, 1.437);
-  box(p, 0.235, 0.018, 0.13, M.steel, 0.56, 0.94, 1.43);
-  box(p, 0.16, 0.055, 0.06, M.dark, 0.56, 1.16, 1.465);
-  cyl(p, 0.018, 0.018, 0.02, M.brass, 0.63, 1.24, 1.44).rotation.x = Math.PI / 2;
-  cyl(p, 0.036, 0.032, 0.073, M.ceramic, 0.56, 0.985, 1.45, 20);
-  ring(0.034, 0.004, M.ceramic, 0.56, 1.023, 1.45);
+  // Espresso machine sits flat on the west-return counter. Keep the cup and
+  // tray within its footprint so the three pieces read as one appliance.
+  const coffee = buildUnit(westRun, '咖啡机');
+  rbox(coffee, 0.28, 0.36, 0.26, 0.025, M.steel, 0.56, 1.103, 1.27);
+  rbox(coffee, 0.215, 0.22, 0.013, 0.012, M.black, 0.56, 1.075, 1.407);
+  box(coffee, 0.235, 0.018, 0.13, M.steel, 0.56, 0.94, 1.40);
+  box(coffee, 0.16, 0.055, 0.06, M.dark, 0.56, 1.16, 1.435);
+  cyl(coffee, 0.018, 0.018, 0.02, M.brass, 0.63, 1.24, 1.41).rotation.x = Math.PI / 2;
+  cyl(coffee, 0.036, 0.032, 0.073, M.ceramic, 0.56, 0.985, 1.40, 20);
+  ring(0.034, 0.004, M.ceramic, 0.56, 1.023, 1.40, coffee);
   // Open shelf with two discrete brass brackets.
   const cupShelf = buildUnit(p, '水杯架');
-  rbox(cupShelf, 0.18, 0.035, 1.3, 0.008, M.oak, 0.5, 1.52, 1.55);
+  rbox(cupShelf, 0.18, 0.035, 1.3, 0.008, M.oak, 0.18, 1.52, 1.55);
   for (const z of [1.05, 2.05]) {
-    box(cupShelf, 0.16, 0.018, 0.025, M.brass, 0.47, 1.49, z);
-    box(cupShelf, 0.018, 0.13, 0.025, M.brass, 0.395, 1.43, z);
+    box(cupShelf, 0.16, 0.018, 0.025, M.brass, 0.15, 1.49, z);
+    box(cupShelf, 0.018, 0.13, 0.025, M.brass, 0.035, 1.43, z);
   }
   for (let i = 0; i < 5; i++) {
     const mugMat = i % 2 ? M.ceramic : M.fabricBlue;
-    cyl(cupShelf, 0.045, 0.038, 0.09, mugMat, 0.5, 1.585, 1.05 + i * 0.24, 16);
-    cyl(cupShelf, 0.035, 0.035, 0.002, M.dark, 0.5, 1.632, 1.05 + i * 0.24, 16);
+    cyl(cupShelf, 0.045, 0.038, 0.09, mugMat, 0.18, 1.585, 1.05 + i * 0.24, 16);
+    cyl(cupShelf, 0.035, 0.035, 0.002, M.dark, 0.18, 1.632, 1.05 + i * 0.24, 16);
   }
   // Refrigerator has a recessed gasket, separate door leaves and two handles.
-  rbox(p, 0.72, 1.9, 0.7, 0.035, M.cream, 0.66, 0.95, 2.7);
-  box(p, 0.02, 1.78, 0.66, M.dark, 1.023, 0.96, 2.7);
-  rbox(p, 0.035, 0.88, 0.642, 0.012, M.steel, 1.045, 1.42, 2.7);
-  rbox(p, 0.035, 0.83, 0.642, 0.012, M.steel, 1.045, 0.53, 2.7);
-  for (const y of [1.32, 0.63]) {
-    rbox(p, 0.035, 0.32, 0.028, 0.008, M.brass, 1.09, y, 2.45);
-    for (const dy of [-0.12, 0.12]) box(p, 0.036, 0.018, 0.024, M.brass, 1.072, y + dy, 2.45);
+  const fridge = new THREE.Group();
+  fridge.position.x = -0.22;
+  p.add(fridge);
+  rbox(fridge, 0.72, 1.9, 0.7, 0.035, M.cream, 0.66, 0.95, 2.7);
+  // No full-width dark overlay: it caused door-face z-fighting and black patches.
+  // Side-by-side door leaves, center gasket and paired vertical handles.
+  box(fridge, 0.014, 1.78, 0.326, M.stone, 1.026, 0.96, 2.527);
+  box(fridge, 0.014, 1.78, 0.326, M.stone, 1.026, 0.96, 2.873);
+  box(fridge, 0.020, 1.78, 0.018, M.dark, 1.037, 0.96, 2.70);
+  for (const z of [2.57, 2.83]) {
+    rbox(fridge, 0.040, 0.62, 0.035, 0.012, M.steel, 1.055, 0.98, z);
+    for (const y of [0.72, 1.24]) box(fridge, 0.038, 0.018, 0.018, M.brass, 1.078, y, z);
   }
-  box(p, 0.024, 0.045, 0.51, M.dark, 1.028, 0.04, 2.7);
+  box(fridge, 0.024, 0.045, 0.51, M.dark, 1.028, 0.04, 2.7);
   const notes = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.24), new THREE.MeshBasicMaterial({ map: world.textures.note, transparent: true }));
   notes.rotation.y = Math.PI / 2;
   notes.position.set(1.064, 1.42, 2.8);
-  p.add(notes);
+  fridge.add(notes);
   for (let i = 0; i < 3; i++) {
-    const dot = cyl(p, 0.02, 0.02, 0.008, [M.terracotta, M.blue, M.fabricOchre][i], 1.067, 1.62 + (i % 2) * 0.09, 2.83 - i * 0.15);
+    const dot = cyl(fridge, 0.02, 0.02, 0.008, [M.terracotta, M.blue, M.fabricOchre][i], 1.067, 1.62 + (i % 2) * 0.09, 2.83 - i * 0.15);
     dot.rotation.z = Math.PI / 2;
   }
-  // Everyday countertop objects, deliberately sparse at room scale.
-  const fruitBowl = buildUnit(p, '水果盘');
-  cyl(fruitBowl, 0.1, 0.065, 0.065, M.ceramic, 3.5, 0.96, 0.62, 24);
-  for (let i = 0; i < 4; i++) {
-    addMesh(fruitBowl, new THREE.SphereGeometry(0.045, 10, 8), i % 2 ? M.terracotta : M.fabricOchre,
-      3.44 + (i % 2) * 0.08, 1.005, 0.58 + Math.floor(i / 2) * 0.07);
-  }
-  rbox(p, 0.32, 0.022, 0.23, 0.01, M.oak, 2.0, 0.945, 0.62, 0.2);
-  const counterBox = buildUnit(p, '盒子');
+  // Fruit bowl moved to the living-room coffee table.
+  const counterBox = buildUnit(westRun, '盒子');
   rbox(counterBox, 0.14, 0.25, 0.1, 0.012, M.darkWood, 0.62, 1.055, 2.05);
   addHotspot(world, 1.5, 2.7, 0.45, { title: '冰箱', sub: '门上贴着一张便利贴：今天也要好好吃饭', room: 'kitchen', spot: 'fridge', label: '冰箱前' });
   addHotspot(world, 1.3, 1.45, 0.4, { title: '水槽', sub: '水龙头有点松，杯子倒扣在沥水架上', room: 'kitchen', spot: 'sink', label: '水槽前' });
@@ -1548,54 +1566,40 @@ function buildKitchen(world, M) {
 
   // H1. 微波炉（台面右端）
   {
-    const MX = 3.45, MZ = 1.02, MY = 1.06;
-    box(p, 0.46, 0.27, 0.34, M.dark, MX, MY + 0.135, MZ);
-    box(p, 0.40, 0.21, 0.006, M.black, MX - 0.01, MY + 0.145, MZ + 0.172);   // 门玻璃
-    box(p, 0.06, 0.14, 0.008, M.steel, MX + 0.17, MY + 0.15, MZ + 0.175);    // 把手
-    cyl(p, 0.022, 0.022, 0.012, M.steel, MX - 0.205, MY + 0.175, MZ + 0.176, 12).rotation.x = Math.PI / 2;
-    box(p, 0.07, 0.028, 0.005, M.teal, MX - 0.13, MY + 0.19, MZ + 0.176);    // 小屏
-    for (let i = 0; i < 5; i++) box(p, 0.34, 0.004, 0.012, M.black, MX, MY + 0.274, MZ - 0.10 + i * 0.03);
+    const MX = 3.64, MZ = 0.46, BASE = 0.925;
+    const microwave = buildUnit(p, '微波炉');
+    microwave.position.z = -0.20;
+    // The upper cabinet is centered at x=3.64; the microwave now shares that
+    // center and rests directly on the counter (top y≈0.923).
+    box(microwave, 0.46, 0.27, 0.34, M.dark, MX, BASE + 0.135, MZ);
+    box(microwave, 0.40, 0.21, 0.006, M.black, MX - 0.01, BASE + 0.145, MZ + 0.172);
+    box(microwave, 0.06, 0.14, 0.008, M.steel, MX + 0.17, BASE + 0.15, MZ + 0.175);
+    cyl(microwave, 0.022, 0.022, 0.012, M.steel, MX - 0.205, BASE + 0.175, MZ + 0.176, 12).rotation.x = Math.PI / 2;
+    box(microwave, 0.07, 0.028, 0.005, M.teal, MX - 0.13, BASE + 0.19, MZ + 0.176);
+    for (let i = 0; i < 5; i++) box(microwave, 0.34, 0.004, 0.012, M.black, MX, BASE + 0.274, MZ - 0.10 + i * 0.03);
   }
 
   // H2. 台面杂物：调料瓶 / 砧板 / 刀具架
   {
-    const TX = 0.62, TZ = 1.06, TOP = 0.92;
+    const TOP = 0.922;
+    // Keep coffee, spices, board and knife block on the same return counter,
+    // but give each a separate footprint. The board lies flat and is supported.
     for (let i = 0; i < 3; i++) {
       const h2 = 0.09 + i * 0.035;
-      cyl(p, 0.026, 0.028, h2, [M.ceramic, M.glass, M.terracotta][i], TX, TOP + h2 / 2, TZ - 0.10 + i * 0.085, 12);
-      cyl(p, 0.020, 0.020, 0.014, M.dark, TX, TOP + h2 + 0.007, TZ - 0.10 + i * 0.085, 10);
+      const sx = 0.33 + i * 0.075, sz = 1.95;
+      cyl(westRun, 0.026, 0.028, h2, [M.ceramic, M.glass, M.terracotta][i], sx, TOP + h2 / 2, sz, 12);
+      cyl(westRun, 0.020, 0.020, 0.014, M.dark, sx, TOP + h2 + 0.007, sz, 10);
     }
-    const board = rbox(p, 0.32, 0.024, 0.44, 0.014, M.oakLight, TX + 0.20, TOP + 0.22, TZ + 0.20);
-    board.rotation.x = -1.32;
-    box(p, 0.13, 0.10, 0.16, M.walnut, TX + 0.26, TOP + 0.05, TZ - 0.12);
+    const boardUnit = buildUnit(westRun, '砧板');
+    rbox(boardUnit, 0.32, 0.024, 0.44, 0.014, M.oakLight, 0.66, TOP + 0.012, 1.63);
+    const knifeUnit = buildUnit(westRun, '刀具架');
+    box(knifeUnit, 0.13, 0.10, 0.16, M.walnut, 0.52, TOP + 0.05, 2.10);
     for (let i = 0; i < 3; i++) {
-      const kn = box(p, 0.016, 0.11, 0.024, M.black, TX + 0.26 + (i - 1) * 0.032, TOP + 0.155, TZ - 0.12);
+      const kn = box(knifeUnit, 0.016, 0.11, 0.024, M.black, 0.52 + (i - 1) * 0.032, TOP + 0.155, 2.10);
       kn.rotation.z = (i - 1) * 0.10;
     }
   }
 
-  // H3. 冰箱贴 + 便签 + 待办清单
-  {
-    const FX = 3.95, FZ = 2.05;
-    for (const [mat, dx, dy] of [[M.terracotta, -0.10, 1.32], [M.blue, 0.06, 1.52],
-      [M.fabricOchre, -0.02, 1.10], [M.teal, 0.12, 1.28], [M.navy, -0.13, 1.48]]) {
-      cyl(p, 0.016, 0.016, 0.008, mat, FX + dx, dy, FZ + 0.012, 10).rotation.x = Math.PI / 2;
-    }
-    for (const [dx, dy, rot] of [[-0.04, 1.40, 0.10], [0.09, 1.18, -0.07]]) {
-      const note = new THREE.Mesh(new THREE.PlaneGeometry(0.10, 0.13),
-        new THREE.MeshStandardMaterial({ map: world.textures.note, roughness: 0.92 }));
-      note.rotation.y = Math.PI;
-      note.rotation.z = rot;
-      note.position.set(FX + dx, dy, FZ + 0.010);
-      p.add(note);
-    }
-    const list = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.16),
-      new THREE.MeshStandardMaterial({ map: world.textures.note, roughness: 0.9 }));
-    list.rotation.y = Math.PI;
-    list.rotation.z = 0.05;
-    list.position.set(FX - 0.16, 1.24, FZ + 0.011);
-    p.add(list);
-  }
 }
 
 function buildDining(world, M) {
@@ -1849,16 +1853,7 @@ function buildLiving(world, M, textures) {
   }
   // 搭毯已移除
   // 落地灯
-  const lampBase = cyl(p, 0.16, 0.18, 0.03, M.dark, 4.95, 0.0, 5.20);
-  cyl(p, 0.015, 0.02, 1.55, M.brass, 4.95, 0.765, 5.20);
-  const shade2 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.26, 24, 1, true), M.fabricCream);
-  shade2.position.set(4.95, 1.585, 5.20);
-  shade2.material.side = THREE.DoubleSide;
-  p.add(shade2);
-  const bulb2 = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), M.bulb);
-  bulb2.position.set(4.95, 1.545, 5.20);
-  p.add(bulb2);
-  world.lampMaterials.push(bulb2.material);
+  // Floor lamp removed from the marked sofa-side path.
 
   // 茶几：椭圆角实木桌面、内退边线与下层置物板。
   furnitureTop(p, 1.16, 0.6, 0.055, 0.13, M.oakLight, 6.3, 0.4, 3.85);
@@ -1978,7 +1973,7 @@ function buildLiving(world, M, textures) {
   cyl(p, 0.035, 0.035, 0.025, M.ceramic, bx - 0.02, 2.0, bz + 0.43, 24);
   // 饮水机（餐厅西北角，靠墙；逆时针转 90° 让接水口朝屋内）
   const dispenser = buildUnit(p, '直饮水机');
-  dispenser.position.set(0.506, 0, 3.205);
+  dispenser.position.set(0.26, 0, 3.30);
   dispenser.rotation.y = Math.PI / 2;   // 逆时针 90°
   box(dispenser, 0.4, 0.95, 0.4, M.white, 0, 0.48, 0);
   box(dispenser, 0.34, 0.06, 0.34, M.steel, 0, 0.98, 0);
@@ -2006,28 +2001,16 @@ function buildLiving(world, M, textures) {
   // ══ 客厅「生活痕迹」（C 组）════════════════════════════════════════
   // 31.9m² 只有 1.75 图元/m²，比小玄关还稀。下面是真实客厅里会有的零碎。
 
-  // C1. 落地灯实体：原来只有一盏 PointLight 在 (7.82,1.56,4.7)，
-  //     没有灯具模型 —— 夜里「光凭空出现」。现在给它一个灯杆 + 布罩。
-  {
-    const LX = 7.82, LZ = 4.7;
-    cyl(p, 0.13, 0.15, 0.035, M.dark, LX, 0.017, LZ, 16);            // 底盘
-    cyl(p, 0.021, 0.021, 1.50, M.brass, LX, 0.77, LZ, 10);            // 灯杆
-    // 布罩（圆台，开口向下）
-    const shade = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.20, 0.26, 0.30, 20, 1, true),
-      new THREE.MeshStandardMaterial({ color: 0xf2e6cf, roughness: 0.94, side: THREE.DoubleSide, transparent: true, opacity: 0.94 })
-    );
-    shade.position.set(LX, 1.60, LZ);
-    p.add(shade);
-    // 罩内灯泡（随灯开关亮）
-    const bulbLive = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), M.bulb);
-    bulbLive.position.set(LX, 1.50, LZ);
-    p.add(bulbLive);
-    world.lampMaterials.push(bulbLive.material);
-    // 罩顶收口
-    cyl(p, 0.055, 0.055, 0.012, M.brass, LX, 1.755, LZ, 12);
-  }
+  // Marked floor lamp removed.
 
+  // 水果盘从厨房移至茶几边缘，避开书本、杯子和绿植。
+  cyl(p, 0.095, 0.075, 0.045, M.ceramic, 6.68, 0.45, 3.68, 20);
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * TAU;
+    const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), [M.terracotta, M.fabricOchre][i % 2]);
+    fruit.position.set(6.68 + Math.cos(a) * 0.045, 0.49, 3.68 + Math.sin(a) * 0.035);
+    p.add(fruit);
+  }
   // C2. 茶几杂物：遥控器 / 摊开的杂志 / 水杯 / 小多肉
   {
     const TX = 6.3, TZ = 3.8, TOP = 0.42;   // 茶几面高度沿用现有家具
@@ -2051,55 +2034,6 @@ function buildLiving(world, M, textures) {
     }
   }
 
-  // C3. 沙发搭毯（卷在扶手上）
-  {
-    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.52, 14), M.fabricOchre);
-    roll.rotation.z = Math.PI / 2;
-    roll.rotation.y = 0.12;
-    roll.position.set(5.28, 0.60, 5.12);
-    p.add(roll);
-    // 垂下来的一角
-    const hang = box(p, 0.30, 0.44, 0.015, M.fabricOchre, 5.12, 0.39, 5.30);
-    hang.rotation.x = 0.10;
-    hang.rotation.z = -0.06;
-  }
-
-  // C6. 沙发扶手旁的小边几 + 台灯（呼应落地灯，但独立开关感）
-  {
-    const SX = 5.05, SZ = 5.75;
-    cyl(p, 0.20, 0.20, 0.032, M.walnut, SX, 0.50, SZ, 20);
-    cyl(p, 0.022, 0.026, 0.48, M.steel, SX, 0.25, SZ, 8);
-    cyl(p, 0.13, 0.14, 0.022, M.dark, SX, 0.011, SZ, 14);
-    // 小台灯
-    cyl(p, 0.055, 0.062, 0.020, M.brass, SX, 0.526, SZ, 12);
-    cyl(p, 0.012, 0.012, 0.26, M.brass, SX, 0.66, SZ, 8);
-    const shade2 = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.075, 0.11, 0.16, 16, 1, true),
-      new THREE.MeshStandardMaterial({ color: 0xffeedd, roughness: 0.9, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
-    );
-    shade2.position.set(SX, 0.845, SZ);
-    p.add(shade2);
-  }
-
-  // C4. 电视柜下方：游戏机 + 卡带盒 + 线缆
-  {
-    const GX = 6.3, GZ = 2.72, GY = 0.06;
-    rbox(p, 0.34, 0.055, 0.24, 0.012, M.dark, GX - 0.28, GY + 0.028, GZ);        // 主机（横放）
-    box(p, 0.30, 0.006, 0.008, M.blue, GX - 0.28, GY + 0.045, GZ + 0.118);       // 指示灯条
-    for (let i = 0; i < 3; i++) {                                                // 三个卡带盒
-      rbox(p, 0.055, 0.09, 0.012, 0.004, [M.terracotta, M.teal, M.navy][i],
-        GX + 0.06 + i * 0.062, GY + 0.048, GZ - 0.02);
-    }
-    // 手柄（放在主机旁）
-    const pad = rbox(p, 0.13, 0.035, 0.075, 0.018, M.dark, GX + 0.30, GY + 0.02, GZ + 0.06);
-    pad.rotation.y = 0.4;
-    // 线缆（几根细圆柱，从主机后方绕出来）
-    for (let i = 0; i < 3; i++) {
-      const cable = cyl(p, 0.0048, 0.0048, 0.34 + i * 0.06, M.black, GX - 0.28 - 0.02 + i * 0.03, GY + 0.03, GZ - 0.17, 6);
-      cable.rotation.x = Math.PI / 2 + (i - 1) * 0.18;
-    }
-  }
-
   // C5. 第二/三幅画 + 挂钟（world.clockHands 之前定义了但没用上）
   {
     // 东墙（x≈8.35）两幅小画
@@ -2111,8 +2045,8 @@ function buildLiving(world, M, textures) {
       p.add(a2);
       box(p, 0.03, 0.42, 0.54, M.walnut, 8.36, 1.62, az);
     }
-    // 北墙挂钟（x 6.9, z 0.12 附近的实墙）
-    const CX = 6.9, CZ = 0.095, CY = 2.05;
+    // 北墙挂钟，中心与电视屏幕对齐。
+    const CX = 6.3, CZ = 0.095, CY = 2.05;
     cyl(p, 0.155, 0.155, 0.032, M.cream, CX, CY, CZ, 26).rotation.x = Math.PI / 2;
     cyl(p, 0.145, 0.145, 0.006, M.white, CX, CY, CZ + 0.020, 26).rotation.x = Math.PI / 2;
     // 指针（挂在 world.clockHands 上，交给 updateEnvironment 按时间转）
@@ -2309,19 +2243,26 @@ function buildBedroom(world, M, textures) {
   // J2. 梳妆台 + 镜子（西墙 x≈8.6，靠床侧）
   {
     const DX = 8.75, DZ = 2.42;
-    rbox(p, 0.34, 0.62, 1.00, 0.02, M.oak, DX, 0.32, DZ);
-    box(p, 0.36, 0.028, 1.04, M.stone, DX, 0.645, DZ);
+    // Open-leg vanity with a clear knee space; the stool aligns to its center.
+    box(p, 0.36, 0.045, 1.04, M.stone, DX, 0.66, DZ);
+    for (const [dx, dz] of [[-0.13,-0.43],[-0.13,0.43],[0.13,-0.43],[0.13,0.43]])
+      box(p, 0.045, 0.62, 0.045, M.oak, DX + dx, 0.32, DZ + dz);
     // 抽屉 ×2
-    for (const dy of [0.20, 0.42]) {
-      box(p, 0.014, 0.18, 0.94, M.oakLight, DX + 0.175, dy, DZ);
-      cyl(p, 0.012, 0.012, 0.055, M.brass, DX + 0.19, dy, DZ, 8).rotation.z = Math.PI / 2;
+    for (const dy of [0.48, 0.57]) {
+      box(p, 0.22, 0.07, 0.55, M.oakLight, DX + 0.025, dy, DZ);
+      cyl(p, 0.012, 0.012, 0.055, M.brass, DX + 0.14, dy, DZ, 8).rotation.z = Math.PI / 2;
     }
     // 镜面（贴着东侧 = 朝床）
     const mirr = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.80), M.mirror);
     mirr.rotation.y = Math.PI / 2;
-    mirr.position.set(DX - 0.02, 1.20, DZ);
+    // The west wall's interior face is x=8.48. Recess the mirror just in front
+    // of its frame instead of exactly coplanar with the wall surface.
+    mirr.position.set(8.515, 1.24, DZ);
     p.add(mirr);
-    box(p, 0.03, 0.86, 0.68, M.walnut, DX - 0.03, 1.20, DZ);
+    // Four slim rails form a frame without covering the reflective panel.
+    box(p, 0.03, 0.04, 0.68, M.walnut, 8.505, 1.66, DZ);
+    box(p, 0.03, 0.04, 0.68, M.walnut, 8.505, 0.82, DZ);
+    for (const dz of [-0.32, 0.32]) box(p, 0.03, 0.82, 0.04, M.walnut, 8.505, 1.24, DZ + dz);
     // 台上：口红/香水/梳子/小镜
     for (let i = 0; i < 3; i++) {
       cyl(p, 0.013, 0.013, 0.062 + i * 0.012, [M.navy, M.terracotta, M.brass][i], DX + 0.06, 0.695, DZ - 0.30 + i * 0.055, 8);
@@ -2329,9 +2270,9 @@ function buildBedroom(world, M, textures) {
     box(p, 0.10, 0.012, 0.14, M.fabricOchre, DX + 0.04, 0.665, DZ + 0.24);
     cyl(p, 0.055, 0.05, 0.022, M.ceramic, DX + 0.05, 0.67, DZ + 0.10, 14);
     // 小凳子（塞在台子下面）
-    rbox(p, 0.32, 0.045, 0.30, 0.02, M.linenBlue, DX + 0.26, 0.42, DZ + 0.30);
+    rbox(p, 0.32, 0.045, 0.30, 0.02, M.linenBlue, DX + 0.38, 0.43, DZ);
     for (const [dx, dz] of [[-0.12, -0.11], [0.12, -0.11], [-0.12, 0.11], [0.12, 0.11]]) {
-      cyl(p, 0.014, 0.012, 0.40, M.walnut, DX + 0.26 + dx, 0.20, DZ + 0.30 + dz, 6);
+      cyl(p, 0.014, 0.012, 0.40, M.walnut, DX + 0.38 + dx, 0.20, DZ + dz, 6);
     }
   }
 
@@ -2407,25 +2348,39 @@ function buildBathroom(world, M) {
   box(p, 0.95, 2.1, 0.02, M.glass, 11.5, 1.05, 7.13);
   box(p, 0.04, 2.15, 0.04, M.steel, 12.0, 1.07, 7.13);
   box(p, 0.04, 2.15, 0.04, M.steel, 12.0, 1.07, 8.1);
-  cyl(p, 0.02, 0.025, 0.5, M.steel, 11.05, 1.9, 7.6);
-  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 20), M.steel);
-  head.position.set(11.35, 2.1, 7.6);
-  head.rotation.z = 0.15;
-  p.add(head);
+  // Wall-mounted shower set: riser, elbow, spray head and mixer share one
+  // anchor on the back wall so the head cannot drift away from its pipe.
+  const shower = new THREE.Group();
+  shower.name = '淋浴花洒';
+  p.add(shower);
+  cyl(shower, 0.018, 0.018, 1.0, M.steel, 11.62, 1.52, 8.10, 16);
+  const showerArm = cyl(shower, 0.016, 0.016, 0.28, M.steel, 11.62, 2.01, 7.965, 16);
+  showerArm.rotation.x = Math.PI / 2;
+  const wallMount = cyl(shower, 0.045, 0.045, 0.035, M.steel, 11.62, 1.12, 8.11, 16);
+  wallMount.rotation.x = Math.PI / 2;
+  const mixer = cyl(shower, 0.055, 0.055, 0.04, M.brass, 11.62, 1.08, 8.09, 16);
+  mixer.rotation.x = Math.PI / 2;
+  // Flat circular plate faces the floor; a short collar visibly joins it to
+  // the horizontal arm and the small dark nozzles define its spray face.
+  cyl(shower, 0.027, 0.027, 0.055, M.steel, 11.62, 2.005, 7.73, 12);
+  cyl(shower, 0.12, 0.12, 0.025, M.steel, 11.62, 1.987, 7.73, 24);
+  for (const [dx, dz] of [[0, 0], [-0.055, 0], [0.055, 0], [0, -0.055], [0, 0.055]]) {
+    cyl(shower, 0.008, 0.008, 0.003, M.stoneDark, 11.62 + dx, 1.973, 7.73 + dz, 8);
+  }
   box(p, 0.9, 0.03, 0.85, M.stoneDark, 11.5, 0.015, 7.6);
-  // 毛巾
+  // 毛巾：挂在共用墙的卫生间内侧，避开墙体厚度。
   for (const z of [5.95, 6.35]) {
     const towel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.3), M.linenBlue);
-    towel.position.set(10.88, 1.3, z);
+    towel.position.set(10.94, 1.3, z);
     p.add(towel);
-    box(p, 0.02, 0.02, 0.36, M.steel, 10.9, 1.6, z);
+    box(p, 0.06, 0.035, 0.035, M.steel, 10.91, 1.6, z);
+    box(p, 0.02, 0.02, 0.36, M.steel, 10.94, 1.6, z);
   }
-  // 浴室垫、小植物
+  // 浴室垫
   const bathmat = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5), new THREE.MeshStandardMaterial({ color: 0xc8d2d0, roughness: 1 }));
   bathmat.rotation.x = -Math.PI / 2;
   bathmat.position.set(12.3, 0.015, 6.55);
   p.add(bathmat);
-  plant(world, 12.78, 7.05, 0.5);
 
   addHotspot(world, 12.0, 6.45, 0.4, { title: '洗手台', sub: '镜子上有一点水汽，牙杯里插着两支牙刷', room: 'bathroom', spot: 'sink', label: '洗手台前' });
   addHotspot(world, 11.9, 6.2, 0.38, { title: '马桶', sub: '旁边放着手机，看来刚才在这里坐了一会儿', room: 'bathroom', spot: 'toilet', label: '马桶边' });
@@ -2436,7 +2391,7 @@ function buildBathroom(world, M) {
 
   // K1. 洗手台杂物：牙刷杯 / 香皂 / 毛巾 / 小瓶
   {
-    const SX = 11.62, SZ = 6.48, TOP = 0.86;   // 洗手台面
+    const SX = 12.82, SZ = 6.50, TOP = 0.885;   // 洗手台面
 
     // 牙刷杯（两只牙刷，一高一低）
     cyl(p, 0.038, 0.034, 0.10, M.ceramic, SX - 0.20, TOP + 0.05, SZ + 0.10, 12);
@@ -2457,8 +2412,9 @@ function buildBathroom(world, M) {
     box(p, 0.030, 0.010, 0.014, M.steel, SX + 0.155, TOP + 0.178, SZ - 0.10);
 
     // 挂着的毛巾（毛巾杆在洗手台侧面）
-    const bar = cyl(p, 0.008, 0.008, 0.36, M.steel, SX - 0.30, TOP + 0.26, SZ - 0.14, 8);
-    bar.rotation.z = Math.PI / 2;
+    const bar = cyl(p, 0.008, 0.008, 0.36, M.steel, 10.94, 1.30, 6.38, 8);
+    bar.rotation.x = Math.PI / 2;
+    for (const z of [6.22, 6.54]) box(p, 0.06, 0.025, 0.025, M.steel, 10.91, 1.30, z);
     const towel = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.34, 4, 4),
       new THREE.MeshStandardMaterial({ color: 0xe1d6c4, roughness: 0.98, side: THREE.DoubleSide }));
     const tp = towel.geometry.attributes.position;
@@ -2467,7 +2423,8 @@ function buildBathroom(world, M) {
       tp.setZ(i, Math.sin(u * 4) * 0.010);
     }
     towel.geometry.computeVertexNormals();
-    towel.position.set(SX - 0.30, TOP + 0.09, SZ - 0.15);
+    towel.rotation.y = Math.PI / 2;
+    towel.position.set(10.96, 1.08, 6.38);
     p.add(towel);
 
     // 台面上的小托盘（放发圈/夹子）
@@ -2507,20 +2464,28 @@ function buildBathroom(world, M) {
     }
   }
 
-  // K3. 置物架 + 洗浴用品（淋浴区墙面）
+  // K3. 双层转角置物架 + 洗浴用品（淋浴区后墙内角）
   {
-    for (const [sy, sz] of [[1.16, 0.30], [1.52, 0.28]]) {
-      box(p, 0.24, 0.018, sz, M.steel, 11.02, sy, 6.95);
+    const caddy = new THREE.Group();
+    caddy.name = '淋浴角落置物架';
+    p.add(caddy);
+    for (const [sy, depth] of [[1.16, 0.22], [1.52, 0.20]]) {
+      // Shelves are supported from the wall and kept within the shower bay.
+      rbox(caddy, 0.30, 0.022, depth, 0.025, M.steel, 11.19, sy, 8.00);
+      box(caddy, 0.018, 0.12, 0.018, M.steel, 11.08, sy - 0.07, 8.11);
+      box(caddy, 0.018, 0.12, 0.018, M.steel, 11.30, sy - 0.07, 8.11);
     }
     // 下层：三瓶洗浴用品
     for (let i = 0; i < 3; i++) {
       const h2 = 0.12 + i * 0.03;
-      cyl(p, 0.030, 0.032, h2, [M.blue, M.teal, M.cream][i], 11.02, 1.17 + h2 / 2, 6.88 + i * 0.075, 10);
-      cyl(p, 0.012, 0.012, 0.022, M.white, 11.02, 1.17 + h2 + 0.011, 6.88 + i * 0.075, 8);
+      const x = 11.11 + i * 0.08;
+      const z = 7.93;
+      cyl(caddy, 0.030, 0.032, h2, [M.blue, M.teal, M.cream][i], x, 1.171 + h2 / 2, z, 10);
+      cyl(caddy, 0.012, 0.012, 0.022, M.white, x, 1.171 + h2 + 0.011, z, 8);
     }
     // 上层：一块海绵 + 一个小桶
-    rbox(p, 0.06, 0.045, 0.075, 0.015, M.fabricOchre, 11.02, 1.545, 6.90);
-    cyl(p, 0.055, 0.045, 0.09, M.terracotta, 11.02, 1.57, 7.04, 12);
+    rbox(caddy, 0.06, 0.045, 0.075, 0.015, M.fabricOchre, 11.11, 1.552, 7.93);
+    cyl(caddy, 0.055, 0.045, 0.09, M.terracotta, 11.27, 1.574, 7.93, 12);
   }
 }
 
@@ -2544,13 +2509,7 @@ function buildCorridor(world, M) {
     p.add(art);
     box(p, 0.64, 0.5, 0.03, M.walnut, x, 1.55, 4.5);
   }
-  // 边柜 + 花瓶
-  rbox(p, 0.9, 0.5, 0.2, 0.02, M.oak, 12.15, 0.25, 5.48);
-  cyl(p, 0.07, 0.09, 0.24, M.ceramic, 12.15, 0.62, 5.48);
-  for (let i = 0; i < 5; i++) {
-    const twig = cyl(p, 0.006, 0.008, 0.36, M.darkWood, 12.15 + (i - 2) * 0.02, 0.88, 5.48);
-    twig.rotation.z = (i - 2) * 0.12;
-  }
+  // 卫生间门前不放边柜：走廊窄，原柜体侵入门洞及进出路线。
   // 壁灯：每幅画一盏，位置与画中心对齐
   for (let i = 0; i < 4; i++) {
     const x = 10.05 + i * 0.72;
@@ -2565,21 +2524,7 @@ function buildCorridor(world, M) {
   // ══ 走廊补细节（E 组）════════════════════════════════════════════════
   // 5.8m² / 0.87 图元/m²，几乎纯通道。走廊窄，只做贴墙的东西。
 
-  // E2. 窄边柜 + 一盆植物（南墙，x 9.0 附近）
-  {
-    const SX = 9.15, SZ = 5.42;
-    rbox(p, 0.86, 0.66, 0.20, 0.02, M.oak, SX, 0.34, SZ);
-    for (const dx of [-0.34, 0.34]) box(p, 0.02, 0.58, 0.022, M.walnut, SX + dx, 0.34, SZ + 0.10);
-    // 柜门拉手
-    for (const dx of [-0.16, 0.16]) cyl(p, 0.014, 0.014, 0.05, M.brass, SX + dx, 0.36, SZ - 0.095, 8).rotation.x = Math.PI / 2;
-    // 柜面：一盆小植物 + 一个小托盘（放钥匙）
-    plant(world, SX - 0.24, SZ - 0.02, 0.52);
-    cyl(p, 0.10, 0.095, 0.016, M.ceramic, SX + 0.22, 0.678, SZ - 0.02, 16);
-    // 托盘里两把钥匙
-    for (const [dx, rz] of [[0.04, 0.4], [-0.03, -0.2]]) {
-      box(p, 0.045, 0.006, 0.014, M.steel, SX + 0.22 + dx, 0.690, SZ - 0.02).rotation.y = rz;
-    }
-  }
+  // 两个卫生间/家政间门洞外均留空；原窄边柜压住家政间入口。
 
   // E3. 壁灯 ×2（走廊太暗，补两盏，与画廊墙那四盏呼应）
   {
@@ -2662,22 +2607,20 @@ export function applyGallery(world, data) {
 
 function buildLaundry(world, M) {
   const p = world.root;
-  // 洗衣机
-  box(p, 0.6, 0.86, 0.6, M.white, 10.4, 0.43, 6.15);
+  // Washer is tucked into the east/back corner and centered under the wall shelf.
+  // The room's inner east face is x=10.72; the casing back edge meets that line.
+  const washer = buildUnit(p, '洗衣机');
+  washer.position.set(0.02, 0, -0.10);
+  box(washer, 0.6, 0.86, 0.6, M.white, 10.4, 0.43, 6.15);
   const door = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 24), M.steel);
   door.rotation.y = Math.PI / 2;
   door.position.set(10.09, 0.5, 6.15);
-  p.add(door);
+  washer.add(door);
   const glass = new THREE.Mesh(new THREE.CircleGeometry(0.16, 24), M.glass);
   glass.rotation.y = -Math.PI / 2;
   glass.position.set(10.08, 0.5, 6.15);
-  p.add(glass);
-  box(p, 0.02, 0.14, 0.3, M.dark, 10.08, 0.82, 6.15);
-  // 洗衣液（放在洗衣机顶上，别浮在半空）
-  for (let i = 0; i < 3; i++) {
-    cyl(p, 0.042, 0.046, 0.19, [M.blue, M.terracotta, M.teal][i], 10.24 + i * 0.155, 0.955, 6.15);
-    cyl(p, 0.016, 0.016, 0.03, M.dark, 10.24 + i * 0.155, 1.065, 6.15);
-  }
+  washer.add(glass);
+  box(washer, 0.02, 0.14, 0.3, M.dark, 10.08, 0.82, 6.15);
   // 晾衣架
   // 晾衣架：贴着西墙摆，长度收短，两端都不穿墙、也不挡窗
   const rack = new THREE.Group();
@@ -2712,42 +2655,31 @@ function buildLaundry(world, M) {
       cl.rotation.y = a;
     }
 
-    // F2. 熨衣板 + 熨斗（靠东墙立着）
-    {
-      const BX = 10.52, BZ = 6.52;
-      const board = rbox(p, 0.40, 0.022, 0.94, 0.02, M.fabricCream, BX, 0.86, BZ);
-      board.rotation.x = -0.06;
-      // 板面布套条纹
-      for (let i = 0; i < 3; i++) {
-        box(p, 0.36, 0.004, 0.05, M.linenBlue, BX, 0.872 + i * 0.002, BZ - 0.28 + i * 0.28);
-      }
-      // 四条折叠腿
-      for (const [dx, dz] of [[-0.15, -0.36], [0.15, -0.36], [-0.15, 0.36], [0.15, 0.36]]) {
-        cyl(p, 0.011, 0.009, 0.84, M.steel, BX + dx, 0.42, BZ + dz, 6);
-      }
-      // 熨斗（放在板尾）
-      rbox(p, 0.10, 0.055, 0.16, 0.018, M.dark, BX, 0.906, BZ + 0.30);
-      rbox(p, 0.055, 0.035, 0.055, 0.012, M.steel, BX, 0.945, BZ + 0.30);
-      // 电线
-      const cord = cyl(p, 0.0035, 0.0035, 0.30, M.black, BX + 0.06, 0.92, BZ + 0.16, 5);
-      cord.rotation.x = Math.PI / 2.4;
-    }
+    // 熨衣板从狭小家政间移除；原占地与洗衣机重叠并压缩进出空间。
 
     // F3. 清洁用品架（墙面层板 + 瓶瓶罐罐）
     {
-      const SX = 10.55, SZ = 6.05;
+      // Shelf runs along the east wall, centered over the washer's z footprint.
+      const SX = 10.60, SZ = 6.05;
       for (const sy of [1.02, 1.38]) {
         box(p, 0.24, 0.022, 0.62, M.white, SX, sy, SZ);
         // 支架
-        for (const dz of [-0.26, 0.26]) box(p, 0.02, 0.10, 0.02, M.steel, SX + 0.10, sy - 0.06, SZ + dz);
+        for (const dz of [-0.26, 0.26]) box(p, 0.02, 0.10, 0.02, M.steel, SX + 0.115, sy - 0.06, SZ + dz);
       }
-      // 下层：三个喷雾瓶
+      // Lower shelf: a coordinated set of three detergent bottles with labels.
+      const detergents = buildUnit(p, '洗涤用品');
       for (let i = 0; i < 3; i++) {
-        const bz2 = SZ - 0.18 + i * 0.18;
-        cyl(p, 0.035, 0.038, 0.16, [M.teal, M.blue, M.fabricOchre][i], SX - 0.02, 1.11, bz2, 10);
-        cyl(p, 0.014, 0.014, 0.055, M.white, SX - 0.02, 1.22, bz2, 8);
-        // 喷头
-        box(p, 0.045, 0.016, 0.016, M.white, SX - 0.045, 1.245, bz2);
+        const bz2 = SZ - 0.17 + i * 0.17;
+        const bx = SX - 0.02;
+        const bodyY = 1.126;
+        rbox(detergents, 0.078, 0.19, 0.10, 0.015,
+          [M.teal, M.blue, M.fabricOchre][i], bx, bodyY, bz2);
+        // Small front label and neck/cap make these read as laundry products,
+        // while keeping the three silhouettes compact and evenly spaced.
+        rbox(detergents, 0.004, 0.075, 0.052, 0.008, M.linen,
+          bx - 0.041, 1.125, bz2);
+        cyl(detergents, 0.023, 0.023, 0.025, M.white, bx, 1.236, bz2, 12);
+        cyl(detergents, 0.019, 0.019, 0.025, M.stone, bx, 1.261, bz2, 12);
       }
       // 上层：抹布叠 + 刷子罐
       for (let i = 0; i < 3; i++) {
@@ -2762,7 +2694,7 @@ function buildLaundry(world, M) {
 
     // F4. 挂衣钩 + 围裙（门后墙）
     {
-      const HX = 9.05, HZ = 7.28;
+      const HX = 8.46, HZ = 7.28;
       for (let i = 0; i < 3; i++) {
         const hz2 = HZ - 0.22 + i * 0.22;
         box(p, 0.05, 0.05, 0.03, M.brass, HX, 1.62, hz2);
@@ -2861,9 +2793,8 @@ function buildBalcony(world, M) {
   cyl(p, 0.22, 0.22, 0.035, M.oak, 1.95, 0.55, 8.6);
   cyl(p, 0.03, 0.05, 0.55, M.steel, 1.95, 0.28, 8.6);
   cyl(p, 0.045, 0.04, 0.09, M.ceramic, 1.95, 0.62, 8.6);
-  // 植物
+  // 远离门口通道，只保留西侧角落盆栽；东侧门边盆栽会压到 bal_door_out→bal_e。
   plant(world, 0.75, 8.25, 1.3);
-  plant(world, 1.45, 8.8, 0.95);
   addHotspot(world, 3.0, 8.45, 0.5, { title: '阳台栏杆', sub: '风从海那边过来，栏杆上有一点盐霜', room: 'balcony', spot: 'chair', label: '栏杆边' });
   addHotspot(world, 2.67, 8.22, 0.5, { title: '躺椅', sub: '搭着一条蓝毯子，扶手上放着半杯柠檬水', room: 'balcony', spot: 'chair', label: '躺椅上' });
   addHotspot(world, 1.2, 8.2, 0.45, { title: '花盆', sub: '薄荷长得有点疯，叶子上还挂着水', room: 'balcony', spot: 'chair', label: '花盆边' });
@@ -2871,176 +2802,70 @@ function buildBalcony(world, M) {
   // ══ 阳台「户外生活」（D 组）════════════════════════════════════════
   // 18.5m² / 1.14 图元/m²，有躺椅有栏杆，但缺「住过」的痕迹。
 
-  // D1. 晾衣绳 + 4 件衣服：最强的「有人住」信号，一眼就懂
-  {
-    const Z = 8.30;
-    // 两端固定点（西墙 / 东侧栏杆柱）
-    cyl(p, 0.012, 0.012, 0.06, M.steel, 0.30, 2.00, Z, 8).rotation.x = Math.PI / 2;
-    cyl(p, 0.012, 0.012, 0.06, M.steel, 4.75, 2.00, Z, 8).rotation.x = Math.PI / 2;
-    // 绳子（略微下垂：用两段折线近似）
-    for (const [x0, x1, y0, y1] of [[0.30, 2.52, 1.99, 1.93], [2.52, 4.75, 1.93, 1.99]]) {
-      const dx = x1 - x0, dy = y1 - y0;
-      const len = Math.hypot(dx, dy);
-      const rope = cyl(p, 0.0045, 0.0045, len, M.linen, (x0 + x1) / 2, (y0 + y1) / 2, Z, 6);
-      rope.rotation.z = Math.PI / 2 + Math.atan2(dy, dx);
-    }
-    // 四件晾着的衣服（不同长度/颜色）
-    const garments = [
-      { x: 0.85, w: 0.30, h: 0.46, mat: M.fabricBlue },     // 衬衫
-      { x: 1.55, w: 0.24, h: 0.34, mat: M.cream },          // 短袖
-      { x: 2.30, w: 0.20, h: 0.52, mat: M.fabricCream },    // 裤子（窄）
-      { x: 3.15, w: 0.44, h: 0.30, mat: M.linenBlue }       // 小毛巾/床单
-    ];
-    for (const g of garments) {
-      const cloth = new THREE.Mesh(
-        new THREE.PlaneGeometry(g.w, g.h, 6, 6),
-        new THREE.MeshStandardMaterial({ color: g.mat.color, roughness: 0.96, side: THREE.DoubleSide })
-      );
-      // 让布面有一点自然起伏（顶点微扰）
-      const pos = cloth.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const u = pos.getX(i) / g.w;
-        pos.setZ(i, Math.sin(u * 6) * 0.018);
-      }
-      cloth.geometry.computeVertexNormals();
-      const topY = 1.99 - (g.x - 0.30) * 0.026;
-      cloth.position.set(g.x, topY - g.h / 2, Z);
-      p.add(cloth);
-      // 两个夹子
-      for (const dx of [-g.w * 0.32, g.w * 0.32]) {
-        box(p, 0.022, 0.048, 0.014, M.terracotta, g.x + dx, topY - 0.014, Z + 0.004);
-      }
-    }
-  }
-
-  // D2. 藤椅 + 小圆桌（现在只有躺椅，没有坐着喝茶的选择）
-  {
-    const CX = 3.72, CZ = 8.52;
-    const rattan = (cx, cz, ry) => {
-      const g = new THREE.Group();
-      g.position.set(cx, 0, cz);
-      g.rotation.y = ry;
-      p.add(g);
-      // 座框 + 编织面
-      rbox(g, 0.52, 0.055, 0.48, 0.05, M.oakLight, 0, 0.40, 0);
-      for (let i = 0; i < 5; i++) rbox(g, 0.50, 0.012, 0.030, 0.006, M.oak, 0, 0.432, -0.17 + i * 0.085);
-      for (let i = 0; i < 5; i++) rbox(g, 0.030, 0.012, 0.46, 0.006, M.oak, -0.20 + i * 0.10, 0.444, 0);
-      // 靠背（弧形，用 5 段拼）
-      for (let i = 0; i < 5; i++) {
-        const a = -0.55 + i * 0.275;
-        const seg = rbox(g, 0.028, 0.40, 0.062, 0.008, M.oakLight,
-          Math.sin(a) * 0.26, 0.62, Math.cos(a) * 0.26);
-        seg.rotation.y = a;
-      }
-      // 四腿
-      for (const [dx, dz] of [[-0.21, -0.20], [0.21, -0.20], [-0.21, 0.20], [0.21, 0.20]]) {
-        cyl(g, 0.016, 0.014, 0.40, M.oak, dx, 0.20, dz, 8);
-      }
-      // 坐垫
-      rbox(g, 0.44, 0.055, 0.40, 0.03, M.fabricCream, 0, 0.47, 0);
-    };
-    rattan(CX, CZ, Math.PI);       // 面向屋内
-    // 小圆桌
-    cyl(p, 0.24, 0.24, 0.030, M.oakLight, CX, 0.52, CZ + 0.72, 20);
-    cyl(p, 0.020, 0.024, 0.50, M.steel, CX, 0.26, CZ + 0.72, 8);
-    cyl(p, 0.15, 0.15, 0.018, M.dark, CX, 0.009, CZ + 0.72, 14);
-    // 桌上：茶杯 + 一小碟饼干
-    cyl(p, 0.045, 0.040, 0.055, M.ceramic, CX - 0.06, 0.563, CZ + 0.68, 14);
-    cyl(p, 0.042, 0.042, 0.006, M.cream, CX - 0.06, 0.592, CZ + 0.68, 14);
-    cyl(p, 0.075, 0.070, 0.012, M.ceramic, CX + 0.08, 0.541, CZ + 0.78, 16);
-    for (let i = 0; i < 3; i++) {
-      cyl(p, 0.024, 0.024, 0.010, M.fabricOchre, CX + 0.08 + (i - 1) * 0.032, 0.552, CZ + 0.78 + (i % 2) * 0.028, 10);
-    }
-  }
+  // Removed disconnected balcony hanging clutter.
+  // Removed the extra rattan chair/table: it sat directly on bal_door_out→bal_chair.
 
   // D3. 遮阳篷：从北墙斜向伸出，罩住躺椅那片
   {
-    const Z0 = 7.62;        // 贴墙
-    const Z1 = 8.34;        // 外沿
-    const Y0 = 2.32, Y1 = 2.10;
-    // 篷布（带条纹）
-    const canopy = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.80, 12, 1),
-      new THREE.MeshStandardMaterial({ color: 0xdfb98d, roughness: 0.94, side: THREE.DoubleSide }));
-    canopy.rotation.x = -Math.PI / 2 + 0.28;
-    canopy.position.set(1.95, (Y0 + Y1) / 2 + 0.02, (Z0 + Z1) / 2);
-    p.add(canopy);
-    // 篷布上的两条深色条纹
-    for (const dx of [-0.62, 0.62]) {
-      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.79, 1, 1),
+    const awning = buildUnit(p, '阳台遮阳篷');
+    const X0 = 0.65, X1 = 3.25, Z0 = 7.62, Z1 = 8.34;
+    const backY = 2.32, frontY = 2.10;
+    const clothGeometry = (xa, xb, rows = 12, lift = 0) => {
+      const positions = [], indices = [];
+      for (let j = 0; j <= rows; j++) {
+        const t = j / rows;
+        const z = Z0 + (Z1 - Z0) * t;
+        const y = backY + (frontY - backY) * t - 0.035 * Math.sin(Math.PI * t) + lift;
+        positions.push(xa, y, z, xb, y, z);
+        if (j < rows) {
+          const a = j * 2;
+          indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    };
+    const clothMat = new THREE.MeshStandardMaterial({ color: 0xdfb98d, roughness: 0.94, side: THREE.DoubleSide });
+    const cloth = new THREE.Mesh(clothGeometry(X0, X1), clothMat);
+    cloth.castShadow = true;
+    awning.add(cloth);
+    // Stripes follow the same measured fabric surface, so they cannot float off it.
+    for (const cx of [1.33, 2.57]) {
+      const stripe = new THREE.Mesh(clothGeometry(cx - 0.15, cx + 0.15, 12, 0.004),
         new THREE.MeshStandardMaterial({ color: 0xc9855a, roughness: 0.95, side: THREE.DoubleSide }));
-      stripe.rotation.copy(canopy.rotation);
-      stripe.position.set(1.95 + dx, (Y0 + Y1) / 2 + 0.022, (Z0 + Z1) / 2);
-      p.add(stripe);
+      awning.add(stripe);
     }
-    // 两根支撑斜杆
-    for (const dx of [-1.15, 1.15]) {
-      const rod = cyl(p, 0.016, 0.016, 1.10, M.steel, 1.95 + dx, 2.20, Z0 + 0.30, 8);
-      rod.rotation.x = -0.62;
-    }
-    // 外沿垂边
-    box(p, 2.60, 0.10, 0.014, M.fabricOchre, 1.95, Y1 - 0.03, Z1);
-  }
-
-  // D4. 吊兰 ×2（挂在遮阳篷下沿）
-  {
-    const hang = (hx, hz) => {
-      // 吊绳
-      cyl(p, 0.0035, 0.0035, 0.34, M.linen, hx, 1.90, hz, 5);
-      // 吊盆
-      cyl(p, 0.075, 0.058, 0.10, M.terracotta, hx, 1.66, hz, 12);
-      // 垂下来的 6 条叶子
-      for (let i = 0; i < 6; i++) {
-        const a = i / 6 * TAU + rnd() * 0.4;
-        const len = 0.24 + rnd() * 0.18;
-        const lf = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 5), M.plantLight);
-        lf.scale.set(0.030, len, 0.020);
-        lf.position.set(hx + Math.cos(a) * 0.055, 1.60 - len * 0.5, hz + Math.sin(a) * 0.055);
-        lf.rotation.z = Math.cos(a) * 0.35;
-        lf.rotation.x = -Math.sin(a) * 0.35;
-        p.add(lf);
-      }
+    const brace = (a, b, radius, material) => {
+      const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
+      const axis = end.clone().sub(start);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, axis.length(), 8), material);
+      mesh.position.copy(start).add(end).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
+      mesh.castShadow = true;
+      awning.add(mesh);
     };
-    hang(1.20, 8.05);
-    hang(2.72, 8.05);
-  }
-
-  // D6. 风铃（遮阳篷外沿，最后一根挂绳上）
-  {
-    const FX = 3.42, FY = 2.06, FZ = 8.30;
-    cyl(p, 0.0030, 0.0030, 0.16, M.linen, FX, FY - 0.08, FZ, 5);
-    cyl(p, 0.075, 0.075, 0.008, M.brass, FX, FY - 0.17, FZ, 14).rotation.x = Math.PI / 2;
-    // 4 根金属管（长短不一）
-    for (let i = 0; i < 4; i++) {
-      const a = i / 4 * TAU;
-      const len = 0.13 + i * 0.028;
-      cyl(p, 0.006, 0.006, len, M.brass, FX + Math.cos(a) * 0.055, FY - 0.20 - len / 2, FZ + Math.sin(a) * 0.055, 6);
+    // Continuous wall rail, front rail, side rails and two braces tie the canopy together.
+    brace([X0, backY, Z0], [X1, backY, Z0], 0.025, M.walnut);
+    brace([X0, frontY, Z1], [X1, frontY, Z1], 0.028, M.walnut);
+    for (const x of [X0, X1]) {
+      brace([x, backY, Z0], [x, frontY, Z1], 0.018, M.oak);
+      // Wall-side pivot plates and outer clamps make the awning stays visibly attached.
+      brace([x, 2.00, Z0 + 0.06], [x, frontY, Z1], 0.014, M.steel);
+      rbox(awning, 0.13, 0.16, 0.035, 0.025, M.steel, x, 2.00, Z0 + 0.055);
+      cyl(awning, 0.026, 0.026, 0.018, M.brass, x, 2.00, Z0 + 0.025, 10);
+      rbox(awning, 0.095, 0.07, 0.055, 0.018, M.steel, x, frontY, Z1 - 0.02);
+      cyl(awning, 0.022, 0.022, 0.02, M.brass, x, frontY, Z1 + 0.018, 10);
     }
-    // 中间垂片
-    box(p, 0.028, 0.10, 0.004, M.cream, FX, FY - 0.26, FZ);
+    // A valance overlaps the front rail instead of hanging as a detached strip.
+    box(awning, X1 - X0, 0.10, 0.025, M.fabricOchre, (X0 + X1) / 2, frontY - 0.045, Z1);
   }
 
-  // D5. 香草/番茄盆栽（呼应屋后菜园）
-  {
-    const herb = (hx, hz, scale, leafMat) => {
-      const g = new THREE.Group();
-      g.position.set(hx, 0, hz);
-      g.scale.setScalar(scale);
-      p.add(g);
-      cyl(g, 0.13, 0.155, 0.24, M.terracotta, 0, 0.12, 0, 14);
-      cyl(g, 0.135, 0.135, 0.018, M.soil, 0, 0.238, 0, 14);
-      // 一堆小叶子
-      for (let i = 0; i < 16; i++) {
-        const a = rnd() * TAU;
-        const r = rnd() * 0.10;
-        const lf = new THREE.Mesh(new THREE.SphereGeometry(0.032 + rnd() * 0.016, 7, 5), leafMat);
-        lf.scale.set(1.3, 0.7, 1.0);
-        lf.position.set(Math.cos(a) * r, 0.26 + rnd() * 0.17, Math.sin(a) * r);
-        g.add(lf);
-      }
-    };
-    herb(0.68, 8.62, 0.92, M.plantLight);   // 香草（浅绿）
-    herb(1.02, 8.66, 0.82, M.plant);        // 另一盆（深绿）
-  }
+  // Removed disconnected balcony hanging clutter.
+  // Removed disconnected balcony hanging clutter.
+  // Removed the east-end herb pot: its footprint narrowed the route to pool_gate.
 
   // D7. 地上的拖鞋（小物件但很有效）
   {
@@ -3051,28 +2876,7 @@ function buildBalcony(world, M) {
     }
   }
 
-  // D8. 望远镜（朝海，呼应「看海」设定；没有就太可惜）
-  {
-    const TX = 3.05, TZ = 8.42;
-    // 三脚架
-    for (let i = 0; i < 3; i++) {
-      const a = i / 3 * TAU + 0.4;
-      const leg = cyl(p, 0.011, 0.009, 0.92, M.dark, TX + Math.cos(a) * 0.15, 0.46, TZ + Math.sin(a) * 0.15, 6);
-      leg.rotation.z = -Math.cos(a) * 0.26;
-      leg.rotation.x = Math.sin(a) * 0.26;
-    }
-    // 云台
-    cyl(p, 0.038, 0.042, 0.055, M.steel, TX, 0.95, TZ, 10);
-    // 镜筒（朝海方向 -z，略微抬高）
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.038, 0.42, 14), M.brass);
-    tube.rotation.x = Math.PI / 2 - 0.18;
-    tube.position.set(TX, 1.02, TZ - 0.14);
-    p.add(tube);
-    // 目镜
-    cyl(p, 0.024, 0.020, 0.055, M.dark, TX, 1.06, TZ + 0.06, 10).rotation.x = Math.PI / 2 - 0.18;
-    // 前端口径圈
-    cyl(p, 0.050, 0.050, 0.010, M.brass, TX, 0.985, TZ - 0.33, 14).rotation.x = Math.PI / 2 - 0.18;
-  }
+  // Removed the tripod telescope: its legs crossed the chaise and obstructed the balcony path.
 }
 
 // 户外泳池露台：从阳台东侧往外延伸出去，无墙、朝海
@@ -3480,10 +3284,10 @@ function buildPoolDeck(world, M) {
 
   // 1) 户外淋浴柱（泳池西端，靠阳台墙）
   {
-    const sx = 0.55, sz = 10.5;
+    const sx = 0.34, sz = 10.5;
     cyl(p, 0.035, 0.035, 2.02, M.steel, sx, DECK_TOP + 1.01, sz, 10);
     // 底盘
-    cyl(p, 0.16, 0.19, 0.05, M.stoneDark, sx, DECK_TOP + 0.025, sz, 16);
+    cyl(p, 0.12, 0.14, 0.05, M.stoneDark, sx, DECK_TOP + 0.025, sz, 16);
     // 顶部横臂 + 花洒
     const armLen = 0.4;
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, armLen, 8), M.steel);
@@ -3501,42 +3305,26 @@ function buildPoolDeck(world, M) {
     }
   }
 
-  // 2) 池边台阶（泳池东端入水处，两级）
-  {
-    const tx0 = 10.25, tz = (POOL_Z0 + POOL_Z1) / 2;
-    rbox(p, 0.34, 0.16, 1.1, 0.02, M.stone, tx0 + 0.17, DECK_TOP + 0.08, tz);
-    rbox(p, 0.20, 0.08, 1.1, 0.02, M.stone, tx0 + 0.10, DECK_TOP + 0.20, tz);
-    // 台阶边的防滑条
-    for (const dz of [-0.42, 0, 0.42]) {
-      box(p, 0.30, 0.008, 0.05, M.steel, tx0 + 0.17, DECK_TOP + 0.162, tz + dz);
-    }
-  }
+  // Removed the decorative east-side steps: they narrowed the pk_ne→pk_se route;
+  // the north ladder is the designated pool access.
 
-  // 3) 盆栽：栏杆边补两盆，和阳台那两盆呼应
-  plant(world, 11.15, 9.35, 1.05);
-  plant(world, 4.6, 9.3, 0.85);
+  // 3) 盆栽：各自作为完整单元建模，叶片沿茎杆生长并与茎相接。
+  const poolPlantWest = buildUnit(p, '泳池西侧绿植');
+  plant(world, 4.6, 9.05, 0.85, poolPlantWest);
+  // 东侧盆栽移除：原位置紧邻泳池餐桌椅，压缩了椅子拉出和通行空间。
 
-  // 4) 叠放的毛巾（躺椅旁的小边桌上）
+  // 4) 角落的小推车（毛巾车）
   {
-    const tx = 11.55, tz = POOL_MID_Z;
-    for (let i = 0; i < 3; i++) {
-      rbox(p, 0.30, 0.045, 0.22, 0.02, i === 1 ? M.fabricBlue : M.fabricCream,
-        tx, DECK_TOP + 0.50 + i * 0.047, tz, (i - 1) * 0.06);
-    }
-  }
-
-  // 5) 角落的小推车（毛巾车）
-  {
-    const cx = 0.62, cz = 12.85;
+    const cx = 1.72, cz = 13.36;
     const g = new THREE.Group();
     g.position.set(cx, DECK_TOP, cz);
     p.add(g);
-    rbox(g, 0.46, 0.05, 0.34, 0.015, M.oak, 0, 0.72, 0);
-    rbox(g, 0.42, 0.04, 0.30, 0.012, M.oak, 0, 0.40, 0);
-    for (const [dx, dz] of [[-0.19, -0.13], [0.19, -0.13], [-0.19, 0.13], [0.19, 0.13]]) {
+    rbox(g, 0.46, 0.05, 0.28, 0.015, M.oak, 0, 0.72, 0);
+    rbox(g, 0.42, 0.04, 0.26, 0.012, M.oak, 0, 0.40, 0);
+    for (const [dx, dz] of [[-0.19, -0.10], [0.19, -0.10], [-0.19, 0.10], [0.19, 0.10]]) {
       cyl(g, 0.018, 0.018, 0.72, M.steel, dx, 0.36, dz, 8);
     }
-    for (const dz of [-0.13, 0.13]) {
+    for (const dz of [-0.10, 0.10]) {
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 12), M.black);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(-0.19, 0.045, dz);
@@ -3544,7 +3332,7 @@ function buildPoolDeck(world, M) {
     }
     // 车上堆的毛巾
     for (let i = 0; i < 2; i++) {
-      rbox(g, 0.36, 0.06, 0.26, 0.018, i ? M.fabricBlue : M.fabricCream, 0, 0.78 + i * 0.062, 0);
+      rbox(g, 0.36, 0.06, 0.24, 0.018, i ? M.fabricBlue : M.fabricCream, 0, 0.78 + i * 0.062, 0);
     }
   }
 
@@ -3555,7 +3343,7 @@ function buildPoolDeck(world, M) {
   // A1. 凉棚 / 廊架：露台西端（x 0.3~3.3，横跨泳池北侧空地）
   {
     const PX0 = 0.35, PX1 = 3.45;          // 跨度
-    const PZ = POOL_Z0 - 1.55;             // 压在泳池北侧那块空地上
+    const PZ = POOL_Z0 - 1.80;             // 将南侧柱脚退离北侧环池步道
     const PH = 2.42;                        // 立柱高
     const posts = [PX0, PX1];
     for (const px of posts) {
@@ -3588,50 +3376,30 @@ function buildPoolDeck(world, M) {
     }
   }
 
-  // A5. 秋千椅：挂在凉棚横梁下（靠西的一跨）
+  // A2. 紧凑双人桌椅靠东侧摆放，给 pk_ne→pk_se 留出连续通道。
   {
-    const SX = 1.15, SZ = POOL_Z0 - 1.55, SY = 2.12;
-    // 两根吊绳
-    for (const dz of [-0.34, 0.34]) {
-      cyl(p, 0.008, 0.008, SY - 0.62, M.linen, SX - 0.42, DECK_TOP + (SY + 0.62) / 2, SZ + dz, 6);
-      cyl(p, 0.008, 0.008, SY - 0.62, M.linen, SX + 0.42, DECK_TOP + (SY + 0.62) / 2, SZ + dz, 6);
-    }
-    // 座面 + 靠背
-    rbox(p, 0.92, 0.07, 0.62, 0.03, M.oak, SX, DECK_TOP + 0.60, SZ);
-    rbox(p, 0.88, 0.06, 0.56, 0.025, M.fabricCream, SX, DECK_TOP + 0.645, SZ);
-    const back = new THREE.Group();
-    back.position.set(SX - 0.40, DECK_TOP + 0.62, SZ);
-    back.rotation.z = 0.30;
-    p.add(back);
-    rbox(back, 0.06, 0.52, 0.60, 0.025, M.oak, 0, 0.26, 0);
-    rbox(back, 0.05, 0.46, 0.54, 0.02, M.fabricCream, -0.03, 0.26, 0);
-    // 坐垫
-    rbox(p, 0.34, 0.09, 0.34, 0.04, M.fabricOchre, SX + 0.22, DECK_TOP + 0.72, SZ);
-  }
-
-  // A2. 户外餐桌 + 4 把折叠椅（露台东侧空地 x 10.6~12.4, z 9.2~9.9）
-  {
-    const TX = 11.35, TZ = POOL_Z0 - 1.42;
+    const diningSet = buildUnit(p, '泳池双人桌椅');
+    const TX = 12.35, TZ = 9.80;
     // 桌面（圆形）+ 单柱 + 十字底
-    cyl(p, 0.52, 0.52, 0.045, M.oakLight, TX, DECK_TOP + 0.715, TZ, 28);
-    cyl(p, 0.48, 0.48, 0.012, M.cream, TX, DECK_TOP + 0.742, TZ, 28);
-    cyl(p, 0.045, 0.05, 0.70, M.steel, TX, DECK_TOP + 0.35, TZ, 10);
+    cyl(diningSet, 0.52, 0.52, 0.045, M.oakLight, TX, DECK_TOP + 0.715, TZ, 28);
+    cyl(diningSet, 0.48, 0.48, 0.012, M.cream, TX, DECK_TOP + 0.742, TZ, 28);
+    cyl(diningSet, 0.045, 0.05, 0.70, M.steel, TX, DECK_TOP + 0.35, TZ, 10);
     for (const a of [0, Math.PI / 2]) {
-      const foot = rbox(p, 0.56, 0.035, 0.055, 0.015, M.steel, TX, DECK_TOP + 0.018, TZ, a);
+      rbox(diningSet, 0.56, 0.035, 0.055, 0.015, M.steel, TX, DECK_TOP + 0.018, TZ, a);
     }
     // 桌上：托盘 + 两个杯子 + 小盆栽
-    cyl(p, 0.19, 0.19, 0.018, M.walnut, TX, DECK_TOP + 0.756, TZ, 18);
+    cyl(diningSet, 0.19, 0.19, 0.018, M.walnut, TX, DECK_TOP + 0.756, TZ, 18);
     for (const [dx, dz] of [[-0.07, 0.04], [0.08, -0.05]]) {
-      cyl(p, 0.038, 0.032, 0.085, M.ceramic, TX + dx, DECK_TOP + 0.808, TZ + dz, 14);
+      cyl(diningSet, 0.038, 0.032, 0.085, M.ceramic, TX + dx, DECK_TOP + 0.808, TZ + dz, 14);
     }
-    cyl(p, 0.05, 0.045, 0.06, M.terracotta, TX + 0.24, DECK_TOP + 0.795, TZ + 0.2, 12);
+    cyl(diningSet, 0.05, 0.045, 0.06, M.terracotta, TX + 0.24, DECK_TOP + 0.795, TZ + 0.2, 12);
 
-    // 4 把折叠椅（围绕圆桌）
+    // 两把折叠椅面对圆桌，取消占通道的南北两把。
     const chair = (cx, cz, ry) => {
       const g = new THREE.Group();
       g.position.set(cx, DECK_TOP, cz);
       g.rotation.y = ry;
-      p.add(g);
+      diningSet.add(g);
       // 座面（木条）
       for (let i = 0; i < 5; i++) rbox(g, 0.40, 0.022, 0.062, 0.008, M.oakLight, 0, 0.44, -0.14 + i * 0.07);
       // 靠背（斜）
@@ -3644,19 +3412,19 @@ function buildPoolDeck(world, M) {
       }
       for (const dz of [-0.16, 0.16]) cyl(g, 0.010, 0.010, 0.34, M.steel, 0, 0.14, dz, 6).rotation.z = Math.PI / 2;
     };
-    chair(TX - 0.78, TZ, Math.PI / 2);
-    chair(TX + 0.78, TZ, -Math.PI / 2);
-    chair(TX, TZ - 0.78, 0);
-    chair(TX, TZ + 0.78, Math.PI);
+    // Local chair front points along -Z; swap yaw so both seats face the table.
+    chair(TX - 0.62, TZ, -Math.PI / 2);
+    chair(TX + 0.62, TZ, Math.PI / 2);
   }
 
   // A3. 池边地灯 ×4：矮柱灯笼，夜里随室内灯联动（材质进 lampMaterials）
   {
     const lampPos = [
-      [POOL_X0 - 0.36, POOL_Z0 - 0.42],
-      [POOL_X1 + 0.36, POOL_Z0 - 0.42],
-      [POOL_X0 - 0.36, POOL_Z1 + 0.42],
-      [POOL_X1 + 0.36, POOL_Z1 + 0.42]
+      // North lamps sit behind the pk_nw→pk_ne circulation edge, not on it.
+      [POOL_X0 - 0.36, POOL_Z0 - 0.82],
+      [POOL_X1 + 0.36, POOL_Z0 - 0.82],
+      [1.05, POOL_Z1 + 0.81],
+      [POOL_X1 + 0.36, POOL_Z1 + 0.81]
     ];
     for (const [lx, lz] of lampPos) {
       cyl(p, 0.075, 0.095, 0.06, M.stoneDark, lx, DECK_TOP + 0.03, lz, 12);
@@ -3678,7 +3446,7 @@ function buildPoolDeck(world, M) {
     }
   }
 
-  // A4. 盆栽棕榈 ×2：有体量感（1.3~1.5m），填泳池长边
+  // A4. 矮棕榈 ×2：退到南侧边缘，避开 pk_sw→pk_se 路线。
   {
     const palm = (px, pz, scale) => {
       const g = new THREE.Group();
@@ -3702,18 +3470,19 @@ function buildPoolDeck(world, M) {
         const len = 0.52 + rnd() * 0.16;
         const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), M.plant);
         leaf.scale.set(0.36 * len, 0.028, 0.075 * len);
-        leaf.position.set(Math.cos(a) * len * 0.42 + 0.06, 1.44 + rnd() * 0.06, Math.sin(a) * len * 0.42);
+        leaf.position.set(Math.cos(a) * len * 0.42 + 0.06, 1.25 + rnd() * 0.04, Math.sin(a) * len * 0.42);
         leaf.rotation.y = -a;
         leaf.rotation.z = -0.34 + rnd() * 0.14;
         g.add(leaf);
       }
       // 顶心
       const crown = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), M.plantLight);
-      crown.position.set(0.06, 1.42, 0);
+      crown.position.set(0.06, 1.25, 0);
       g.add(crown);
     };
-    palm(4.15, POOL_Z1 + 0.62, 1.0);
-    palm(8.05, POOL_Z1 + 0.62, 0.88);
+    // 缩小花盆并移到西南、东南角，给南侧环池步道留出连续净宽。
+    palm(0.30, 13.35, 0.48);
+    palm(12.85, 13.35, 0.48);
   }
 
   // A7. 水面漂浮物：浮圈 + 浮板（漂在池面上，和挂在柱子上的救生圈不同）
@@ -3737,23 +3506,13 @@ function buildPoolDeck(world, M) {
         band.position.copy(ring.position);
         p.add(band);
       } else {
-        rbox(p, 0.46, 0.045, 0.30, 0.06, M.fabricBlue, f.x, WATER_Y, f.z, f.r);
+        // 浮板要有一部分压入水面；把板心下沉 3cm，避免看起来像悬在水上。
+        rbox(p, 0.46, 0.045, 0.30, 0.06, M.fabricBlue, f.x, WATER_Y - 0.03, f.z, f.r);
       }
     }
   }
 
-  // A8. 沙滩巾晾在栏杆上（北侧栏杆，z≈DECK_Z0 那条）
-  {
-    const towels = [M.fabricOchre, M.fabricBlue, M.fabricCream, M.linenBlue];
-    for (let i = 0; i < 4; i++) {
-      const tx = 5.6 + i * 0.52;
-      const tz = DECK_Z0 + 0.10;
-      const t = rbox(p, 0.42, 0.62, 0.018, 0.006, towels[i], tx, DECK_TOP + 0.86, tz);
-      t.rotation.x = 0.06;        // 略微外翻，像刚搭上去
-      // 栏杆压住的那条横杆
-      if (i === 0) cyl(p, 0.012, 0.012, 2.1, M.steel, tx + 0.78, DECK_TOP + 1.16, tz, 8).rotation.z = Math.PI / 2;
-    }
-  }
+  // Removed the extra towel rail: it intersected the balcony railing and narrowed the pool approach.
 }
 
 
@@ -3761,15 +3520,15 @@ function buildPoolDeck(world, M) {
 function buildFoyer(world, M) {
   const p = world.root;
   // 鞋柜
-  box(p, 0.3, 0.9, 0.8, M.cream, 0.25, 0.45, 5.3);
-  box(p, 0.32, 0.04, 0.82, M.oak, 0.25, 0.92, 5.3);
+  box(p, 0.3, 0.9, 0.52, M.cream, 0.25, 0.45, 5.47);
+  box(p, 0.32, 0.04, 0.54, M.oak, 0.25, 0.92, 5.47);
   // Inset fronts and shadow reveals on the entry shoe cabinet.
-  box(p, 0.014, 0.76, 0.74, M.darkWood, 0.405, 0.46, 5.3);
-  for (const z of [5.115, 5.485]) {
-    rbox(p, 0.025, 0.716, 0.35, 0.008, M.cream, 0.42, 0.46, z);
-    box(p, 0.035, 0.015, 0.13, M.brass, 0.448, 0.67, z);
+  box(p, 0.014, 0.76, 0.48, M.darkWood, 0.405, 0.46, 5.47);
+  for (const z of [5.34, 5.60]) {
+    rbox(p, 0.025, 0.716, 0.22, 0.008, M.cream, 0.42, 0.46, z);
+    box(p, 0.035, 0.015, 0.10, M.brass, 0.448, 0.67, z);
   }
-  box(p, 0.25, 0.07, 0.73, M.darkWood, 0.25, 0.045, 5.3);
+  box(p, 0.25, 0.07, 0.50, M.darkWood, 0.25, 0.045, 5.47);
   // 镜子
   const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.9), M.mirror);
   mirror.rotation.y = Math.PI / 2;
@@ -3778,22 +3537,28 @@ function buildFoyer(world, M) {
   box(p, 0.03, 0.96, 0.61, M.walnut, 0.1, 1.52, 7.18);
   // （去掉玄关那块蓝色地垫）
   // 钥匙碗
-  cyl(p, 0.07, 0.06, 0.035, M.ceramic, 0.25, 0.94, 5.1);
+  cyl(p, 0.07, 0.06, 0.035, M.ceramic, 0.25, 0.94, 5.47);
   // （去掉原先挂在窗前的高位挂钩与外套：浮空横杆会挡住窗）
   addHotspot(world, 0.95, 6.25, 0.5, { title: '门口', sub: '门垫上有一点点沙，钥匙挂在旁边的钩子上', room: 'foyer', spot: 'door', label: '门口' });
-  addHotspot(world, 0.85, 5.4, 0.4, { title: '鞋柜', sub: '最上层放着一双白色小皮鞋，鞋尖朝外', room: 'foyer', spot: 'shoe', label: '鞋柜旁' });
+  addHotspot(world, 0.85, 5.47, 0.4, { title: '鞋柜', sub: '最上层放着一双白色小皮鞋，鞋尖朝外', room: 'foyer', spot: 'shoe', label: '鞋柜旁' });
 }
 
 // ── 植物 ──────────────────────────────────────────────────────────────────
-function plant(world, x, z, scale = 1) {
-  const p = world.root;
+function plant(world, x, z, scale = 1, parent = world.root) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.scale.setScalar(scale);
-  p.add(g);
+  parent.add(g);
   const potH = 0.3;
   cyl(g, 0.16, 0.2, potH, M_forPot(world), 0, potH / 2, 0);
   cyl(g, 0.165, 0.165, 0.02, M_soil(world), 0, potH + 0.005, 0);
+  // A visible central stalk joins the fan of branches to the soil. Without it,
+  // thin individual stems disappear at normal camera distances and the leaves
+  // read as a disconnected floating clump.
+  cyl(g, 0.018, 0.027, 0.36, M_stem(world), 0, potH + 0.18, 0, 10);
+  const crown = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 8), M_leaf(world));
+  crown.position.set(0, potH + 0.32, 0);
+  g.add(crown);
   const n = 7 + Math.floor(rnd() * 4);
   const up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < n; i++) {
@@ -3801,18 +3566,20 @@ function plant(world, x, z, scale = 1) {
     const len = 0.34 + rnd() * 0.3;
     const dir = new THREE.Vector3(Math.cos(a) * 0.55, 1.15 + rnd() * 0.25, Math.sin(a) * 0.55).normalize();
     const base = new THREE.Vector3(Math.cos(a) * 0.035, potH, Math.sin(a) * 0.035);
-    const tip = base.clone().addScaledVector(dir, len);
-    const mid = base.clone().addScaledVector(dir, len / 2);
-    const stem = cyl(g, 0.006, 0.009, len, M_stem(world), mid.x, mid.y, mid.z);
+    const stemCenter = base.clone().addScaledVector(dir, len / 2);
+    const stem = cyl(g, 0.006, 0.009, len, M_stem(world), stemCenter.x, stemCenter.y, stemCenter.z);
     stem.quaternion.setFromUnitVectors(up, dir);
     const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.085 + rnd() * 0.055, 10, 7), i % 3 ? M_leaf(world) : M_leafLight(world));
-    leaf.scale.set(1.35, 0.2, 0.8);
-    leaf.position.copy(tip).addScaledVector(dir, 0.03);
-    leaf.rotation.y = -a;
-    leaf.rotation.z = 0.22 * (rnd() - 0.5);
+    leaf.scale.set(1.45, 0.40, 0.82);
+    // The leaf's long axis follows its stem. Centering it before the stem tip
+    // makes the two surfaces visibly overlap instead of leaving a floating gap.
+    leaf.position.copy(base).addScaledVector(dir, len * 0.78);
+    leaf.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir);
+    leaf.rotateX(0.22 * (rnd() - 0.5));
     leaf.castShadow = true;
     g.add(leaf);
   }
+  return g;
 }
 function M_forPot(world) { return world.mats.terracotta; }
 function M_soil(world) { return world.mats.soil; }

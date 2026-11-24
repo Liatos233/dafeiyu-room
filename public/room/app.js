@@ -747,13 +747,11 @@ function setMode(mode, requestedRoom = null) {
     eyesPrev = null;   // 刚切进她的视角：不要拿旧位置算方向
   }
 }
-if (EDIT_MODE) {
-  try {
-    const ed = createDevEditor({ world, camera, canvas, view: VIEW });
-    ed.setEnabled(true);
-  } catch (e) {
-    console.warn('[dev-editor] 启动失败', e);
-  }
+try {
+  const ed = createDevEditor({ world, camera, canvas, view: VIEW });
+  if (EDIT_MODE) ed.setEnabled(true);
+} catch (e) {
+  console.warn('[dev-editor] 启动失败', e);
 }
 
 if (EDIT_MODE) {
@@ -3213,6 +3211,7 @@ function buildDevQuickMenu() {
   el.innerHTML = `
     <div style="color:#8fc1ff;font-weight:700;margin:2px 4px 6px">开发菜单</div>
     <button data-dev="nav" class="dq">地图 <b></b></button>
+    <button data-dev="objectids" class="dq">家具/物件编号 <b></b></button>
     <button data-dev="labels" class="dq">房间标签 <b></b></button>
     <button data-dev="hitbox" class="dq">动画框 <b></b></button>
     <button data-dev="animdbg" class="dq">动画调试 <b></b></button>
@@ -3249,6 +3248,18 @@ function buildDevQuickMenu() {
     if (navMapEl && document.body.contains(navMapEl)) { navMapEl.remove(); navMapEl = null; }
     else showNavMap();
     mark('nav', !!navMapEl);
+  });
+  el.querySelector('[data-dev="objectids"]').addEventListener('click', () => {
+    if (window.__devEditor?.setObjectIds) {
+      mark('objectids', window.__devEditor.setObjectIds(!window.__devEditor.objectIdsEnabled));
+      return;
+    }
+    // The editable scene owns stable mesh grouping and ID sprites. Open it with
+    // labels enabled, preserving the current camera/debug query parameters.
+    const url = new URL(location.href);
+    url.searchParams.set('edit', '1');
+    url.searchParams.set('objectIds', '1');
+    location.href = url.toString();
   });
   el.querySelector('[data-dev="labels"]').addEventListener('click', () => {
     if (typeof setRoomLabels === 'function') {
@@ -3316,6 +3327,7 @@ function buildDevQuickMenu() {
     mark('events', true);
     mark('actions', true);
     mark('nav', !!navMapEl);
+    mark('objectids', !!window.__devEditor?.objectIdsEnabled);
     mark('anim', devMode);
   }, 60);
 
@@ -3345,6 +3357,7 @@ function setDevMode(on) {
     clipLogOn = false;
     renderClipLog();            // clipLogOn=false 时它会移除「动画调试」卡片
     try { setAnimGraphOpen(false); } catch { /* 忽略 */ }
+    window.__devEditor?.setObjectIds?.(false);
     // 勾选一起清空，否则重新开开发模式时菜单会显示「已开」但其实没有
     const menu = document.getElementById('devQuickMenu');
     if (menu) for (const b of menu.querySelectorAll('[data-dev] b')) b.textContent = '';
