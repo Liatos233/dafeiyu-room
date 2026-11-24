@@ -15,7 +15,6 @@ const DIR = 'assets/sound/sfx/';
 
 /** 文件型音效：多取几个变体，同一个动作连着响才不像复读机。 */
 const FILES = {
-  step: [1, 2, 3, 4, 5, 6].map((i) => `${DIR}step-${i}.ogg`),
   swim: [1, 2, 3, 4].map((i) => `${DIR}swim-${i}.ogg`),
   splashEnter: [`${DIR}splash-enter.ogg`]
 };
@@ -23,21 +22,27 @@ const FILES = {
 /**
  * 事件表。键是事件名，值是：
  *   file     素材（数组 = 变体池，随机取一个；字符串 = 单个）
- *   synth    没有素材时的合成兜底（见 SYNTHS），也用于纯合成音效
+ *   synth    合成器（见 SYNTHS）
  *   gain     这条音效的基准增益（0–1），再乘总音量
  *   cooldown 两次触发的最小间隔（毫秒），防连发糊成一片
  *   jitter   音高随机浮动比例，进一步打散重复感（如 0.06 = ±6%）
  *   panScale 这一条受声像影响的程度，1 = 全受
  *
- * 走路/跑步刻意用同一组素材、只改 rate（见 playStep）：跑步本来就是把走路的
- * 频次和音高抬上去，用完全不同的采样反而像换了个人。
+ * 一条事件可以**同时**有 file 和 synth：素材优先，解码失败或还没下载好
+ * 就退到合成器。这样不会出现"素材挂了一个文件就彻底没声音"。
  */
 const EVENTS = {
   // ── 已接入：走 / 跑 / 游泳 ───────────────────────────────
-  step: { file: FILES.step, gain: 0.30, cooldown: 90, jitter: 0.05, panScale: 1 },
-  // rate 1.38：服务端 route 速度是 走 1.05 / urgent 跑 1.45 m/s（home-state.js），
-  // 比值 1.38 正好对应步频抬高的倍率。用 1.18 会跟画面里的步频脱节。
-  run: { file: FILES.step, gain: 0.36, cooldown: 80, jitter: 0.06, rate: 1.38, panScale: 1 },
+  // 脚步用**合成**而不是采样：合成天然没有复读感（每步都有随机 detune 和
+  // 左右脚交替），也不用背 91KB 的素材和它的许可证记录。
+  // Coopanion 的做法证明这套在桌宠上够用；这里按木地板/瓷砖的体量加了低频，
+  // 参数见 SYNTHS.step 和 SURFACES。
+  step: { synth: 'step', gain: 0.30, cooldown: 90, panScale: 1 },
+  // 跑步**不抬高 rate**。Coopanion 对桌宠用 ×1.25，那是因为它只有"嗒"一声、
+  // 想表达"跑起来了"只能靠音高。脚步声的"跑"应该靠**更多低频**和更密的步频，
+  // 抬高音高只会变尖。实测 rate 1.12 会让过零率（zcr）涨到走路的 1.5 倍，
+  // 听着像"哒哒"而不像"咚咚"。这里交给 SYNTHS.step 内部的 gait 因子去加重。
+  run: { synth: 'step', gain: 0.38, cooldown: 80, panScale: 1 },
   swim: { file: FILES.swim, gain: 0.34, cooldown: 260, jitter: 0.07, panScale: 1 },
   splashEnter: { file: FILES.splashEnter, gain: 0.42, cooldown: 900, panScale: 1 },
   splashExit: { synth: 'splash', gain: 0.26, cooldown: 900, panScale: 1 },
@@ -57,11 +62,85 @@ const EVENTS = {
 // ── 合成兜底 ──────────────────────────────────────────────────
 // 有素材时优先用素材；这些只在素材缺失/解码失败时接管，
 // 以及给纯合成音效（UI）用。参数按"听起来像什么"调，不是按物理。
+
+/**
+ * 每种地面的一组参数。同一个脚步声换地面就换这三样，其余不动：
+ *   thump    撞击音高的整体缩放（瓷砖比木头脆、地毯比木头闷）
+ *   body     地面共鸣的中频位置 —— 决定"这块地是木头的还是瓷砖的"
+ *   scuff    鞋底摩擦的噪声中心频率与音量
+ */
+const SURFACES = {
+  wood: { thump: 1.00, body: 210, bodyVol: 0.16, bodyDur: 0.070, scuff: 2300, scuffVol: 0.14 },
+  tile: { thump: 1.08, body: 340, bodyVol: 0.10, bodyDur: 0.045, scuff: 3200, scuffVol: 0.20 },
+  carpet: { thump: 0.92, body: 150, bodyVol: 0.06, bodyDur: 0.050, scuff: 1500, scuffVol: 0.09 },
+  stone: { thump: 1.05, body: 300, bodyVol: 0.12, bodyDur: 0.055, scuff: 2800, scuffVol: 0.18 },
+  grass: { thump: 0.88, body: 140, bodyVol: 0.05, bodyDur: 0.060, scuff: 1200, scuffVol: 0.22 }
+};
+
 const SYNTHS = {
-  /** 脚步：低频"咚" + 一层很短的摩擦噪声。run 时音高抬上去。 */
-  step(ctx, dest, { at, rate = 1 }) {
-    thump(ctx, dest, { at, f0: 190 * rate, f1: 62 * rate, dur: 0.09, vol: 0.5 });
-    noise(ctx, dest, { at, f0: 2100 * rate, q: 0.9, dur: 0.045, vol: 0.16 });
+  /**
+   * 脚步。结构参考 Coopanion 的 `step(run, i)`：
+   * 一个**下滑**的正弦 +（跑步时）一层摩擦噪声，并且**两只脚用不同的基音**
+   * （它用 440→330 与 520→380 交替）。
+   *
+   * 双脚交替是它最聪明的一处：光靠随机 detune 分不出左右脚，
+   * 而每步固定换一个基音，连续两步天然不完全相同 —— 更像"真的在走"。
+   *
+   * 但桌宠那版是轻声"嗒"一下（f0 440 起、音量 0.05，一只小宠物够用）。
+   * 木地板上的人脚步需要体重感，所以在它的结构上补了三层：
+   *   ① 脚跟   更低更短的撞击，负责"重"
+   *   ② 地面   一段中频短共鸣，负责"这块地是什么材质"
+   *   ③ 摩擦   鞋底擦过地面的"沙"，不是"嘶"（带通要窄）
+   * 跑步再多一层蹬地，并把整体音高抬起来 —— 但抬得比它克制：
+   * 它用 ×1.25，真跑起来是"更密更重"，不是"更尖"。
+   */
+  step(ctx, dest, { at = 0, rate = 1, running = false, surface = 'wood', foot = 0, gainMul = 1 } = {}) {
+    const s = SURFACES[surface] || SURFACES.wood;
+    // 跑步不加 gait 音高因子：跑步的"重"全部来自下面 ④ 那层蹬地低频，
+    // 以及更长的摩擦尾巴。抬音高只会让它变尖（见 EVENTS.run 的注释）。
+    const side = foot ? 1.12 : 1;
+    // ±1.5% 的随机，避免机械重复。再多就"跑调"了
+    const wobble = 1 + (Math.random() * 2 - 1) * 0.015;
+    const k = rate * side * s.thump * wobble;
+
+    // ① 脚跟：这一步的重量。滑向 45Hz 而不是纯低频正弦 ——
+    //    下滑让听觉上是"落地压实"，恒定正弦只是"嗡"。
+    thump(ctx, dest, {
+      at, type: 'sine',
+      f0: 105 * k, f1: 45 * k,
+      dur: running ? 0.065 : 0.085,
+      vol: (running ? 0.30 : 0.24) * gainMul,
+      attack: 0.004
+    });
+
+    // ② 地面共鸣：短、很轻，但去掉就没有"房间感"，脚步会像在真空里
+    thump(ctx, dest, {
+      at: at + 0.006, type: 'triangle',
+      f0: s.body * k, f1: s.body * k * 0.62,
+      dur: s.bodyDur,
+      vol: s.bodyVol * gainMul,
+      attack: 0.003
+    });
+
+    // ③ 摩擦：Q 值高一点，出来是"沙"而不是"嘶"
+    noise(ctx, dest, {
+      at: at + 0.004,
+      f0: s.scuff * k, f1: s.scuff * k * 0.7, q: 1.4,
+      dur: running ? 0.055 : 0.035,
+      // 跑步的摩擦**不该**加得更多。实测加 1.5× 会让过零率翻到走路的 2.25 倍，
+      // 听感变成"哒哒"的尖响，而跑步真正该多的是下面那层蹬地低频。
+      // 这里给 1.15× 已经是"鞋底更用力擦过"的程度。
+      vol: s.scuffVol * (running ? 1.15 : 1) * gainMul
+    });
+
+    // ④ 跑步的蹬地：这是"跑"的**唯一来源** —— 比走多一个更低更闷的撞击。
+    //    不加音高（那会变尖），只加低频厚度，所以听起来是"咚咚"不是"哒哒"。
+    if (running) {
+      thump(ctx, dest, {
+        at: at + 0.010, type: 'sine',
+        f0: 72 * k, f1: 34 * k, dur: 0.085, vol: 0.26 * gainMul, attack: 0.006
+      });
+    }
   },
   /** 溅水：带通噪声从高滑到低，尾巴拖一点。 */
   splash(ctx, dest, { at }) {
@@ -82,7 +161,7 @@ const SYNTHS = {
 };
 
 // ── 底层发声 ──────────────────────────────────────────────────
-function thump(ctx, dest, { at, f0, f1, dur, vol, type = 'sine' }) {
+function thump(ctx, dest, { at, f0, f1, dur, vol, type = 'sine', attack = 0.005 }) {
   const t0 = ctx.currentTime + (at || 0);
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -90,7 +169,9 @@ function thump(ctx, dest, { at, f0, f1, dur, vol, type = 'sine' }) {
   osc.frequency.setValueAtTime(f0, t0);
   osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.005);
+  // attack 可调：脚步要"硬起"（4ms），共鸣要"软起"（3ms 但更轻），
+  // 统一的 5ms 会让脚跟那一下听起来钝
+  g.gain.exponentialRampToValueAtTime(vol, t0 + Math.min(attack, dur * 0.5));
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   osc.connect(g); g.connect(dest);
   osc.start(t0); osc.stop(t0 + dur + 0.02);
@@ -137,7 +218,10 @@ const state = {
   panMax: 0.25,    // 声像上限（轻微，不要飘）
   enabled: true,
   volume: 1,
-  variantIdx: {}   // 每条事件上一次用了哪个变体，避免连续重复
+  variantIdx: {},  // 每条事件上一次用了哪个变体，避免连续重复
+  foot: 0,         // 下一步是哪只脚（0/1 交替）。Coopanion 用不同基音区分左右脚
+  surface: 'wood', // 脚下是什么地面，换地面就换音色
+  failing: {}      // 素材连续失败几次后放弃，退到合成音
 };
 
 /** 解码一个文件；同一个文件只解一次。 */
@@ -207,7 +291,7 @@ function playBuffer(name, buffer, ev, rate) {
 /**
  * 触发一个事件。
  * @param {string} name EVENTS 的键
- * @param {object} opts { rate, gain, pan } —— gain 用来做「这一刻比平时轻/重」
+ * @param {object} opts { rate, gain, running, surface } —— gain 用来做「这一刻比平时轻/重」
  * @returns {boolean} 是否真的发声（被冷却挡住、没上下文、静音时为 false）
  */
 function play(name, opts = {}) {
@@ -230,24 +314,36 @@ function play(name, opts = {}) {
       playBuffer(name, buf, g, rate);
       return true;
     }
-    // 素材还在下载（第一步赶上了）→ 直接静默返回，不要用合成音顶替一下，
-    // 否则同一串脚步里会混进一个音色完全不同的声音，比漏一拍更明显
-    if (!state.failed[file]) { loadBuffer(file); return false; }
+    // 素材还没下载好 → 立刻用合成音顶上。
+    // 早先这里返回 false（怕同一串脚步混进不同音色），结果是**完全没声**，
+    // 比混一个音色更糟：用户听到的是"走路没声音"。
+    // 现在脚步本身就走合成，素材型音效（水声）也允许兜底。
+    if (!state.failed[file]) loadBuffer(file);
   }
 
   const synth = ev.synth && SYNTHS[ev.synth];
   if (!synth) return false;
-  synth(state.ctx, state.bus, { at: 0, rate });
+  const gainMul = opts.gain != null ? opts.gain : 1;
+  synth(state.ctx, state.bus, { at: 0, rate, gainMul, ...opts });
   return true;
 }
 
 /**
- * 走路的一步。走路和跑步共用 step 素材，只改 rate 和增益：
- * 跑步本来就是「更密、更响、音高略高」，用不同采样反而像换了个人。
- * @param {object} opts { running, surface }
+ * 走路的一步。走和跑共用同一个合成器，靠 running 改音色：
+ * 跑步是「更密、更重、鞋底摩擦更大」，不是「把走路的音高调高」。
+ * @param {object} opts { running, surface, gain }
  */
-function playStep({ running = false, gain = 1 } = {}) {
-  return play(running ? 'run' : 'step', { gain });
+function playStep({ running = false, surface = null, gain = 1 } = {}) {
+  // 左右脚交替。放在这里而不是调用方，是为了让"每一步换一只脚"
+  // 不受调用频率影响（跑起来步子更密，但左右仍严格交替）
+  const foot = state.foot;
+  state.foot = state.foot ? 0 : 1;
+  return play(running ? 'run' : 'step', {
+    gain,
+    running,
+    foot,
+    surface: surface || state.surface
+  });
 }
 
 export const sfx = {
@@ -276,6 +372,11 @@ export const sfx = {
   /** 她的屏幕位置 -1…1，声音轻微偏向那一侧。 */
   setPan(v) { state.pan = Math.max(-1, Math.min(1, Number(v) || 0)); },
   get pan() { return state.pan; },
+  /** 脚下地面：wood / tile / carpet / stone / grass。换地面就换音色。 */
+  setSurface(s) { if (SURFACES[s]) state.surface = s; },
+  get surface() { return state.surface; },
+  /** 可用的地面清单，给试听页/测试用。 */
+  get surfaces() { return Object.keys(SURFACES); },
   /** 声像上限，默认 0.25（轻微）。 */
   setPanMax(v) { state.panMax = Math.max(0, Math.min(1, Number(v) || 0)); },
   play,
@@ -302,6 +403,8 @@ export const sfx = {
       enabled: state.enabled,
       pan: state.pan,
       panMax: state.panMax,
+      surface: state.surface,
+      foot: state.foot,
       loaded: Object.keys(state.buffers).length,
       failed: Object.keys(state.failed),
       ctxState: state.ctx?.state || 'none'
@@ -310,4 +413,4 @@ export const sfx = {
 };
 
 // 便于无头测试
-export const __internals = { EVENTS, SYNTHS, FILES };
+export const __internals = { EVENTS, SYNTHS, FILES, SURFACES };

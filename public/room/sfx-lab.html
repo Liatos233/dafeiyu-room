@@ -67,6 +67,24 @@
   </div>
 
   <div class="panel">
+    <h2>脚步声 · 地面</h2>
+    <div class="row">
+      <label>脚下地面</label>
+      <div id="surfaces" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
+    </div>
+    <div class="row">
+      <button class="sfx" id="btnStep" style="flex:1">▶ 走一步</button>
+      <button class="sfx" id="btnRunStep" style="flex:1">▶ 跑一步</button>
+      <button class="sfx" id="btnAlt" style="flex:1">▶ 连踩 8 步（听左右脚交替）</button>
+    </div>
+    <div class="hint">
+      脚步声是<strong>合成</strong>的，不是采样 —— 结构照 Coopanion 的 <code>step(run, i)</code>：
+      下滑正弦 + 摩擦噪声，并且<strong>两只脚用不同基音</strong>。
+      「连踩 8 步」专门用来听左右脚是不是真的不一样；如果听起来像同一下复读，就是交替坏了。
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>总控</h2>
     <div class="row">
       <label>总音量</label>
@@ -214,6 +232,47 @@ for (const name of sfx.events) {
   });
   $('grid').appendChild(b);
 }
+
+// ── 脚步声：地面选择 + 单步 + 连踩 ────────────────────────────
+const SURFACE_LABEL = { wood: '木地板', tile: '瓷砖', carpet: '地毯', stone: '石材', grass: '草地' };
+let curSurface = 'wood';
+for (const s of sfx.surfaces) {
+  const b = document.createElement('button');
+  b.className = 'sfx';
+  b.style.flex = '0 0 auto';
+  b.style.padding = '6px 12px';
+  b.textContent = SURFACE_LABEL[s] || s;
+  b.addEventListener('click', () => {
+    initAudio();
+    curSurface = s;
+    sfx.setSurface(s);
+    [...$('surfaces').children].forEach((x) => { x.style.borderColor = ''; x.style.fontWeight = ''; });
+    b.style.borderColor = 'var(--accent)'; b.style.fontWeight = '600';
+    log(`地面 → ${s}`);
+  });
+  if (s === 'wood') { b.style.borderColor = 'var(--accent)'; b.style.fontWeight = '600'; }
+  $('surfaces').appendChild(b);
+}
+
+$('btnStep').addEventListener('click', () => {
+  initAudio(); sfx.playStep({ running: false, surface: curSurface });
+  log(`走一步 · 地面 ${curSurface}`);
+});
+$('btnRunStep').addEventListener('click', () => {
+  initAudio(); sfx.playStep({ running: true, surface: curSurface });
+  log(`跑一步 · 地面 ${curSurface}`);
+});
+$('btnAlt').addEventListener('click', () => {
+  initAudio();
+  // 8 步 90ms 间隔（约等于小跑的步频），专门听左右脚是否真的交替
+  let i = 0;
+  const t = setInterval(() => {
+    sfx.playStep({ running: false, surface: curSurface });
+    i += 1;
+    if (i >= 8) { clearInterval(t); log('连踩 8 步结束'); }
+  }, 90);
+  log('连踩 8 步…');
+});
 
 // ── 连续走/跑 ─────────────────────────────────────────────────
 let loopTimer = 0;

@@ -4,7 +4,17 @@
 和 `assets/sound/ambience/`（天气环境音）分开：环境音是背景床，动作音效是
 「她做了什么」的即时反馈。
 
-## 许可证：全部 CC0 1.0（公有领域）
+## 现状：只有水声用素材，脚步是合成的
+
+| 音效 | 实现 | 为什么 |
+|---|---|---|
+| 走 / 跑 | **合成**（`sfx.js` 的 `SYNTHS.step`） | 合成天生不重复（每步随机 detune + 左右脚交替基音），也不用背素材和许可证 |
+| 划水 / 入水 | 素材（本目录） | 水的瞬态很难合成得像，真录音明显更自然 |
+
+脚步最初也用了素材（6 个 CC0 单步），后来按 Coopanion 的思路改成合成后删掉了：
+换来复读感消失、包体积少 46KB、地面材质可切换（木/瓷砖/地毯/石材/草地）。
+
+## 许可证：CC0 1.0（公有领域）
 
 CC0 不要求署名，但**必须留存来源记录** —— 这是本项目以前的欠账：
 `ambience/` 里那 6 个 ogg 现在没有任何来源信息（ffmpeg 转码时把 tags 剥了，
@@ -12,15 +22,14 @@ CC0 不要求署名，但**必须留存来源记录** —— 这是本项目以�
 
 | 文件 | 来源 | 作者 | 许可证 |
 |---|---|---|---|
-| `step-1…6.ogg` | [Footsteps](https://opengameart.org/content/footsteps-0) | 匿名（OpenGameArt） | CC0 |
 | `swim-1…4.ogg` | [40 CC0 water / splash / slime SFX](https://opengameart.org/content/40-cc0-water-splash-slime-sfx) | rubberduck | CC0 |
 | `splash-enter.ogg` | 同上（`splash_01.ogg`） | rubberduck | CC0 |
 
-- **脚步**：作者自述在地铁里实录、Audacity 去噪归一。原始 7 个片段，取了
-  `01`–`06` 六个当变体轮换（`07` 与已选的重复度高，没用）。
-- **水声**：rubberduck 的 40 个素材包，取 4 个短促溅水当划水、1 个较长的当入水。
-  同一包里 `slime_*`（16 个）和 `loop_water_*`（9 个）还没用上，将来要加
-  「涉水走」「游泳循环」可以直接取。
+同一包里 `slime_*`（16 个）和 `loop_water_*`（9 个）还没用上，将来要加
+「涉水走」「游泳循环」可以直接取。
+
+早期版本里用过的脚步素材（[Footsteps](https://opengameart.org/content/footsteps-0)，CC0）
+现已不再使用，如需恢复采样版可重新下载。
 
 ## 规整方式（可复现）
 

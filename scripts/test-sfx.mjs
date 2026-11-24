@@ -101,12 +101,13 @@ test('FILES 里登记的素材全部存在且非空', () => {
       count += 1;
     }
   }
-  assert.ok(count >= 8, `素材太少：${count}`);
+  assert.ok(count >= 5, `素材太少：${count}`);
 });
 
-test('每类动作音效都有多个变体（单发重复会像复读机）', () => {
-  // step / swim 必须多变体；splash 是「一次性事件」，单条可以接受
-  assert.ok(FILES.step.length >= 4, `走路变体太少：${FILES.step.length}`);
+test('每类素材音效都有多个变体（单发重复会像复读机）', () => {
+  // 脚步已改成合成（每步随机 detune + 左右脚交替，天生不重复），
+  // 剩下用素材的是水声：划水必须有多个变体。
+  // 入水（splashEnter）是「一次性事件」，单条可以接受。
   assert.ok(FILES.swim.length >= 3, `划水变体太少：${FILES.swim.length}`);
 });
 
@@ -156,10 +157,41 @@ test('高频动作都设了冷却（防连发糊成一片）', () => {
   }
 });
 
-test('跑步的 rate 高于 1（音高抬起来），但不超过 1.6', () => {
-  const r = EVENTS.run?.rate;
-  assert.ok(r > 1, `跑步 rate 应 > 1，实际 ${r}`);
-  assert.ok(r <= 1.6, `跑步 rate ${r} 太尖，会像卡通`);
+test('跑步靠低频加重，不靠抬音高', () => {
+  // 曾经的写法是 rate > 1（音高抬起来）—— 那是错的：
+  // 实测 zcr 会翻到走路的 1.5~2.25 倍，听着像"哒哒"的尖响。
+  // 真正该多的是低频。这条测试守住这个决定，免得以后有人"顺手"加回 rate。
+  assert.equal(EVENTS.run?.rate, undefined, 'run 不该设 rate（抬音高会变尖，用低频加重）');
+  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
+  // 跑步分支里必须有蹬地低频
+  assert.ok(/if \(running\)[\s\S]{0,240}?f0: 7[0-9]/.test(src), '跑步没有加低频蹬地层');
+  // 合成器里不该再用 gait 之类的整体音高因子
+  assert.ok(!/const gait = running/.test(src), '又出现了整体音高抬升（gait）');
+});
+
+test('脚步左右脚交替（Coopanion 的 step(run, i) 思路）', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
+  // 交替由 playStep 里翻转 state.foot 实现
+  assert.ok(/state\.foot = state\.foot \? 0 : 1/.test(src), '没有左右脚交替');
+  // 两只脚必须真的用不同参数
+  assert.ok(/const side = foot \? 1\.12 : 1/.test(src), '左右脚用同一个基音，等于没交替');
+  // 随机抖动不能太大，否则会"跑调"
+  assert.ok(/0\.015/.test(src), '每步的随机抖动参数不见了');
+});
+
+test('脚步是合成的，不再依赖素材文件', () => {
+  // 换成合成后，step/run 不该再引 file —— 否则素材缺失时又退回没声音
+  assert.equal(EVENTS.step?.file, undefined, 'step 还在用素材');
+  assert.equal(EVENTS.run?.file, undefined, 'run 还在用素材');
+  assert.equal(EVENTS.step?.synth, 'step', 'step 没接合成器');
+});
+
+test('地面参数齐全，且瓷砖比地毯亮', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'sfx.js'), 'utf8');
+  for (const s of ['wood', 'tile', 'carpet', 'stone', 'grass']) {
+    assert.ok(new RegExp(`${s}:\\s*\\{`).test(src), `缺少地面参数 ${s}`);
+  }
+  assert.ok(/const SURFACES/.test(src), '找不到 SURFACES 表');
 });
 
 console.log('\n接入点');

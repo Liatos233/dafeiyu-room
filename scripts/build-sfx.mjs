@@ -37,21 +37,19 @@ const TARGET_RMS = -20;   // 目标 RMS（听觉响度）dBFS
  *
  * 溅水是瞬态音：能量全集中在开头几十毫秒，原始峰值就贴着 0dBFS。
  * 硬推到 -20 会被限制器压平，出来是"啪"的一下削波失真，听感比响度不齐更糟。
- * 低 1.5dB 换干净的音头，和脚步的差距落在 1.5dB 内，基本听不出。
+ * 低 1.5dB 换干净的音头。
  */
 const WATER_TARGET_RMS = -21.5;
 const LIMIT = 0.85;       // 限制器上限，约 -1.4dBFS，留余量防爆音
 
 /** 源文件 → 产物。`trim` 是保留长度（秒），按动作的实际时长裁。 */
 const JOBS = [
-  ...[1, 2, 3, 4, 5, 6].map((i) => ({
-    in: join(SRC, `${String(i).padStart(2, '0')}-footstep.ogg`),
-    out: `step-${i}.ogg`, trim: 0.40, kind: 'step', label: '走路单步',
-  })),
+  // 游泳：4 个划水声（rubberduck 的 CC0 溅水包）
   ...['09', '10', '06', '15'].map((n, i) => ({
     in: join(SRC, 'water', `splash_${n}.ogg`),
     out: `swim-${i + 1}.ogg`, trim: 0.45, kind: 'swim', label: '划水',
   })),
+  // 入水：一次较大的溅水
   { in: join(SRC, 'water', 'splash_01.ogg'), out: 'splash-enter.ogg', trim: 0.90, kind: 'splash', label: '入水' },
 ];
 

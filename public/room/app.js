@@ -1293,6 +1293,28 @@ let stepWasSwimming = false;
 let stepPrevPos = null;    // 独立的上一帧位置，不受 lastDisplayPos 被别处改写的影响
 const STEP_STRIDE_WALK = 0.75;   // 走路每步 0.75m（1.05 m/s → 约 1.4 步/秒）
 const STEP_STRIDE_RUN = 0.55;    // 跑步步子更密
+
+// 哪些区域是瓷砖/石材。其余（客厅/卧室/餐厅/走廊）铺木地板。
+// 数值必须和 world.js 里 tilePlane(...) 的矩形一致 —— 那里是铺地图纸的真源，
+// 这里只是按她的坐标反推"脚下是什么"。改地板时两处要一起改。
+// [x0, z0, x1, z1, surface]
+const TILE_AREAS = [
+  [0, 0, 4.2, 3.6, 'tile'],        // 厨房
+  [10.8, 5.6, 13.2, 8.2, 'tile'],  // 浴室
+  [8.4, 5.6, 10.8, 7.6, 'tile'],    // 洗衣房
+  [0, 7.6, 8.2, 9.0, 'tile'],       // 阳台
+  [0.15, 9.0, 13.2, 13.5, 'stone']  // 泳池露台
+];
+
+/** 她脚下是什么地面。她不在任何特殊区域时算木地板。 */
+function surfaceAt(pos) {
+  if (!pos) return 'wood';
+  for (const [x0, z0, x1, z1, s] of TILE_AREAS) {
+    if (pos[0] >= x0 && pos[0] <= x1 && pos[1] >= z0 && pos[1] <= z1) return s;
+  }
+  // 卧室和客厅铺了地毯的区域给 'carpet'：踩上去比木地板闷
+  return 'wood';
+}
 let sleepPhase = 'none';
 let lastOnceKey = '';
 let lastOnceAt = 0;
@@ -4362,8 +4384,8 @@ function updateFootsteps({ displayPos, swimmingNow, dragging }) {
   stepDist += moved;
   if (stepDist >= stride) {
     stepDist = 0;
-    // 跑步时声音更靠下、更响一点；gain 变化幅度小，避免一步一个音量
-    ambience.sfx.playStep({ running });
+    // 跑步时声音更重更密；gain 变化幅度小，避免一步一个音量
+    ambience.sfx.playStep({ running, surface: surfaceAt(displayPos) });
   }
 }
 
