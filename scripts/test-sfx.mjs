@@ -157,36 +157,42 @@ test('高频动作都设了冷却（防连发糊成一片）', () => {
   }
 });
 
-test('脚步贴近 Coopanion 的轻快取向（高频短促，不是低频闷响）', () => {
-  // 这条的取向改过一次，记下来免得再来回：
-  //   第一版 → 加 105→45Hz 脚底低频 + 210Hz 地面共鸣，想表达"木地板有体重"
-  //   用户反馈 → "太闷了，不像参考的那个轻快"
-  //   现在   → 回到 Coopanion 的做法：**基音 440 起、60ms、向下滑**
-  //            低频只留极轻一层地面色（占主音约 1/7）用来区分材质
+test('脚步逐参数照抄 Coopanion 的 step(run, i)', () => {
+  // 取向定过三次，最终结论：**照抄，别改**。
+  //   第一版 → 105→45Hz 脚底低频 + 地面共鸣（想表达体重感）
+  //   用户   → "太闷了，不像参考的那个轻快"
+  //   第二版 → 440 起但自己加了 layer、增益
+  //   用户   → "声音都不像是走路了"
+  //   现在   → 逐参数照抄它的 step，只保留一个极小的地面音高系数
+  //
+  // Coopanion 原文：
+  //   const k = run ? 1.25 : 1;
+  //   tone({ f0: (i ? 520 : 440) * k, f1: (i ? 380 : 330) * k, dur: .06, vol: run ? .07 : .05 });
+  //   if (run) noise({ f0: 2500, q: .8, dur: .05, vol: .03 });
   const src = code(path.join(ROOT, 'public', 'room', 'sfx.js'));
-  // 取 step 函数体：从 "step(ctx, dest, {" 到下一个 "  }," （SYNTHS 的方法结束）
-  // 注意注释已在上面的 code() 里剥掉，不会因为注释里的花括号截断
   const body = /step\(ctx, dest,[\s\S]*?\n  \},/.exec(src);
   assert.ok(body, '找不到 SYNTHS.step');
   const b = body[0];
-  // 主音必须落在 440 附近（Coopanion 的基音高度），而不是 105 那种低频
-  assert.ok(/running \? 550 : 440/.test(b), '主音没落在 440/550（Coopanion 的高度）');
-  // 必须很短促
-  assert.ok(/dur: 0\.060/.test(b), '主音不是 60ms 的短促音');
-  // 音高必须向下滑（440→330 就是 ×0.75）
-  assert.ok(/f1: base \* 0\.75/.test(b), '音高没有向下滑');
-  // 不该再有 105/45 那一档低频
-  assert.ok(!/f0: 105/.test(b), '又回到 105Hz 的闷响了');
+
+  assert.ok(/const k = running \? 1\.25 : 1/.test(b), '缺少它的跑步系数 1.25');
+  assert.ok(/foot \? 520 : 440/.test(b), '主音不是它的 440/520');
+  assert.ok(/foot \? 380 : 330/.test(b), '下滑终点不是它的 330/380');
+  assert.ok(/dur: 0\.06/.test(b), '时长不是它的 60ms');
+  assert.ok(/running \? 0\.07 : 0\.05/.test(b), '基准音量不是它的 .05/.07');
+  // 跑步的摩擦噪声必须是它的 2500Hz / Q0.8 / 50ms / .03
+  assert.ok(/f0: 2500/.test(b), '摩擦噪声不是 2500Hz');
+  assert.ok(/q: 0\.8/.test(b), '摩擦噪声 Q 不是 0.8');
+  assert.ok(/vol: 0\.03/.test(b), '摩擦噪声音量不是 .03');
+  // 不该再有任何"额外层"（上一版就是加多了不像走路）
+  assert.ok(!/f0: 105|f0: 72/.test(b), '又加回了低频层');
 });
 
-test('脚步左右脚交替（Coopanion 的 step(run, i) 思路）', () => {
+test('脚步左右脚交替（它的 (i ? 520 : 440)）', () => {
   const src = code(path.join(ROOT, 'public', 'room', 'sfx.js'));
   // 交替由 playStep 里翻转 state.foot 实现
   assert.ok(/state\.foot = state\.foot \? 0 : 1/.test(src), '没有左右脚交替');
-  // 两只脚必须真的用不同基音（Coopanion 是 440/520，这里 440/500）
-  assert.ok(/const side = foot \? 1\.136 : 1/.test(src), '左右脚用同一个基音，等于没交替');
-  // 随机抖动不能太大，否则会"跑调"
-  assert.ok(/0\.02/.test(src), '每步的随机抖动参数不见了');
+  // 两只脚必须真的用不同基音 —— 就是它的 520/440
+  assert.ok(/foot \? 520 : 440/.test(src), '左右脚用同一个基音，等于没交替');
 });
 
 test('脚步是合成的，不再依赖素材文件', () => {
@@ -196,15 +202,17 @@ test('脚步是合成的，不再依赖素材文件', () => {
   assert.equal(EVENTS.step?.synth, 'step', 'step 没接合成器');
 });
 
-test('步幅对得上动画的实测步频（不能凭感觉）', () => {
-  // 动画实测（scripts/measure-gait.mjs）：walk/run_happy/run_hurry 三个 webm
-  // 的下半身运动量自相关都指向 **24 帧**周期（24fps → 1.0s = 左右各一步），
-  // 即三个动画都是 2 步/秒。服务端速度 走 1.05 / 跑 1.45 m/s。
-  // 所以步幅 = 速度 ÷ 2：走 0.53m、跑 0.72m。
+test('步幅对得上实际在用的动画（run_hurry）', () => {
+  // 关键：走和跑**都不用 walk 那个 clip**。clipFor() 里在走时一律播
+  // run_hurry（侧向）或 run_happy（正对镜头），俯视视角里基本都是侧向，
+  // 所以绝大多数时间是 run_hurry。早先我拿 walk 量，对象就错了。
   //
-  // 注意：跑步的步频和走路**一样**（动画就这么画的），
-  // 差别体现在步幅更大（0.72 vs 0.53），不是步频更快。
-  // 早先我按"跑步步频更高"写这条测试，方向就错了。
+  // 实测（scripts/measure-gait-hem.mjs，量 run_hurry 裙摆上下起伏）：
+  //   主周期 12 帧 @24fps = 0.50s，相关 1.00，lag 24 处 0.64 自洽
+  //   一个周期左右各一步 → 0.25s/步 → 4 步/秒
+  // 服务端速度 走 1.05 / 跑 1.45 m/s：
+  //   走 1.05 ÷ 4 = 0.26 m/步
+  //   跑 1.45 ÷ 4 = 0.36 m/步
   const src = code(path.join(ROOT, 'public', 'room', 'app.js'));
   const w = /STEP_STRIDE_WALK = ([\d.]+)/.exec(src);
   const r = /STEP_STRIDE_RUN = ([\d.]+)/.exec(src);
@@ -213,19 +221,16 @@ test('步幅对得上动画的实测步频（不能凭感觉）', () => {
 
   const walk = Number(w[1]);
   const run = Number(r[1]);
-  const WALK_SPEED = 1.05;
-  const RUN_SPEED = 1.45;
 
-  const walkHz = WALK_SPEED / walk;
-  const runHz = RUN_SPEED / run;
+  const walkHz = 1.05 / walk;
+  const runHz = 1.45 / run;
 
-  // 两者都应是 2 步/秒（动画实测），允许 ±15%
+  // 两者都应对上 run_hurry 的 4 步/秒（±20%）
   for (const [label, hz] of [['走', walkHz], ['跑', runHz]]) {
-    assert.ok(hz >= 1.7 && hz <= 2.3, `${label}步频 ${hz.toFixed(2)}/s 偏离动画实测的 2.0 太多`);
+    assert.ok(hz >= 3.2 && hz <= 4.8, `${label}步频 ${hz.toFixed(2)}/s 对不上 run_hurry 实测的 4.0`);
   }
   // 跑步步幅必须比走路大（动画一样密，跑得更快 → 步幅更大）
   assert.ok(run > walk, `跑步步幅 ${run} 不大于走路 ${walk}`);
-  // 步幅不该超过 1m（那是配慢了）
   assert.ok(walk <= 1.0 && run <= 1.0, '步幅超过 1m，步频明显配慢了');
 });
 

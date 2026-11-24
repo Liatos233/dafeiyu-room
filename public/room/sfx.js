@@ -37,10 +37,12 @@ const EVENTS = {
   // 左右脚交替），也不用背 91KB 的素材和它的许可证记录。
   // Coopanion 的做法证明这套在桌宠上够用；这里按木地板/瓷砖的体量加了低频，
   // 参数见 SYNTHS.step 和 SURFACES。
-  step: { synth: 'step', gain: 0.55, cooldown: 70, panScale: 1 },
-  // 跑步：音高在合成器里已经抬到 550（Coopanion 的 ×1.25），
-  // 这里再给一点增益，让它比走更"跳"。
-  run: { synth: 'step', gain: 0.62, cooldown: 60, panScale: 1 },
+  // 音量：Coopanion 的 vol 只有 .05/.07（桌宠够用），这里要靠事件表的 gain
+// 把它抬到房间尺度。gain 现在真的会乘进合成器（见 play()），
+// 所以这两个数是**有效**的主音量旋钮，不再是摆设。
+step: { synth: 'step', gain: 4.2, cooldown: 60, panScale: 1 },
+  // 跑步：它本身 vol 就更高（.07 vs .05），这里再略加一点
+  run: { synth: 'step', gain: 5.0, cooldown: 55, panScale: 1 },
   swim: { file: FILES.swim, gain: 0.34, cooldown: 260, jitter: 0.07, panScale: 1 },
   splashEnter: { file: FILES.splashEnter, gain: 0.42, cooldown: 900, panScale: 1 },
   splashExit: { synth: 'splash', gain: 0.26, cooldown: 900, panScale: 1 },
@@ -62,85 +64,60 @@ const EVENTS = {
 // 以及给纯合成音效（UI）用。参数按"听起来像什么"调，不是按物理。
 
 /**
- * 每种地面的一组参数。同一个脚步声换地面就换这三样，其余不动：
- *   thump    撞击音高的整体缩放（瓷砖比木头脆、地毯比木头闷）
- *   body     地面共鸣的中频位置 —— 决定"这块地是木头的还是瓷砖的"
- *   scuff    鞋底摩擦的噪声中心频率与音量
+ * 每种地面：只有一个参数 —— 主音的音高系数。
+ *
+ * 为什么不再有多层（共鸣/摩擦中心频率）：那是照抄 Coopanion 之前的做法，
+ * 会让声音变闷、变重，已经不是"走路"了。它的 step 就是**一个 60ms 的正弦**，
+ * 没有第二层。为保留可辨识的地面差异，只能动这一个音高：
+ *   瓷砖比木地板高 8%（更脆、更"亮"），地毯低 10%（更钝）。
+ * 6~10% 的音高差不至于让人听出"音不对"，但同一个人走过厨房和地毯时
+ * 能感觉到音色变了。再大的差异就会破坏"同一个人"的连续感。
  */
 const SURFACES = {
-  wood: { thump: 1.00, body: 320, bodyVol: 0.07, bodyDur: 0.045, scuff: 3200, scuffVol: 0.16 },
-  tile: { thump: 1.06, body: 460, bodyVol: 0.05, bodyDur: 0.032, scuff: 4200, scuffVol: 0.22 },
-  carpet: { thump: 0.94, body: 240, bodyVol: 0.03, bodyDur: 0.032, scuff: 2100, scuffVol: 0.10 },
-  stone: { thump: 1.04, body: 420, bodyVol: 0.06, bodyDur: 0.038, scuff: 3800, scuffVol: 0.19 },
-  grass: { thump: 0.90, body: 220, bodyVol: 0.025, bodyDur: 0.040, scuff: 1700, scuffVol: 0.24 }
+  wood: { thump: 1.00 },   // 基准
+  tile: { thump: 1.08 },   // 更脆
+  carpet: { thump: 0.90 }, // 更钝
+  stone: { thump: 1.04 },  // 略脆
+  grass: { thump: 0.94 },  // 略钝
 };
 
 const SYNTHS = {
   /**
-   * 脚步。**结构照 Coopanion 的 `step(run, i)`，并且刻意贴近它的音色取向。**
+   * 脚步。**逐参数照抄 Coopanion 的 `step(run, i)`**（web/sound.js）：
    *
-   * 它的做法（web/sound.js）：
-   *   tone({ f0: 440|520, f1: 330|380, dur: .06, vol: .05 })
-   *   跑步时 rate ×1.25，再加一层 2500Hz 的高通噪声当摩擦
-   * 关键点：
-   *   ① 基音在 **440–520Hz**，很高 —— 这是"嗒"而不是"咚"，轻快的来源
-   *   ② 音高**向下滑**（440→330），60ms 就结束，非常短促
-   *   ③ **两只脚用不同基音**（440 与 520 交替），连续两步不完全相同
-   *   ④ 音量只有 .05，很轻
+   *   const k = run ? 1.25 : 1;
+   *   tone({ f0: (i ? 520 : 440) * k, f1: (i ? 380 : 330) * k, dur: .06, vol: run ? .07 : .05 });
+   *   if (run) noise({ f0: 2500, q: .8, dur: .05, vol: .03 });
    *
-   * 我上一版加了 105→45Hz 的"脚跟低频"和 210Hz 的"地面共鸣"，
-   * 出发点是想让木地板有体重感 —— 结果就是把那个轻快感压没了，
-   * 听起来闷、响、像穿靴子。那一版作废。
+   * 之前我自作聪明加了三层（105→45Hz 脚底低频、210Hz 地面共鸣、
+   * 更长的摩擦尾巴），理由是"木地板该有体重感"。结果是轻快感全没了，
+   * 听起来根本不像走路 —— 用户两次反馈都指向这一点。教训：参考实现
+   * 之所以长那样是有道理的，先照抄，别急着"改进"。
    *
-   * 现在：**基音回到 Coopanion 的高度**，只保留极轻的一层地面色，
-   * 用来区分木地板/瓷砖/地毯（否则换地面完全听不出差别）。
-   * 低频只在其 1/3 音量上做一点点"落地的实感"，不做主角。
+   * 唯一的偏离：主音音高乘一个极小的地面系数（0.94~1.06）。
+   * 6% 的音高差听不出"不对"，但能区分木地板/瓷砖/地毯 ——
+   * 否则换地面完全没反馈，那套 SURFACES 就白写了。
    */
-  step(ctx, dest, { at = 0, rate = 1, running = false, surface = 'wood', foot = 0, gainMul = 1 } = {}) {
+  step(ctx, dest, { at = 0, running = false, foot = 0, surface = 'wood', gainMul = 1 } = {}) {
+    const k = running ? 1.25 : 1;              // 它的跑步音高系数
     const s = SURFACES[surface] || SURFACES.wood;
-    // 两只脚不同基音：Coopanion 用 440/520（差 18%）。
-    // 这里取 440/500（差 14%）—— 18% 已经接近一个音阶，连听两步像音高错乱。
-    const side = foot ? 1.136 : 1;
-    // ±2% 随机，避免机械重复
-    const wobble = 1 + (Math.random() * 2 - 1) * 0.02;
-    // 走 440 起、跑抬到 Coopanion 的 1.25 倍（它就是这么做的）
-    const base = (running ? 550 : 440) * side * wobble * s.thump;
 
-    // ① 主音：高、短、向下滑 —— 这一步的"嗒"
+    // ① 主音：440/520 交替（两只脚不同），下滑到 330/380，共 60ms
     thump(ctx, dest, {
       at, type: 'sine',
-      f0: base, f1: base * 0.75,     // 440→330，就是它的比例
-      dur: 0.060,
-      vol: 0.50 * gainMul,
-      attack: 0.003
+      f0: (foot ? 520 : 440) * k * s.thump,
+      f1: (foot ? 380 : 330) * k * s.thump,
+      dur: 0.06,
+      vol: (running ? 0.07 : 0.05) * gainMul,
+      attack: 0.005
     });
 
-    // ② 地面色：极轻的中频，比主音低一个八度附近。
-    //    没有它，木地板和瓷砖听起来一模一样；有它又别太响 —— 只占主音 1/7。
-    thump(ctx, dest, {
-      at: at + 0.002, type: 'triangle',
-      f0: s.body * side, f1: s.body * side * 0.72,
-      dur: s.bodyDur,
-      vol: s.bodyVol * gainMul,
-      attack: 0.002
-    });
-
-    // ③ 摩擦：Coopanion 跑步时才加的那层噪声，这里走和跑都加一点，
-    //    但走的时候很轻（鞋底擦过地面的"沙"），Q 高一些免得出"嘶"。
-    noise(ctx, dest, {
-      at: at + 0.003,
-      f0: s.scuff * side, f1: s.scuff * side * 0.78, q: 1.2,
-      dur: running ? 0.050 : 0.030,
-      vol: s.scuffVol * (running ? 1.35 : 1) * gainMul
-    });
-
-    // ④ 跑步的额外一层：它用 ×1.25 抬音高 + 更响的噪声。
-    //    音高已在 base 里抬过，这里补一层很轻的短促高频，让跑步更"脆"。
+    // ② 跑步时才有的摩擦噪声：2500Hz 带通、Q 0.8、50ms（照抄它的参数）
     if (running) {
-      thump(ctx, dest, {
-        at: at + 0.008, type: 'sine',
-        f0: base * 1.5, f1: base * 1.2,
-        dur: 0.035, vol: 0.18 * gainMul, attack: 0.002
+      noise(ctx, dest, {
+        at, f0: 2500, f1: 2500, q: 0.8,
+        dur: 0.05,
+        vol: 0.03 * gainMul
       });
     }
   },
@@ -325,7 +302,12 @@ function play(name, opts = {}) {
 
   const synth = ev.synth && SYNTHS[ev.synth];
   if (!synth) return false;
-  const gainMul = opts.gain != null ? opts.gain : 1;
+  // **事件表里的 gain 必须乘进去**。之前这里只把 opts 传下去，完全忽略了
+  // ev.gain —— 于是「把 step 的 gain 从 0.30 调到 0.55」是个空操作，
+  // 声音一点没变响。合成器内部的 vol 是"这一个音的基准电平"，
+  // ev.gain 是"这条事件整体多响"，两层要相乘。
+  const beat = opts.gain != null ? opts.gain : 1;
+  const gainMul = (ev.gain ?? 1) * beat;
   synth(state.ctx, state.bus, { at: 0, rate, gainMul, ...opts });
   return true;
 }

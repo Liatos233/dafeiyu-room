@@ -1291,16 +1291,21 @@ let stillMs = 0;
 let stepDist = 0;          // 上次响过之后累计走过的距离（米）
 let stepWasSwimming = false;
 let stepPrevPos = null;    // 独立的上一帧位置，不受 lastDisplayPos 被别处改写的影响
-// 步幅（米/步）。**这两个数是从动画本身量出来的，不是猜的**：
-//   `node scripts/measure-gait.mjs` 对 walk/run_happy/run_hurry 的下半身运动量做自相关，
-//   三个动画的步态周期都是 **24 帧**（24fps → 1.0s 一个完整周期 = 左右各一步），
-//   即步频 2 步/秒。用服务端速度换算步幅：
-//     走：1.05 m/s ÷ 2 步/s = 0.53 m/步
-//     跑：1.45 m/s ÷ 2 步/s = 0.72 m/步
-// 早先用 0.75 / 0.55 —— 走比动画慢 40%、跑快了一倍，走起来就是不跟脚。
+// 步幅（米/步）。**从实际在用的那个动画量出来的**：
+//
+// 走和跑**都不用 walk 那个 clip** —— clipFor() 里在走时一律播 run_hurry（侧向）
+// 或 run_happy（正对镜头），俯视视角里基本都是侧向 → 绝大多数时间是 run_hurry。
+// 所以步频要以 run_hurry 为准，不是 walk（早先量错了对象）。
+//
+// `node scripts/measure-gait-hem.mjs` 量 run_hurry 的裙摆上下起伏：
+//   主周期 12 帧（24fps → 0.50s），相关 1.00，lag 24 处 0.64 自洽
+//   一个周期左右各一步 → 0.25s/步 → **4 步/秒**
+// 服务端速度 走 1.05 / 跑 1.45 m/s，换算步幅：
+//   走：1.05 ÷ 4 = 0.26 m/步
+//   跑：1.45 ÷ 4 = 0.36 m/步
 // 数值改了记得同步 scripts/test-sfx.mjs 的「步幅对得上动画实测步频」。
-const STEP_STRIDE_WALK = 0.53;   // 2.0 步/秒 @ 1.05 m/s
-const STEP_STRIDE_RUN = 0.72;    // 2.0 步/秒 @ 1.45 m/s
+const STEP_STRIDE_WALK = 0.26;   // 4 步/秒 @ 1.05 m/s（run_hurry 的节奏）
+const STEP_STRIDE_RUN = 0.36;    // 4 步/秒 @ 1.45 m/s
 
 // 哪些区域是瓷砖/石材。其余（客厅/卧室/餐厅/走廊）铺木地板。
 // 数值必须和 world.js 里 tilePlane(...) 的矩形一致 —— 那里是铺地图纸的真源，

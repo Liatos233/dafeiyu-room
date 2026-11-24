@@ -125,25 +125,42 @@ const result = await evaluate(`
 
   const out = {};
   // 左脚 / 右脚（同一次渲染里只响一步）
-  const L = await render((c, d) => SYNTHS.step(c, d, { foot: 0, running: false, surface: 'wood' }));
-  const R = await render((c, d) => SYNTHS.step(c, d, { foot: 1, running: false, surface: 'wood' }));
+  // 离线渲染**真实调用路径**（sfx.playStep → play → SYNTHS.step），
+  // 不是直接调 SYNTHS.step —— 那样会绕过事件表的 gain，
+  // 测出来的只是合成器内部的基准电平（Coopanion 的 .05），
+  // 跟玩家听到的响度差着好几倍。
+  async function renderStep(sfx, { running = false, surface = 'wood' } = {}) {
+    const len = Math.floor(44100 * 0.5);
+    const ctx = new OfflineAudioContext(1, len, 44100);
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
+    sfx.attach(ctx, out);
+    sfx.setEnabled(true);
+    sfx.setSurface(surface);
+    sfx.playStep({ running });
+    const buf = await ctx.startRendering();
+    return buf.getChannelData(0);
+  }
+
+  const L = await renderStep(m.sfx, { running: false, surface: 'wood' });
+  const R = await renderStep(m.sfx, { running: false, surface: 'wood' });
   out.left = feats(L);
   out.right = feats(R);
+  // 左右脚由内部的 foot 交替决定，两次相邻调用必然是一左一右
   out.footCorr = corr(L, R);
 
-  // 两次同参数渲染：应该也很像（决定性），用来校准 corr 的判读
-  const L2 = await render((c, d) => SYNTHS.step(c, d, { foot: 0, running: false, surface: 'wood' }));
-  out.sameCorr = corr(L, L2);
+  // 同参数再跑两次做基准（注意：每次都会翻转 foot，所以这里比的是奇偶同相）
+  const L2 = await renderStep(m.sfx, { running: false, surface: 'wood' });
+  const L3 = await renderStep(m.sfx, { running: false, surface: 'wood' });
+  out.sameCorr = Math.max(corr(L, L2), corr(L, L3));
 
-  // 跑 vs 走
-  const W = await render((c, d) => SYNTHS.step(c, d, { running: false, surface: 'wood' }));
-  const Rr = await render((c, d) => SYNTHS.step(c, d, { running: true, surface: 'wood' }));
+  const W = await renderStep(m.sfx, { running: false, surface: 'wood' });
+  const Rr = await renderStep(m.sfx, { running: true, surface: 'wood' });
   out.walk = feats(W);
   out.run = feats(Rr);
 
-  // 地面差异：瓷砖应该比地毯亮（过零率高），地毯更闷
-  const tile = await render((c, d) => SYNTHS.step(c, d, { surface: 'tile' }));
-  const carpet = await render((c, d) => SYNTHS.step(c, d, { surface: 'carpet' }));
+  const tile = await renderStep(m.sfx, { running: false, surface: 'tile' });
+  const carpet = await renderStep(m.sfx, { running: false, surface: 'carpet' });
   out.tile = feats(tile);
   out.carpet = feats(carpet);
   out.tileVsCarpetCorr = corr(tile, carpet);
