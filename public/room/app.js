@@ -2,7 +2,7 @@
 // 事实/行为在 src/home-state.js；这里只读快照、画房间、处理相机与交互。
 import * as THREE from 'three';
 import { ambience } from './ambience.js';
-import { createWorld } from './world.js';
+import { createWorld, applyGallery } from './world.js';
 import { createDevEditor } from './dev-editor.js';
 import { SpriteActor, CLIPS } from './actor.js';
 import { ACTION_GROUPS } from './action-manifest.js';
@@ -4147,6 +4147,9 @@ async function poll() {
     if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
     applyState(data);
     $('qqChip').classList.add('online');
+    // 走廊画廊墙：4 幅画可能被换过（QQ 让她换的）。单独一条接口、低频拉取，
+    // 不塞进每 250~1200ms 的 state 主循环里 —— 换画是低频事件，不值得每次都传。
+    void syncGallery();
   } catch (error) {
     $('qqText').textContent = '连不上桥接';
     if (!state) {
@@ -4155,6 +4158,25 @@ async function poll() {
   } finally {
     requestInFlight = false;
   }
+}
+
+// 画廊同步：15 秒一次就够（换画是手动/对话触发的低频动作）。
+// 用时间戳节流而不是 setInterval，避免和主轮询各开一条定时器。
+const GALLERY_EVERY_MS = 15000;
+let galleryAt = 0;
+let galleryInFlight = false;
+async function syncGallery() {
+  if (!world || galleryInFlight) return;
+  const now = Date.now();
+  if (now - galleryAt < GALLERY_EVERY_MS) return;
+  galleryAt = now;
+  galleryInFlight = true;
+  try {
+    const res = await fetch(withToken('/api/room/gallery'), { cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && data?.ok) applyGallery(world, data);
+  } catch { /* 拿不到就继续用默认画 */ }
+  finally { galleryInFlight = false; }
 }
 
 // ── 轮询节拍：平时慢，**走路/上下座时快** ───────────────────────────────

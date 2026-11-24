@@ -2031,11 +2031,19 @@ function buildCorridor(world, M) {
   const p = world.root;
   // （去掉走廊那条蓝色长地毯）
   // 画廊墙（整体右移 0.2 米，避开左侧门洞）
+  //
+  // 这 4 幅画可以被「换掉」：/api/room/gallery 写入图片后，
+  // applyGallery() 会把对应的 material.map 换成那张图。
+  // 默认（没换过）还是程序化生成的 artTexture。
   const arts = [1, 3, 0, 2];
   for (let i = 0; i < 4; i++) {
     const x = 10.05 + i * 0.72;
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.42), new THREE.MeshStandardMaterial({ map: artTexture(arts[i]), roughness: 0.8 }));
+    const art = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.56, 0.42),
+      new THREE.MeshStandardMaterial({ map: artTexture(arts[i]), roughness: 0.8 })
+    );
     art.position.set(x, 1.55, 4.52);
+    art.userData.gallerySlot = i + 1;      // 1~4，和后端 GALLERY_SLOTS 对齐
     p.add(art);
     box(p, 0.64, 0.5, 0.03, M.walnut, x, 1.55, 4.5);
   }
@@ -2056,6 +2064,49 @@ function buildCorridor(world, M) {
     world.lampMaterials.push(bulb.material);
   }
   addHotspot(world, 9.8, 4.68, 0.5, { title: '画廊墙', sub: '四幅画，最右边那幅是蓝鲸，画框有点歪', room: 'corridor', spot: 'gallery', label: '画廊墙前' });
+}
+
+/**
+ * 把 /api/room/gallery 的结果应用到走廊的 4 幅画上。
+ *
+ * 每幅画有两套贴图：程序化生成的默认图（启动时就有）和用户换上的图片。
+ * 这里只动 material.map —— 几何、位置、画框一律不碰，保证换画不会让画框错位。
+ *
+ * @param {object} world
+ * @param {{slots: Array<{slot:number, custom:boolean, url:string|null}>}} data
+ */
+export function applyGallery(world, data) {
+  if (!world || !Array.isArray(data?.slots)) return;
+  world.gallerySlots ??= new Map();
+  for (const item of data.slots) {
+    const slot = Number(item?.slot);
+    if (!slot || !item.custom || !item.url) continue;
+    // 已经加载过同一个 URL：跳过（避免每次都重建贴图）
+    if (world.gallerySlots.get(slot) === item.url) continue;
+    const target = [];
+    world.root.traverse((o) => { if (o.userData?.gallerySlot === slot) target.push(o); });
+    if (!target.length) continue;
+    world.gallerySlots.set(slot, item.url);
+    const loader = new THREE.TextureLoader();
+    // 换图是异步的：加载完才替换，失败的保留原来那张，不会变白板。
+    loader.load(
+      item.url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 8;
+        for (const mesh of target) {
+          const old = mesh.material.map;
+          mesh.material.map = tex;
+          mesh.material.needsUpdate = true;
+          // 默认图是运行时生成的 canvas 贴图，换掉之后可以释放（但同一个默认图
+          // 可能被别的画共用，所以只在确认 different 时才 dispose）
+          if (old && old !== tex && old.userData?.disposable) old.dispose();
+        }
+      },
+      undefined,
+      () => { world.gallerySlots.delete(slot); }   // 加载失败就下次再试
+    );
+  }
 }
 
 function buildLaundry(world, M) {

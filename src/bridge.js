@@ -87,6 +87,7 @@ import {
 } from './home-state.js';
 import { actGarden } from './garden-store.js';
 import { loadWeather, setWeather, getWeather, WEATHER_LABEL } from './weather-store.js';
+import { galleryView, setGalleryImage, clearGalleryImage, buildGalleryPromptLine } from './gallery-store.js';
 import { createGardenCaretaker } from './garden-autonomy.js';
 import {
   normalizeQzoneConfig,
@@ -4044,8 +4045,10 @@ async function main() {
         res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS });
         res.end(JSON.stringify(obj, null, 2));
       };
-      const readBody = () => new Promise((resolve, reject) => {
-        const MAX_BODY_BYTES = 1_000_000;
+      const readBody = (opts = {}) => new Promise((resolve, reject) => {
+        // 默认 1MB。换走廊壁画要传 base64 图片，那条路由会传更大的 limit
+        // （base64 膨胀 4/3，4MB 图 → 约 5.4MB JSON，这里给到 7MB）。
+        const MAX_BODY_BYTES = Number(opts.maxBytes) > 0 ? Number(opts.maxBytes) : 1_000_000;
         const chunks = [];
         let total = 0;
         let settled = false;
@@ -4163,8 +4166,8 @@ async function main() {
       })();
       const isRoomSurface = (
         (req.method === 'GET' && (url.pathname === '/room' || url.pathname === '/room/' || url.pathname.startsWith('/room/')))
-        || (req.method === 'GET' && ['/api/home/state', '/api/home/context', '/api/home/clips', '/api/room/state', '/api/room/inspect', '/api/garden/state'].includes(url.pathname))
-        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/home/weather', '/api/debug/client'].includes(url.pathname))
+        || (req.method === 'GET' && ['/api/home/state', '/api/home/context', '/api/home/clips', '/api/room/state', '/api/room/inspect', '/api/room/gallery', '/api/garden/state'].includes(url.pathname))
+        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/room/gallery', '/api/room/gallery/clear', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/home/weather', '/api/debug/client'].includes(url.pathname))
       );
       const secFetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
       const siteTrusted = !secFetchSite || secFetchSite === 'same-origin' || secFetchSite === 'none';
@@ -4351,6 +4354,29 @@ async function main() {
           if (rel === '' || rel.endsWith('/')) rel += 'index.html';
           const srcRoom = path.resolve(path.join(ROOT, 'public', 'room'));
           const distRoom = path.resolve(path.join(ROOT, 'dist', 'room'));
+          // gallery/ 是运行时写入的用户图片（走廊壁画），既不在源码目录也不在
+          // 构建产物里，存在 STATE_DIR 下，所以单独分流。
+          if (rel.startsWith('gallery/')) {
+            const name = path.basename(rel.slice('gallery/'.length));
+            const galDir = path.resolve(path.join(STATE_DIR, 'gallery'));
+            const galFile = path.join(galDir, name);
+            if (!name || galFile !== path.join(galDir, path.basename(galFile))) {
+              sendJson({ ok: false, error: '非法路径' }, 400);
+              return;
+            }
+            let galData;
+            try { galData = fs.readFileSync(galFile); } catch { sendJson({ ok: false, error: '图片不存在' }, 404); return; }
+            const galExt = path.extname(galFile).toLowerCase();
+            const galTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+            res.writeHead(200, {
+              'content-type': galTypes[galExt] || 'application/octet-stream',
+              ...STATIC_HEADERS,
+              // 文件名带时间戳，内容不会变，可以长缓存
+              'cache-control': 'public, max-age=604800, immutable'
+            });
+            res.end(galData);
+            return;
+          }
           // assets/ 与 vendor/ 这类大体积静态资源不随构建产物走（vite publicDir:false 不拷贝），永远从源码目录提供。
           const useSrc = rel.startsWith('assets/') || rel.startsWith('vendor/');
           const roomRoot = useSrc ? srcRoom : (fs.existsSync(path.join(distRoom, 'index.html')) ? distRoom : srcRoom);
@@ -4803,6 +4829,60 @@ async function main() {
             return;
           }
           sendJson({ ok: false, title: '这里还空着', sub: '', lines: [] }, 404);
+          return;
+        }
+
+        // ── 走廊画廊墙：自定义画面 ────────────────────────────────────────
+        // 用户希望在 QQ 上让她换走廊的画，所以这条要能被 QQ 插件调用。
+        //   GET  /api/room/gallery            看 4 幅现在挂了什么
+        //   POST /api/room/gallery            换一幅（body: {slot, dataUrl|base64, mime, caption, by}）
+        //   POST /api/room/gallery/clear      恢复某幅的默认画（body: {slot}）
+        if (req.method === 'GET' && url.pathname === '/api/room/gallery') {
+          sendJson({ ok: true, ...galleryView(STATE_DIR) });
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/api/room/gallery') {
+          try {
+            // 图片走 base64，4MB 原图会膨胀到 ~5.4MB，给 7MB 余量
+            const body = await readBody({ maxBytes: 7 * 1024 * 1024 });
+            const slot = Number(body?.slot);
+            let b64 = String(body?.dataUrl || body?.base64 || '').trim();
+            let mime = String(body?.mime || '').trim();
+            // 允许直接传 data:image/png;base64,xxx
+            const dataUrl = /^data:([\w/+.-]+);base64,(.*)$/i.exec(b64);
+            if (dataUrl) { mime = mime || dataUrl[1]; b64 = dataUrl[2]; }
+            if (!b64) { sendJson({ ok: false, error: '没有收到图片数据（dataUrl 或 base64）' }, 400); return; }
+            let buf;
+            try { buf = Buffer.from(b64, 'base64'); } catch { sendJson({ ok: false, error: 'base64 解码失败' }, 400); return; }
+            const result = setGalleryImage(STATE_DIR, slot, buf, mime, {
+              by: body?.by, caption: body?.caption, at: Date.now()
+            });
+            if (!result.ok) { sendJson({ ok: false, error: result.error }, 400); return; }
+            // 换了画要让她"知道"：记一条事件，下次对话的提示词里会带上。
+            try {
+              const now = Date.now();
+              const rs = loadRoomState(ROOM_FILE, now);
+              const from = String(body?.by || '').trim() || '主人';
+              rs.lastGalleryAt = now;
+              rs.galleryNote = `第${slot}幅换成了${body?.caption ? `「${String(body.caption).slice(0, 60)}」` : '新的一张'}`;
+              saveRoomState(ROOM_FILE, rs, now);
+              emitGalleryEvent?.({ slot, by: from, caption: body?.caption });
+            } catch { /* 记录失败不影响换图本身 */ }
+            sendJson({ ok: true, ...galleryView(STATE_DIR) });
+          } catch (e) {
+            sendJson({ ok: false, error: String(e?.message || e) }, e?.statusCode || 400);
+          }
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/api/room/gallery/clear') {
+          try {
+            const body = await readBody();
+            const result = clearGalleryImage(STATE_DIR, Number(body?.slot));
+            if (!result.ok) { sendJson({ ok: false, error: result.error }, 400); return; }
+            sendJson({ ok: true, cleared: !!result.cleared, ...galleryView(STATE_DIR) });
+          } catch (e) {
+            sendJson({ ok: false, error: String(e?.message || e) }, e?.statusCode || 400);
+          }
           return;
         }
 
