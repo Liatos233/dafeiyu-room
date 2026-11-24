@@ -147,29 +147,33 @@ function log(msg) {
   logEl.textContent = `[${t}] ${msg}\n${logEl.textContent}`.slice(0, 4000);
 }
 
-// ── 自建一条最小音频链，模拟 ambience 的总线结构 ──────────────
+// ── 自建一条最小音频链，模拟 ambience 里的动作音效支路 ──────
 // 试听页不加载整个 ambience（它要天气、房间、素材一大堆），
-// 但**接线方式必须和正式的一样**：sfxBus → master → destination。
-// 否则这里听着正常、进游戏就变形。
+// 但**接线方式必须和正式的一样**：sfxBus → sfxMaster → 输出。
+//
+// 正式环境里这是**独立于环境音的一条支路**（ambience.js 里有注释说明）：
+// 它不经过 roomFilter（室内低通会把脚步闷掉），也不经过环境音的 master
+// （那个由默认关着的「环境音」开关控制）。
+// 所以听感上这里放出来的，就是游戏里「音效」开关打开时该有的样子。
 const AC = window.AudioContext || window.webkitAudioContext;
-let ctx = null, master = null, bus = null;
+let ctx = null, sfxMaster = null, bus = null;
 
 function initAudio() {
   if (ctx) return true;
   if (!AC) { log('这个浏览器没有 Web Audio'); return false; }
   ctx = new AC();
-  master = ctx.createGain();
-  master.gain.value = 0.6;
+  sfxMaster = ctx.createGain();
+  sfxMaster.gain.value = 0.6;
   bus = ctx.createGain();
   bus.gain.value = 1;
-  bus.connect(master);
-  master.connect(ctx.destination);
+  bus.connect(sfxMaster);
+  sfxMaster.connect(ctx.destination);
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   sfx.attach(ctx, bus);
   sfx.setEnabled(true);
   // 给自动化测试留的抓点：测试脚本据此在真实链路上并接 analyser，
   // 测「到底有没有出声」。生产页面没有这个，也不该有。
-  window.__sfxGraph = { ctx, bus, master };
+  window.__sfxGraph = { ctx, bus, master: sfxMaster };
   window.__sfxInstance = sfx;
   refreshState();
   return true;
@@ -183,7 +187,7 @@ document.addEventListener('keydown', initAudio, { once: true });
 $('vol').addEventListener('input', (e) => {
   initAudio();
   const v = +e.target.value / 100;
-  if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+  if (sfxMaster) sfxMaster.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
   $('volVal').textContent = `${e.target.value}%`;
 });
 $('pan').addEventListener('input', (e) => {

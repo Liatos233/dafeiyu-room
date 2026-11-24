@@ -1364,9 +1364,16 @@ let ambienceBooted = false;
 function bootAmbience() {
   if (ambienceBooted) return;
   ambienceBooted = true;
-  ambience.init();
-  ambience.setVolume(ambienceVol);
-  if (ambienceOn) ambience.setEnabled(true);
+  // 建链（幂等）。注意这里**不再只看环境音的偏好**：
+  // 环境音默认关，如果只有 ambienceOn 时才建链，那么开着音效的用户
+  // 会永远停在「没有 AudioContext」的状态，脚步一声都不响。
+  // 只要任一声音开关是开的，就该把链建起来。
+  if (ambienceOn || soundOn) {
+    ambience.init();
+    ambience.setVolume(ambienceVol);
+    ambience.setEnabled(ambienceOn);
+    ambience.setSfxEnabled(soundOn);
+  }
   paintAmbience();
 }
 document.addEventListener('pointerdown', bootAmbience, { once: true });
@@ -1409,13 +1416,13 @@ function unlockAudio() {
 
 function playClick() {
   if (!soundOn) return;
-  // 跟着环境音的总音量走：音量拉到 0 时点击要跟着静音，
-  // 这是原来的缺陷（固定 0.38 让点击永远能听见，跟音效开关对不上）。
-  const vol = CLICK_BASE_VOL * (ambience.enabled ? ambience.volume : 0);
-  if (vol <= 0) return;
+  // 只受「音效」开关控制（soundOn），不受环境音音量影响：
+  // 那个滑块是背景风雨声的偏好，跟点击反馈无关。
+  // 早先这里乘了 ambience.volume 且要求 ambience.enabled —— 而环境音默认关，
+  // 于是「开着音效却没有点击声」，看起来像音效开关失灵。
   try {
     const a = new Audio(clickSfx.src);
-    a.volume = Math.min(1, vol);
+    a.volume = Math.min(1, CLICK_BASE_VOL);
     a.play().catch(() => {});
   } catch { /* 忽略 */ }
 }
@@ -1747,6 +1754,12 @@ function applySoundPref() {
     const st = $('soundState');
     if (st) st.textContent = soundOn ? '开' : '关';
   }
+  // 「音效」开关同时管两样东西：
+  //   ① clickSfx（点击/抓取/放下的 duck 声，裸 Audio 元素）
+  //   ② ambience.sfx（脚步、游泳、入水，Web Audio）
+  // ②曾经挂在「环境音」开关下面，而环境音默认关 → 用户开着音效却没脚步。
+  // 现在两条线各归各的开关，这里统一驱动。
+  try { ambience.setSfxEnabled(soundOn); } catch { /* 音频还没就绪 */ }
   if (!soundOn) {
     try { clickSfx.pause(); } catch { /* 忽略 */ }
   }

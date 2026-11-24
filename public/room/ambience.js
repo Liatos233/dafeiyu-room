@@ -260,15 +260,29 @@ function waterDrip(ctx, dest) {
 }
 
 // ── 主控制器 ───────────────────────────────────────────────────
+//
+// 两条独立的音量支路，共用一个 AudioContext 和输出：
+//
+//   bedBus/shotBus/roomBus → roomFilter → master ─┐
+//                                                 ├→ analyser → destination
+//   sfxBus →────────────────────────→ sfxMaster ──┘
+//
+// 为什么要分两支：「环境音」和「音效」在 UI 上是两个开关，
+// 环境音默认关（背景风雨声太吵，多数人不开），音效默认开（点击/脚步的反馈）。
+// 早先把 sfxBus 挂在 master 下面，等于让默认关着的环境音开关
+// 顺手管住了动作音效 —— 用户没开环境音，脚步就永远不响。
+// 现在各走各的增益，互不影响。
 const state = {
   ctx: null,
-  master: null,
+  master: null,      // 环境音总音量（受 enabled / volume 控制）
+  sfxMaster: null,   // 动作音效总音量（受动作音效开关控制）
   roomFilter: null,
   bedBus: null,
   shotBus: null,
   roomBus: null,
   sfxBus: null,
-  enabled: false,
+  enabled: false,        // 环境音开关
+  sfxEnabled: true,      // 动作音效开关（默认开，和 UI 的「音效」一致）
   volume: 0.45,
   speaking: false,
   weather: 'day',
@@ -464,10 +478,17 @@ function indoorNow() {
 function applyLevels() {
   if (!state.ctx) return;
   const now = state.ctx.currentTime;
+  // 环境音：由环境音开关 + 环境音音量控制；她说话时让路压低
   const target = state.enabled ? state.volume * (state.speaking ? 0.55 : 1) : 0;
   state.master.gain.cancelScheduledValues(now);
   state.master.gain.linearRampToValueAtTime(target, now + 0.6);
-  // 室内低通
+  // 动作音效：只看自己的开关。**不乘环境音音量** —— 那是背景声的偏好，
+  // 不该连带把脚步也调小；动作音效的音量在这里固定，靠各事件自己的 gain 调。
+  if (state.sfxMaster) {
+    state.sfxMaster.gain.cancelScheduledValues(now);
+    state.sfxMaster.gain.linearRampToValueAtTime(state.sfxEnabled ? 1 : 0, now + 0.15);
+  }
+  // 室内低通（只作用于环境音那一路，sfxBus 不经过它）
   const indoor = indoorNow();
   state.roomFilter.frequency.cancelScheduledValues(now);
   state.roomFilter.frequency.linearRampToValueAtTime(indoor ? 1200 : 18000, now + 0.8);
@@ -509,20 +530,22 @@ export const ambience = {
     state.bedBus = gainNode(state.ctx, 1);
     state.shotBus = gainNode(state.ctx, 0.9);
     state.roomBus = gainNode(state.ctx, 1);
-    // 动作音效（脚步/水声，见 sfx.js）：**绕开 roomFilter** 直连 master。
-    // roomFilter 是给风雨声「进屋」用的（室内低通到 1200Hz），
-    // 脚步要是也过它，会被闷成敲纸盒 —— 而脚步声恰恰是最需要清楚的中频。
-    // 接 master 意味着它照样受总音量、静音、说话压低管，不会出现
-    // 「环境音静音了、脚步还在响」。
+    // 动作音效（脚步/水声，见 sfx.js）走自己的一条支路。
     state.sfxBus = gainNode(state.ctx, 1);
+    state.sfxMaster = gainNode(state.ctx, 1);
     state.bedBus.connect(state.roomFilter);
     state.shotBus.connect(state.roomFilter);
     state.roomBus.connect(state.roomFilter);
-    state.sfxBus.connect(state.master);
+    // 动作音效：sfxBus → sfxMaster → analyser（不经 roomFilter、不经 master）。
+    // 不过 roomFilter：室内低通 1200Hz 是给风雨声「进屋」用的，
+    // 脚步过了它会被闷成敲纸盒。不过 master：那个由环境音开关管着，
+    // 而动作音效有自己独立的开关。
+    state.sfxBus.connect(state.sfxMaster);
     state.roomFilter.connect(state.master);
     state.analyser = state.ctx.createAnalyser();
     state.analyser.fftSize = 1024;
     state.master.connect(state.analyser);
+    state.sfxMaster.connect(state.analyser);
     state.analyser.connect(state.ctx.destination);
     rebuildBeds();
     applyLevels();
@@ -538,8 +561,9 @@ export const ambience = {
       this.init();
       if (state.ctx?.state === 'suspended') state.ctx.resume().catch(() => {});
     }
-    // 静音时连音符都别再排（master 归零也能挡住声音，但没必要白算节点）
-    sfx.setEnabled(state.enabled);
+    // **只影响环境音**。动作音效有自己的开关（setSfxEnabled），
+    // 早先在这里顺手调 sfx.setEnabled(state.enabled)，导致没开环境音时
+    // 脚步永远不响 —— 而环境音是默认关的。
     applyLevels();
   },
   toggle() {
@@ -547,6 +571,29 @@ export const ambience = {
     return state.enabled;
   },
   get enabled() { return state.enabled; },
+  /**
+   * 动作音效开关（对应 UI 的「音效」）。
+   * 和 UI 上的 soundOn 是同一个概念：点击、抓取、放下、脚步、水声都归它管。
+   *
+   * 注意：**开音效时要自己把音频链建起来**。链的创建原本只发生在
+   * setEnabled(true) 里，而环境音默认关，于是「开着音效却从没初始化过」
+   * 是一个极易复现的状态 —— 用户点开音效，什么都听不到。
+   */
+  setSfxEnabled(v) {
+    state.sfxEnabled = !!v;
+    if (state.sfxEnabled) {
+      this.init();   // 幂等：ctx 已存在就直接返回
+      if (state.ctx?.state === 'suspended') state.ctx.resume().catch(() => {});
+    }
+    // 静音时连音符都别再排（增益归零也能挡住，但没必要白算节点）
+    sfx.setEnabled(state.sfxEnabled);
+    applyLevels();
+  },
+  toggleSfx() {
+    this.setSfxEnabled(!state.sfxEnabled);
+    return state.sfxEnabled;
+  },
+  get sfxEnabled() { return state.sfxEnabled; },
   get volume() { return state.volume; },
   setVolume(v) {
     state.volume = Math.max(0, Math.min(1, Number(v) || 0));

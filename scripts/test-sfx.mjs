@@ -196,12 +196,63 @@ test('地面参数齐全，且瓷砖比地毯亮', () => {
 
 console.log('\n接入点');
 
-test('ambience 里 sfxBus 绕开 roomFilter、直连 master', () => {
-  // 这是关键设计：室内低通 1200Hz 是给风雨声用的，脚步过了它就闷成敲纸盒
+test('ambience 里 sfxBus 绕开 roomFilter 和 master，走独立增益', () => {
+  // 两条关键设计，任何一条被改回去都会出 bug：
+  //   ① 不过 roomFilter：室内低通 1200Hz 会把脚步闷成敲纸盒
+  //   ② 不过 master：master 由「环境音」开关控制，而它默认关；
+  //      脚步再挂它下面 = 用户没开环境音就永远听不到脚步（真实踩过的坑）
   const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'ambience.js'), 'utf8');
   assert.ok(/state\.sfxBus\s*=\s*gainNode/.test(src), '找不到 sfxBus 的创建');
-  assert.ok(/sfxBus\.connect\(state\.master\)/.test(src), 'sfxBus 没有直连 master');
+  assert.ok(/state\.sfxMaster\s*=\s*gainNode/.test(src), '没有独立的 sfxMaster 增益');
+  assert.ok(/sfxBus\.connect\(state\.sfxMaster\)/.test(src), 'sfxBus 没接到 sfxMaster');
+  assert.ok(!/sfxBus\.connect\(state\.master\)/.test(src), 'sfxBus 又接回 master 了（会被环境音开关连带静音）');
   assert.ok(!/sfxBus\.connect\(state\.roomFilter\)/.test(src), 'sfxBus 不该接 roomFilter（会被室内低通闷掉）');
+  assert.ok(/state\.sfxMaster\.connect\(state\.analyser\)/.test(src), 'sfxMaster 没接输出');
+});
+
+/** 读源码并去掉注释：正则式断言必须看**代码**，否则会被解释性注释误伤。
+ *  （踩过：注释里写着"不要用 sfx.setEnabled"，测试反而因此判失败。）*/
+function code(p) {
+  return fs.readFileSync(p, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')     // 块注释
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');  // 行注释（避开 http:// 里的 //）
+}
+
+test('环境音开关不管动作音效（各自独立）', () => {
+  const src = code(path.join(ROOT, 'public', 'room', 'ambience.js'));
+  const setEnabledBody = /setEnabled\(v\)\s*\{([\s\S]*?)\n  \},/.exec(src);
+  assert.ok(setEnabledBody, '找不到 setEnabled');
+  assert.ok(!/sfx\.setEnabled/.test(setEnabledBody[1]), '环境音开关又在管动作音效了');
+  // 必须有独立入口
+  assert.ok(/setSfxEnabled\(v\)/.test(src), '缺少 setSfxEnabled');
+  assert.ok(/toggleSfx\(\)/.test(src), '缺少 toggleSfx');
+});
+
+test('开动作音效会自己把音频链建起来', () => {
+  // 环境音默认关 → 如果只有 setEnabled(true) 时建链，
+  // 那么开着音效的用户会永远停在"没有 AudioContext"，一声不响。
+  const src = code(path.join(ROOT, 'public', 'room', 'ambience.js'));
+  const body = /setSfxEnabled\(v\)\s*\{([\s\S]*?)\n  \},/.exec(src);
+  assert.ok(body, '找不到 setSfxEnabled 实现');
+  assert.ok(/this\.init\(\)/.test(body[1]), 'setSfxEnabled 里没有 init()，开着音效也可能没有音频链');
+});
+
+test('app.js 的「音效」开关同时驱动 clickSfx 和动作音效', () => {
+  const src = code(path.join(ROOT, 'public', 'room', 'app.js'));
+  const body = /function applySoundPref\(\)\s*\{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(body, '找不到 applySoundPref');
+  assert.ok(/ambience\.setSfxEnabled\(soundOn\)/.test(body[1]), '音效开关没驱动动作音效');
+  // 启动时也要建链：任一开关开着就该 init
+  assert.ok(/if \(ambienceOn \|\| soundOn\)/.test(src), 'bootAmbience 只看环境音偏好，音效用户可能永远不建链');
+});
+
+test('点击音只受音效开关控制，不依赖环境音', () => {
+  const src = code(path.join(ROOT, 'public', 'room', 'app.js'));
+  const body = /function playClick\(\)\s*\{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(body, '找不到 playClick');
+  assert.ok(!/ambience\.enabled/.test(body[1]), 'playClick 又依赖环境音开关（环境音默认关会让点击也哑）');
+  assert.ok(!/ambience\.volume/.test(body[1]), 'playClick 又乘环境音音量（那是背景声的偏好，与点击无关）');
+  assert.ok(/soundOn/.test(body[1]), 'playClick 没检查音效开关');
 });
 
 test('ambience.init 会把上下文和总线交给 sfx', () => {
@@ -240,11 +291,16 @@ test('瞬移不会连成一片脚步', () => {
   assert.ok(/moved > 1\.2/.test(src), '缺少瞬移保护：切房间/快照跳变会连响一串脚步');
 });
 
-test('点击音跟着总音量走（原来固定 0.38，静音了还在响）', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'public', 'room', 'app.js'), 'utf8');
-  assert.ok(/CLICK_BASE_VOL \* \(ambience\.enabled \? ambience\.volume : 0\)/.test(src),
-    '点击音没有乘总音量，静音后仍会响');
-  assert.ok(!/clickSfx\.volume\s*=\s*0\.38/.test(src), '还在用固定音量赋值');
+test('点击音不再绕过全局开关（原来固定 0.38，静音了还在响）', () => {
+  // 这条演变过一次：
+  //   原始 bug   → clickSfx.volume = 0.38 写死，总音量 0 时点击仍响
+  //   第一次修法 → 乘 ambience.volume，但 ambience.enabled 默认关，点击反而全哑
+  //   现在的正解 → 只受「音效」开关 soundOn 控制（它本就是点击音的开关）
+  const src = code(path.join(ROOT, 'public', 'room', 'app.js'));
+  assert.ok(!/clickSfx\.volume\s*=\s*0\.38/.test(src), '又回到写死 0.38 的写法');
+  const body = /function playClick\(\)\s*\{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(body, '找不到 playClick');
+  assert.ok(/if \(!soundOn\) return/.test(body[1]), 'playClick 没先检查音效开关');
 });
 
 test('「跑」用真实速度判定，不靠 clip 名', () => {
@@ -262,9 +318,12 @@ test('试听页存在、可独立打开，且接线方式与正式一致', () =>
   const src = fs.readFileSync(p, 'utf8');
   assert.ok(/import \{ sfx \} from '\.\/sfx\.js'/.test(src), '没有引入真模块');
   assert.ok(/sfx\.attach\(ctx,\s*bus\)/.test(src), '没有 attach');
-  // 必须和 ambience 一样：bus → master → destination，否则试听正常进游戏变形
-  assert.ok(/bus\.connect\(master\)/.test(src), '总线没接到 master');
-  assert.ok(/master\.connect\(ctx\.destination\)/.test(src), 'master 没接 destination');
+  // 必须和正式一样是「bus → 独立增益 → 输出」两段结构，
+  // 而不是 bus 直接接 destination（那样就测不出增益层的行为）
+  assert.ok(/bus\.connect\(\w+Master\)/.test(src), '总线没接到独立的 master 增益');
+  assert.ok(/\w+Master\.connect\(ctx\.destination\)/.test(src), 'master 增益没接 destination');
+  // 名字要对得上：sfxMaster 才是和正式环境同构的那一层
+  assert.ok(/sfxMaster/.test(src), '增益层没按正式结构命名为 sfxMaster');
 });
 
 test('试听页带素材来源说明（CC0 也要留记录）', () => {
