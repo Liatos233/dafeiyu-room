@@ -4704,7 +4704,20 @@ async function main() {
           const view = homeView(state, now, env);
           const w = view.body?.words || {};
           const mood = env.emotion && Number.isFinite(Number(env.emotion.mood))
-            ? { label: String(env.emotion.label || ''), mood: Math.round(Number(env.emotion.mood)) }
+            ? {
+                label: String(env.emotion.label || ''),
+                mood: Math.round(Number(env.emotion.mood)),
+                // 新情绪系统（soul 插件）带来的字段，旧系统没有就落空
+                stage: env.emotion.stage || undefined,
+                attitude: env.emotion.attitude || undefined,
+                band: env.emotion.band || undefined,
+                bandKey: env.emotion.bandKey || undefined,
+                blame: Number.isFinite(Number(env.emotion.blame)) ? env.emotion.blame : undefined,
+                dims: env.emotion.dims && Object.keys(env.emotion.dims).length ? env.emotion.dims : undefined,
+                dimLabels: env.emotion.dimLabels || undefined,
+                lastReason: env.emotion.lastReason || undefined,
+                source: env.emotion.source || undefined
+              }
             : null;
           const recent = (view.events || []).slice(-3).map((e) => String(e.text || '').slice(0, 60)).filter(Boolean);
           const bits = [
