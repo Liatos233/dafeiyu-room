@@ -1,3 +1,19 @@
+// ⚠️ DEPRECATED（2026-11-25）—— 已被 AstrBot 插件 astrbot_plugin_dafeiyu_soul 取代。
+//
+// 为什么废弃：
+//   · 实测从未运行过：affinity.json 全盘不存在、/api/affinity 日志 0 次调用、
+//     room/app.js 里 0 处引用。它是一份完整的死代码。
+//   · 它的 STAGES 六个阶段名（陌生鱼苗 → 眼熟的小鱼 → 愿意搭话 → 嘴硬搭子 →
+//     心软常客 → 黏人）已经搬进新插件的 core.py（STAGES 常量），逻辑重写为
+//     依恋/亲密双轴映射。
+//   · 保留旧文件是为了对照命名和态度文案，不要再往里加功能。
+//
+// 新系统在哪：
+//   deploy/plugins/astrbot_plugin_dafeiyu_soul/core.py  → STAGES
+//   情绪与关系状态：<DSH_HOME>/feiyu-soul/state.json
+//   方案文档：docs/SOUL-PLUGIN-PLAN.md
+// --------------------------------------------------------------------------
+
 // 小蓝鱼好感度系统：每次被群友 @ 时激活/更新，按群 + 群友分别记录。
 //
 // 数据落在 state/affinity.json（已被 .gitignore 忽略）：
