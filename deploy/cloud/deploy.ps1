@@ -62,8 +62,15 @@ $changedList = Join-Path $tmp "assets-changed.txt"
 # 未提交改动（-AllowDirty）打成一个临时 commit，代码与资产都从它归档
 $archiveSrc = "HEAD"
 if ($AllowDirty) {
-  $stash = (& $git stash create).Trim()
-  if ($stash) { $archiveSrc = $stash }
+  # git stash create 只在有**已跟踪文件改动**时才产出一个 commit；
+  # 如果工作区脏只是因为多了几个未跟踪文件（??），它返回空 ——
+  # 此时 $(...).Trim() 会对 null 调方法直接崩。之前就是这么炸的。
+  $stash = & $git stash create
+  if ($stash) { $archiveSrc = "$stash".Trim() }
+  else {
+    # 没有已跟踪改动：直接用 HEAD（未跟踪文件本来也不该进部署包）
+    Write-Host "==> 工作区只有未跟踪文件，按 HEAD 打包"
+  }
 }
 
 # 1) 代码包（排除 assets；assets 单独打包）
