@@ -1,4 +1,4 @@
-# 一键部署：本地 git archive（代码，排除 assets）→ scp → 服务器解包重启（不依赖 GitHub）
+﻿# 一键部署：本地 git archive（代码，排除 assets）→ scp → 服务器解包重启（不依赖 GitHub）
 # 资产（public/room/assets，~380MB）走增量：按 sha256 清单只上传新增/变更的文件。
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File deploy\cloud\deploy.ps1
