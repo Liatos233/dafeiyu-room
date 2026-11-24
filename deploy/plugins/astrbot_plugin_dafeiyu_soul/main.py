@@ -457,15 +457,17 @@ class DafeiyuSoul(Star):
             return event.plain_result(f"出错了：{exc}")
 
     def _render_status(self, now: int) -> str:
-        """给 QQ 看的紧凑格式。
+        """给 QQ 看的格式。
 
-        设计取舍（都是被真实问题逼出来的）：
-          · **10 行太长**：QQ 上要滑动才看得完 → 压到 6~7 行
-          · **小数参差**：40.12 / 50.4 / 56.07 视觉上很乱 → 全部取整
-          · **看不出相对基线**：45 和 55 在 45 基线上差异巨大，但绝对值看不出来
-            → 用 ▲▼ 标出相对基线的方向，差值 ≥3 才标
-          · **没有方向感**：只说数值不说"所以呢" → 补一句她此刻的语气倾向
-          · 进度条从 10 格压到 8 格，两边对齐更好看
+        经过一轮试错后的定稿（第一版压行数压过头，反而不好看）：
+          · **每维一行**：QQ 是等宽中文字体，竖着排能对齐成柱状图，一眼看全
+          · **10 格进度条**：█████░░░░░ 比 8 格更接近"进度条"的直觉
+          · **去掉小数**：50.2 / 56.07 → 50 / 56，整齐
+          · **不要 ▲▼ 标记**：每行多一个字符反而破坏对齐
+          · 关系（依恋/亲密）和情绪之间空一行，有语义分隔
+
+        QQ 的 OneBot v11 协议没有颜色/粗体组件（只有 Plain 和 Face），
+        所以靠排版而不是靠样式。
         """
         st = self.state
         dims = st.get("dims") or {}
@@ -474,52 +476,27 @@ class DafeiyuSoul(Star):
         stage = core.stage_of(st)
         blame = core.num(st.get("blame"), 0.0)
 
-        def bar(v: float, width: int = 8) -> str:
-            n = int(round(max(0.0, min(100.0, v)) / 100 * width))
-            return "▰" * n + "▱" * (width - n)
-
-        def mark(v: float, base: float) -> str:
-            d = v - base
-            if d >= 6:
-                return "▲"
-            if d >= 3:
-                return "△"
-            if d <= -6:
-                return "▼"
-            if d <= -3:
-                return "▽"
-            return "　"  # 全角空格占位，保持列对齐
+        def bar(v: float) -> str:
+            n = max(0, min(10, int(round(core.num(v) / 10))))
+            return "█" * n + "░" * (10 - n)
 
         # ── 第一行：关系 + 责怪档 ──
-        # 责怪档只在非日常时才占版面，否则太吵
-        head = f"心情 {stage['name']}"
-        if band != "calm":
-            head += f"｜{binfo['label']} {round(blame)}"
+        if band == "calm":
+            head = f"心情：{stage['name']}｜没在生气"
         else:
-            head += "｜没在生气"
+            head = f"心情：{stage['name']}｜{binfo['label']}（{round(blame)}/100）"
 
-        lines = [head]
+        lines = [head, ""]
 
-        # ── 七维：一行两根，四行装完 ──
-        # 依恋/亲密是存量（关系），其余是情绪，中间空一行分开更有语义
-        bond = ("attachment", "intimacy")
-        mood = tuple(k for k in core.DIM_KEYS if k not in bond)
-
-        def cell(k: str) -> str:
+        # 七维按固定顺序排，依恋/亲密在前（关系是存量，其余是当下的情绪），
+        # 中间**不空行** —— 加了空行会让整块从 10 行涨到 12 行，
+        # 而柱状图本来就靠连续对齐才好看。
+        for k in core.DIM_KEYS:
             v = core.num(dims.get(k), core.DIMS[k]["base"])
-            base = core.DIMS[k]["base"]
-            label = core.DIMS[k]["label"]
-            return f"{label}{bar(v)}{round(v):>3}{mark(v, base)}"
+            lines.append(f"  {core.DIMS[k]['label']} {bar(v)} {round(v):>3}")
 
-        for pair in ((bond[0], bond[1]), (mood[0], mood[1]), (mood[2], mood[3]), (mood[4], None)):
-            if pair[1]:
-                lines.append(f"{cell(pair[0])}  {cell(pair[1])}".rstrip())
-            else:
-                lines.append(cell(pair[0]).rstrip())
-
-        # ── 语气倾向：让她"所以呢"这一层有落点 ──
         lines.append("")
-        lines.append(f"这会儿{binfo['short']}")
+        lines.append(binfo["short"])
 
         reason = str(st.get("lastReason") or "").strip()
         if reason:
