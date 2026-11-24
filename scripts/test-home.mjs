@@ -622,38 +622,99 @@ test('上座过渡明显长于客户端轮询间隔，否则会「停下→闪�
     'homeView().her.elev 在上座期间必须是插值后的值，不能一直是 0');
 });
 
-test('在家具上点「去喝水」不许残留 pose/elev（否则客户端每帧 snap 鬼畜）', () => {
-  // 真 bug：water 分支只写了 s.command + s.kind = 'walk'，
-  // 没动 pose / elev / walking / freeTarget / route / dismounting。
+test('全动作残留检查：脱离家具后再走路，不许「同时在家具上又在走路」', () => {
+  // 这是「从根本上解决」的那道闸。
+  //
+  // 背景：applyHomeAction 的每个分支原来各写各的清理，写法还不一样 ——
+  // water 只改 kind 不改 pose/elev，sleep/clip 也不清座椅姿态。
+  // 结果每加一个动作就可能复现「客户端每帧 snap → 鬼畜」。
+  // 现在统一走 resetMotion()，这条测试就是对所有动作的体检：
+  // 只要哪个分支漏调，这里立刻红，不用等用户报「鬼畜」。
+  //
+  // 判定依据（和 app.js 里 onFurniture / snap 同源）：
+  //   elev > 0.05 && kind === 'walk'  → 客户端认为「在家具上走路」→ 每帧 snap
+  //   pose === 'sit' && kind === 'walk' → 同上
+  // 只对「会改变她状态」的动作检查；pet/talk/lamp 这种只回气泡的允许保持原状。
+  const HARMLESS = new Set(['visit', 'pet', 'poke', 'talk', 'say', 'lamp', 'heal', 'feed', 'play', 'wake']);
+  // 和 src/home-state.js 的 HOME_ACTIONS 对齐；这里显式列出来，加新动作时
+  // 两边都补一条，测试才能覆盖到。
+  const ACTIONS = [
+    'visit', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'go', 'place',
+    'sleep', 'wake', 'clip', 'say', 'lamp', 'command', 'sick', 'heal'
+  ];
+  const INPUTS = {
+    visit: {}, pet: {}, poke: {}, feed: {}, water: {}, play: {},
+    talk: { text: '测试留言' }, go: { pos: [12.0, 8.0] }, place: { pos: [6.5, 6.0] },
+    sleep: {}, wake: {}, clip: { clip: '跳舞' }, say: { text: '测试一句' }, lamp: {},
+    command: { room: 'her_room', spot: 'bed' }, sick: {}, heal: {}
+  };
+
+  const seated = () => atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.492, nextDecisionAt: T0 + 60000 });
+  const walker = () => {
+    let w = atState({ room: 'living', spot: 'sofa', pose: 'stand', elev: 0, nextDecisionAt: T0 });
+    w = applyHomeAction(w, { action: 'go', pos: [12.0, 8.0], at: T0 }).state;
+    let tt = T0;
+    for (let i = 0; i < 6; i += 1) { tt += 200; w = advanceHomeState(w, tt, {}).state; }
+    return w;
+  };
+
+  const bad = [];
+  for (const action of ACTIONS) {
+    const input = INPUTS[action];
+    if (!input) continue;
+    for (const [name, make] of [['坐在沙发', seated], ['正在走路', walker]]) {
+      const r = applyHomeAction(make(), { action, at: T0, ...input });
+      const s = r.state;
+      const inTransition = !!(s.dismounting || s.mounting);
+      if (inTransition) continue;      // 过渡期间允许 elev 高（正在升起/落下）
+      if (Number(s.elev) > 0.05 && s.kind === 'walk') {
+        bad.push(`${action}（${name}）elev=${Number(s.elev).toFixed(3)} 但 kind=walk`);
+      }
+      if (s.pose === 'sit' && s.kind === 'walk') {
+        bad.push(`${action}（${name}）pose=sit 但 kind=walk`);
+      }
+    }
+  }
+  assert.equal(bad.length, 0,
+    `以下动作会残留「在家具上 + 在走路」的冲突状态（客户端会每帧 snap 鬼畜）：\n  ${bad.join('\n  ')}`);
+});
+
+test('在家具上点「去喝水」会走完下座过渡，过程中不出现「家具上 + 走路」', () => {
+  // 真 bug：water 分支原来只写 s.command + s.kind = 'walk'，不动 pose/elev。
   // 她坐在沙发上（pose='sit', elev=0.49）时点喝水，客户端会同时看到
   // 「在走路」（kind=walk）和「在家具上」（pose=sit 且 elev>0.05），
-  // 于是 onFurniture 成立 → snap=true → **每帧把位置硬拷到目标点**，
-  // 画面就是「坐在沙发上鬼畜抖动」。
+  // 于是 onFurniture 成立 → snap=true → 每帧把位置硬拷到目标点 → 鬼畜。
+  //
+  // 现在的修法不是「立刻把 pose/elev 清零」（那会让身体先瞬移到地面、
+  // 再被下座插值从座面拉回来，单帧跳 0.48 米），而是统一走 resetMotion +
+  // 让 beginRoute 建 dismounting 把她平稳降下去。
   const s0 = atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.492, nextDecisionAt: T0 });
   let s = applyHomeAction(s0, { action: 'water', at: T0 }).state;
 
-  // 立刻检查：不许还带着 sit / 座面高度
-  assert.notEqual(s.pose, 'sit', '点喝水后 pose 不该还留在 sit');
-  assert.ok(!(Number(s.elev) > 0.05), `点喝水后 elev 不该还是座面高度（实际 ${s.elev}）`);
+  // 立刻检查：目标和过渡源必须是干净的
+  assert.ok(s.command && s.command.spot === 'water', '点喝水应该下一条去饮水的指令');
   assert.equal(s.freeTarget, null, '点喝水应清掉 freeTarget');
-  assert.equal(s.dismounting, null, '点喝水应清掉半截的下座状态');
 
-  // 逐帧确认高度单调下降到地面，不出现「卡在座面又在走路」
+  // 逐帧确认：高度单调下降；任何一帧都不许「在家具上 + 在走路」同时成立
   let t = T0;
   let prevElev = Number(s.elev) || 0;
   let stuckOnSeat = 0;
-  for (let i = 0; i < 40; i += 1) {
+  let touchedGround = false;
+  for (let i = 0; i < 80; i += 1) {
     t += 100;
     s = advanceHomeState(s, t, {}).state;
     const elev = Number(s.elev) || 0;
-    // 「还在家具上 + 说自己在走」同时成立就是那个鬼畜场景
-    if (elev > 0.05 && s.kind === 'walk' && !s.dismounting) stuckOnSeat += 1;
-    assert.ok(elev <= prevElev + 1e-9 || s.dismounting || s.mounting,
-      `高度不该在下去的过程中回升：${prevElev} → ${elev}`);
+    const inTransition = !!(s.dismounting || s.mounting);
+    // 「还在家具上」+「说自己在走」+「不在过渡中」= 客户端会每帧 snap 的那一帧
+    if (elev > 0.05 && s.kind === 'walk' && !inTransition) stuckOnSeat += 1;
+    if (elev <= 0.001) touchedGround = true;
+    assert.ok(elev <= prevElev + 1e-9 || inTransition,
+      `高度不该在下去的过程中回升：${prevElev.toFixed(3)} → ${elev.toFixed(3)}`);
     prevElev = elev;
   }
   assert.equal(stuckOnSeat, 0,
     `有 ${stuckOnSeat} 帧同时「在家具上」和「在走路」，客户端会每帧 snap`);
+  assert.ok(touchedGround, '下座过渡走完后应该落到地面（elev≈0）');
 });
 
 test('下座过渡期间 spot 不许提前改成目标点（否则家具上会闪一下）', () => {
