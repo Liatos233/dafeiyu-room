@@ -4,7 +4,7 @@
 import { getWeather, isWetWeather, isSnowWeather, isStormyWeather } from './weather-store.js';
 import { CROPS, GARDEN_RULES, advanceGarden, applyGardenAction, gardenView, normalizeGardenCare } from '../public/room/garden-state.js';
 import { loadGarden, saveGarden } from './garden-store.js';
-import { loadHomeState, saveHomeState, advanceHomeState, beginGardenWork, endGardenWork, homeView } from './home-state.js';
+import { loadHomeState, saveHomeState, advanceHomeState, beginGardenWork, endGardenWork, homeView, currentPosition } from './home-state.js';
 
 const ACTIONS = ['till','plant','water','fertilize','harvest','sell','buySeed','buyCompost'];
 
@@ -151,6 +151,28 @@ function resolvePending(g, h, decision, now) {
 export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),storage={loadHomeState,saveHomeState,loadGarden,saveGarden}}){
   if(!homeFile||!gardenFile) throw new Error('菜园照料需要独立的房间与菜园存档路径');
   let lastHomeSave=0;
+  // 物理状态签名：决定「这一 tick 要不要立刻落盘」。
+  //
+  // 必须包含 mounting/dismounting。它们是把人从家具挪到地面的**唯一**载体，
+  // 只存在于内存里；不带进签名就不会触发落盘，下一 tick 的 loadHomeState
+  // 又把它覆盖掉，于是每个 tick 都新建一个 t0=now 的过渡 ——
+  // t=(now-t0)/dur 永远是 0，位置和高度冻在第 0 帧。
+  // 实测：坐在沙发/椅子上想走，却「一直要走不走」，卡满 20 秒
+  // （正好是下面的落盘节流间隔），t0 每 250ms 递增一次。
+  //
+  // 同理带上 walking：它是「在走」的显式标志，落盘后才能跨 tick 保持一致。
+  const motionSignature=(st)=>JSON.stringify([
+    st.route, st.dwell, st.asleep, st.sleepPending, st.mounting, st.dismounting, st.walking
+  ]);
+
+  // 「想走却走不动」的可观测性。
+  //
+  // 位置完全由 route + departAt 决定（motionAt 里 elapsed=max(0,now-t0)）。
+  // 一旦有代码在每 tick 重建路线，departAt 就被刷成 now，客户端每帧算出的
+  // elapsed 都≈0 —— 人停在路线起点原地「跑步」。这种状态光看代码很难发现，
+  // 所以这里主动检测：连续 1.5 秒「声明在移动但位置没动」就写一条日志，
+  // 带上当时完整的 route/过渡状态。**只记录，不改行为。**
+  let moveWatch=null;
   function tick(now=Date.now()){
     const env=getEnv(now)||{};
     // ── 天气对菜园的影响 ──────────────────────────────────────
@@ -204,7 +226,7 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
       finish(g,job,false,`${reason}；已暂停这次${labels[job.action.type]}`,now,'cancelled');homeTransition=true;
     }
     const mayPlan=!reason && (g.care.task || g.care.queue.length || (g.care.autoEnabled && now>=g.care.nextPlanAt));
-    const beforeMotion=JSON.stringify([h.route,h.dwell,h.asleep,h.sleepPending]);
+    const beforeMotion=motionSignature(h);
     // 事件也要触发落盘：需求类事件（饿了/渴了/憋了）不改 route/dwell/asleep/sleepPending，
     // 只比这四项的话，它们在内存里生成后会被下一次 loadHomeState 覆盖掉。
     // 用「条数 + 末条时间戳」而不是只比条数：eventLog 到 300 条后会被 slice 截断，条数就不再变化。
@@ -212,7 +234,7 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
     const beforeEvents=`${log.length}|${log.length?log[log.length-1].at:0}`;
     if(reason && !h.route && !h.dwell)h.nextDecisionAt=0;
     const advanced=advanceHomeState(h,now,{...env,gardenReady:!!mayPlan}); h=advanced.state;
-    if(beforeMotion!==JSON.stringify([h.route,h.dwell,h.asleep,h.sleepPending]))homeTransition=true;
+    if(beforeMotion!==motionSignature(h))homeTransition=true;
     else {
       const log2=h.eventLog||[];
       if(beforeEvents!==`${log2.length}|${log2.length?log2[log2.length-1].at:0}`)homeTransition=true;
@@ -275,6 +297,24 @@ export function createGardenCaretaker({homeFile,gardenFile,getEnv=()=>({}),stora
     // Routine needs are checkpointed at most every 20 seconds, physical job transitions immediately.
     const checkpoint=homeTransition||now-lastHomeSave>=20_000;
     if(checkpoint){h=storage.saveHomeState(homeFile,h,now);lastHomeSave=now;}
+    // ── 走动停滞检测（只记录，不改行为）────────────────────
+    try{
+      const claimed=!!(h.route||h.dismounting||h.mounting||h.walking);
+      if(claimed){
+        const cwPos=currentPosition(h,now);
+        if(!moveWatch)moveWatch={pos:cwPos,at:now,lastLogAt:0};
+        else{
+          const cwMoved=Math.hypot(cwPos[0]-moveWatch.pos[0],cwPos[1]-moveWatch.pos[1]);
+          if(cwMoved>=0.01){moveWatch.pos=cwPos;moveWatch.at=now;}
+          else if(now-moveWatch.at>1500&&now-(moveWatch.lastLogAt||0)>3000){
+            moveWatch.lastLogAt=now;
+            const cwR=h.route;
+            const cwRoute=cwR?(cwR.points.length+'pt departAgo='+Math.round(now-(Number(cwR.departAt)||0))+'ms arriveAgo='+Math.round(now-(Number(cwR.arriveAt)||0))+'ms speed='+cwR.speed+' target='+(cwR.target&&cwR.target.room)+'/'+(cwR.target&&cwR.target.spot)):'none';
+            console.warn('[home] 走动停滞 '+((now-moveWatch.at)/1000).toFixed(1)+'s：'+h.room+'/'+h.spot+' kind='+h.kind+' walking='+(h.walking===true)+' dismount='+(!!h.dismounting)+' dwell='+(!!h.dwell)+' command='+(!!h.command)+' route='+cwRoute+' pos='+cwPos.map((v)=>v.toFixed(2)).join(','));
+          }
+        }
+      }else moveWatch=null;
+    }catch{ /* 诊断失败不影响主流程 */ }
     return {state:h,env,garden:publicView(g,h,now),changed:advanced.changed||homeTransition};
   }
   function control(input={},now=Date.now()){

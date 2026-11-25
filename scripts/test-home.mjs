@@ -28,6 +28,7 @@ import {
   recentEvents,
   saveHomeState
 } from '../src/home-state.js';
+import { createGardenCaretaker } from '../src/garden-autonomy.js';
 
 let passed = 0;
 function test(name, fn) {
@@ -1089,6 +1090,83 @@ test('睡觉时卫生也在涨（不是只有清醒才脏）', () => {
   const after = advanceHomeState(s, T0 + 6 * HOUR, {}).state;
   assert.ok(after.needs.hygiene > 0.35, `睡觉也会变脏，6h 后应 >0.35，实际 ${after.needs.hygiene.toFixed(2)}`);
   assert.ok(after.needs.hygiene < 0.75, `但不该一夜就脏透，实际 ${after.needs.hygiene.toFixed(2)}`);
+});
+
+test('落盘签名必须包含上/下座过渡，且下座跨 tick 不被重建', () => {
+  // 线上表现：坐在沙发/椅子上想走，却「一直要走不走」——实测卡 8.6s（观测截断）
+  // 到 20 秒（完整窗口），20 秒正好是 caretaker 的落盘节流间隔。
+  //
+  // 根因：gardenCaretaker 每个 tick 都重新 loadHomeState() 读盘，再用「物理状态
+  // 签名」判断这一 tick 要不要立刻落盘。签名原来只有
+  //   [route, dwell, asleep, sleepPending]
+  // 而 mounting/dismounting 是把人从家具挪到地面的**唯一**载体、且只存在于内存中。
+  // 不带进签名 → 开始下座不落盘 → 下一 tick 读回没下座的旧状态 → 又新建一个
+  // t0=now 的下座 → t=(now-t0)/dur 永远 0 → 位置和高度冻在第 0 帧。
+  //
+  // 实测（scripts/repro-caretaker-freeze.mjs 快进 6 小时）：
+  //   修复前 13 次 >=1.5s 的卡死，最长 20 秒；t0 每 tick 精确 +250ms
+  //   修复后 0 次
+  //
+  // 先做结构化断言守住根因：以后谁把这俩字段从签名里删掉，这里立刻红。
+  const src = fs.readFileSync(new URL('../src/garden-autonomy.js', import.meta.url), 'utf8');
+  const sig = /const motionSignature\s*=\s*\(st\)\s*=>\s*JSON\.stringify\(\[([\s\S]*?)\]\)/.exec(src);
+  assert.ok(sig, '找不到 motionSignature（落盘签名）');
+  for (const field of ['st.mounting', 'st.dismounting', 'st.walking', 'st.route', 'st.dwell']) {
+    assert.ok(sig[1].includes(field), `落盘签名缺少 ${field}：该状态只在内存里，不落盘就会被下一 tick 覆盖`);
+  }
+  assert.ok(!/JSON\.stringify\(\[h\.route,h\.dwell,h\.asleep,h\.sleepPending\]\)/.test(src),
+    '还有地方用内联的旧签名比较（会漏掉上下座过渡）');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'caretaker-'));
+  const homeFile = path.join(dir, 'home.json');
+  const gardenFile = path.join(dir, 'garden.json');
+  try {
+    const mk = (over) => {
+      const s = atState(over);
+      return s;
+    };
+    // 1) 先「坐在沙发上发呆（有 dwell）」。这一 tick 会落盘并把 lastHomeSave 设成 T0+250，
+    //    之后 20 秒内的落盘就只靠「物理状态签名」判断。
+    const seated = mk({
+      room: 'living', spot: 'sofa', pose: 'sit', elev: 0.48,
+      nextDecisionAt: T0 + 10 * HOUR,
+      dwell: { until: T0 + 10 * MIN, target: { room: 'living', spot: 'sofa', kind: 'idle', actText: '打盹', pose: 'sit', elev: 0.48 } },
+    });
+    saveHomeState(homeFile, seated, T0);
+    const ct = createGardenCaretaker({ homeFile, gardenFile, getEnv: () => ({}) });
+    ct.tick(T0 + 250);
+
+    // 2) 让 dwell 结束、立刻决策「起身走人」——注意这一步不改 route/list，只改变过渡状态
+    const leave = loadHomeState(homeFile, T0 + 250);
+    leave.dwell = null;
+    leave.nextDecisionAt = T0;
+    saveHomeState(homeFile, leave, T0 + 250);
+
+    // 3) 这一 tick 会创建下座；它必须立刻落盘
+    const a = ct.tick(T0 + 500).state;
+    assert.ok(a.dismounting, '这一 tick 应该开始下座');
+    const onDisk = loadHomeState(homeFile, T0 + 500);
+    assert.ok(onDisk.dismounting,
+      '开始下座的这一 tick 没有落盘：下一 tick 会读回没有下座的旧状态并重建 t0（表现就是原地卡住）');
+    assert.equal(onDisk.dismounting.t0, a.dismounting.t0, '落盘的必须是同一个下座（t0 相同）');
+
+    // 4) 之后每个 tick 都必须读到同一个下座（t0 不变），否则就是被重建了
+    let prevT0 = a.dismounting.t0;
+    for (const dt of [750, 1000, 1250, 1500]) {
+      const s = ct.tick(T0 + dt).state;
+      if (s.dismounting) {
+        assert.equal(s.dismounting.t0, prevT0, `t=${dt}ms 时下座 t0 变了：过渡没落盘，被每 tick 重建`);
+        prevT0 = s.dismounting.t0;
+      }
+    }
+
+    // 5) 1800ms 内必须起身完成并开始走
+    const c = ct.tick(T0 + 2600).state;
+    assert.ok(!c.dismounting, '下座应该在 1800ms 内完成，现在还在卡着');
+    assert.ok(c.route || c.spot !== 'sofa', '下座完成后应该已经离开沙发');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 if (process.exitCode) {

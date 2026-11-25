@@ -44,6 +44,8 @@
     "test:role-card": "node scripts/test-role-card.mjs",
     "test:room": "node scripts/test-room.mjs",
     "test:home": "node scripts/test-home.mjs",
+    "test:walk": "node scripts/repro-caretaker-freeze.mjs 2",
+    "watch:walk": "node scripts/watch-bridge-freeze.mjs 6",
     "test:sfx": "node scripts/test-sfx.mjs",
     "test:sfx:audio": "node scripts/test-sfx-audio.mjs",
     "test:sfx:step": "node scripts/test-sfx-step.mjs",
