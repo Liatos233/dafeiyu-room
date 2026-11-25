@@ -76,9 +76,16 @@
   .chip.active{color:#0b1420; background:linear-gradient(135deg,#b7d8ff,#8fc1ff); border-color:transparent; font-weight:600}
   .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--ok); box-shadow:0 0 10px rgba(143,224,192,.8)}
   .chip:not(.active) .dot{background:#66788c; box-shadow:none}
+  /* 「在家」是常态、没有信息量。只在有状态（睡着了/有人找/连不上）时才显形，
+     否则左上角永远挂着一个不说话的标签。 */
+  .chip.is-idle{display:none}
   .chip.mode{padding:6px 8px; gap:2px}
-  .chip.mode button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:2px 8px;border-radius:999px;opacity:.6}
-  .chip.mode button.on{background:rgba(255,255,255,.14);opacity:1}
+  .chip.mode button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:3px 10px;border-radius:999px;opacity:.55;transition:.15s}
+  .chip.mode button:hover{opacity:.85}
+  /* 选中的那一段要**明确亮起来**。原来只有 rgba(255,255,255,.14) 的微弱提亮，
+     在深色 chip 上几乎看不出；叠加 chip 自己变亮时（cameraMode!=left 会给
+     .chip.active 上亮色渐变）更是完全看不见。现在改成实心亮底 + 深色字。 */
+  .chip.mode button.on{background:linear-gradient(135deg,#b7d8ff,#8fc1ff); color:#0b1420; opacity:1; font-weight:600; box-shadow:0 1px 8px rgba(140,190,255,.45)}
 
   .panel{
     background:var(--card); border:1px solid var(--line); border-radius:16px;

@@ -1084,7 +1084,10 @@ canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (VIEW.mode === 'overview') VIEW.radius = clamp(VIEW.radius + e.deltaY * 0.012, 2.5, gardenController?.isOpen ? 90 : 60);
 }, { passive: false });
-canvas.addEventListener('dblclick', () => { if (!SHOT) { if (gardenController?.isOpen) focusGarden(); else resetView(); } });
+// 双击复位已移除：
+//   ① 拖拽镜头时手抖双击会被当成"回到默认视角"，刚调好的视角白调了；
+//   ② 双击常见于误触（尤其触控板和手机），代价远大于收益。
+// 需要复位时用左下角的视角按钮（家居视角/俯视/第一人称）。
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
@@ -1367,7 +1370,13 @@ function paintAmbience() {
   const st = document.getElementById('ambienceState');
   const chip = document.getElementById('ambienceChip');
   if (st) st.textContent = ambience.enabled ? '开' : '关';
-  if (chip) chip.setAttribute('aria-pressed', ambience.enabled ? 'true' : 'false');
+  if (chip) {
+    // 之前只有 aria-pressed，没有 .active 类 —— 而 .chip.active 才是那个
+    // 高亮样式（`.chip.active` 在 index.html 里），所以开着环境音按钮也不变色。
+    // 音效按钮一直是对的（applySoundPref 里 toggle 了 active），这里补齐。
+    chip.setAttribute('aria-pressed', ambience.enabled ? 'true' : 'false');
+    chip.classList.toggle('active', ambience.enabled);
+  }
   const volState = document.getElementById('ambienceVolState');
   const vol = document.getElementById('ambienceVol');
   if (volState) volState.textContent = `${Math.round(ambience.volume * 100)}%`;
@@ -1663,12 +1672,8 @@ function bindTimeBar() {
     setFromEvent(e);
     applySkyPref();
   });
-  // 双击：回到跟随真实时间
-  bar.addEventListener('dblclick', () => {
-    customHour = null;
-    skyRealTime = true;
-    applySkyPref();
-  });
+  // 双击回到真实时间也移除了：旁边的「真实时间」chip 是同一个功能，
+  // 双击只是重复入口，而且拖时间条时容易误触。
 }
 
 function skyOptions(hourOverride) {
@@ -1788,6 +1793,13 @@ function applySpriteViewPref() {
   if (st) st.textContent = spriteView === 'free' ? '自由' : '正面';
 }
 
+/** 三种视角模式的一句话说明（title 与切换提示共用，避免两处文案漂移）。 */
+const CAMERA_MODE_TEXT = {
+  open: '开放视角：WASD 移动，方向键转动视角，Shift 加速',
+  left: '左键视角：按住鼠标左键拖动镜头',
+  both: '组合视角：键盘和鼠标左键都能移动视角'
+};
+
 function applyCameraModePref() {
   const chip = $('camModeChip');
   if (!chip) return;
@@ -1796,7 +1808,13 @@ function applyCameraModePref() {
     button.classList.toggle('on', active);
     button.setAttribute('aria-pressed', String(active));
   });
-  chip.classList.toggle('active', cameraMode !== 'left');
+  // 这里**不再**给整个 chip 加 .active。
+  // 原因：.chip.active 是亮色渐变底 + 深色字，套在分段容器上以后，
+  // 内部「选中的那一段」再怎么提亮都会被同色背景吃掉 ——
+  // 表现就是用户说的「选中哪个看不出来」。高亮只留在分段上（见 CSS .on）。
+  chip.classList.remove('active');
+  // 用一个中性的“非默认”提示交给 title，避免用户不知道当前是哪种模式
+  chip.title = `视角控制：${CAMERA_MODE_TEXT[cameraMode] || cameraMode}`;
   canvas.classList.toggle('free-cam', cameraUsesKeyboard());
   if (!cameraUsesKeyboard()) clearOpenViewKeys();
   if (cameraUsesKeyboard()) {
@@ -1810,12 +1828,7 @@ function setCameraMode(next) {
   localStorage.setItem('home-camera-mode', cameraMode);
   localStorage.removeItem('home-free-cam');
   applyCameraModePref();
-  const text = {
-    open: '开放视角：WASD 移动，方向键转动视角，Shift 加速',
-    left: '左键视角：按住鼠标左键拖动镜头',
-    both: '组合视角：键盘和鼠标左键都能移动视角'
-  }[cameraMode];
-  toast(text);
+  toast(CAMERA_MODE_TEXT[cameraMode] || cameraMode);
 }
 
 function showClickMarker(pos) {
@@ -2033,8 +2046,13 @@ function renderHUD() {
     emoChip.textContent = '';
     emoChip.title = '';
   }
-  $('qqText').textContent = her.asleep ? '睡着了' : (state.env?.unread > 0 ? 'QQ 有人找' : '在家');
-  $('qqChip').classList.toggle('active', !!state.env?.unread);
+  // 「在家」是常态、没有信息量，一直挂在那儿只是噪音 —— 隐藏它。
+  // 只在真有状态要报告时才显形：睡着了 / QQ 有人找 / 连不上桥接。
+  const unread = !!state.env?.unread;
+  const qqAsleep = her.asleep === true;
+  $('qqText').textContent = qqAsleep ? '睡着了' : (unread ? 'QQ 有人找' : '在家');
+  $('qqChip').classList.toggle('active', unread);
+  $('qqChip').classList.toggle('is-idle', !qqAsleep && !unread);
 
   $('sleep').textContent = her.asleep ? '叫她起来' : '哄她睡';
   $('lamp').textContent = state.env?.lamp ? '关灯' : '开灯';
@@ -4235,6 +4253,8 @@ async function poll() {
     void syncGallery();
   } catch (error) {
     $('qqText').textContent = '连不上桥接';
+    // 连不上是有信息量的状态：把它从「常态隐藏」里放出来
+    $('qqChip').classList.remove('is-idle');
     if (!state) {
       $('activityText').textContent = '桥接还没起来，先把房间亮着。';
     }
