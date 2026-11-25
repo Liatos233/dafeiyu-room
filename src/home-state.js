@@ -2488,6 +2488,21 @@ function choosePetReaction(s, emotion) {
  * @param {boolean} opts.keepSpot       是否保留当前 spot（默认清成 free 之外不动）
  */
 function resetMotion(s, opts = {}) {
+  // 走在中途时，**先把此刻的真实位置记下来**，否则下面一清 route 位置就丢了。
+  //
+  // 为什么必须这么做（用户报的「一点她就闪现回开始位置再走」的根因）：
+  //   位置只有一个来源 motionOf()：
+  //     有 route → 沿 points + s0/t0 求值（正确）
+  //     没 route → 退回 spotOf(room, spot).pos（那个 spot 的**固定坐标**）
+  //   而 beginRoute 在出发那一刻就把 state.room/spot 改成了**目的地**（见 1516-1517）。
+  //   于是 resetMotion 清掉 route 之后，currentPosition() 立刻返回**目的地**坐标：
+  //   人还在半路，位置却被钉到目的地，紧接着的新路线就从那里起步。
+  //   表现就是「点一下 → 位置突然跳走 → 再点又跳」的鬼畜。
+  //   （下座完成那段 1477-1478 行用的就是这个正确做法：spot='free' + freePos。）
+  const midWalkPos = (s.route && Array.isArray(s.route.points) && s.route.points.length > 1)
+    ? currentPosition(s, Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now())
+    : null;
+
   // 目标/路线/过渡：三套会互相抢的源，一起清
   s.freeTarget = null;      // 「鼠标指点」的残留目标
   s.route = null;           // 旧路线（不清就会边跑旧路线边等新指令）
@@ -2495,6 +2510,16 @@ function resetMotion(s, opts = {}) {
   s.mounting = null;        // 半截的上座过渡
   s.dwell = null;           // 「到了之后待着」的停留
   s.walking = false;        // 真正的出发交给 advance → beginRoute
+
+  // route 清掉之后把位置钉住：spot 标成 free，room 换成她此刻真正所在的房间。
+  // room 必须一起改 —— beginRoute 会用 nearestNodeInRoom(rawFrom, state.room)
+  // 找接入点，如果 room 还停在旧目的地，就会去错房间找节点、算出一条坏路线。
+  if (midWalkPos) {
+    const here = roomAtPoint(midWalkPos);
+    if (here?.id) s.room = here.id;
+    s.spot = 'free';
+    s.freePos = midWalkPos.slice();
+  }
   // 姿态与高度：只要要换动作，就必须回到「站在地面」这个基准，
   // 否则客户端会同时认为「在走路」和「在家具上」→ 每帧 snap。
   //
@@ -2598,7 +2623,7 @@ export function applyHomeAction(state, input = {}) {
       //   · 自己硬设 kind='walk' 会保留 pose=sit + elev=0.49，
       //     客户端同时看到「在走路」和「在家具上」→ 每帧 snap → 鬼畜
       //     （实测卡了 2.8 秒）
-      resetMotion(s);
+      resetMotion(s, { now });
       s.command = { room: 'living', spot: 'water', until: now + 30_000, by: '访客' };
       s.kind = 'idle';
       s.activity = '去饮水机接杯水';
@@ -2645,7 +2670,7 @@ export function applyHomeAction(state, input = {}) {
     const from = currentPosition(s, now);
     const fromRoom = roomAtPoint(from);
     // from 要在 resetMotion 之前算（它依赖当前的 route/dismounting 来定位）
-    resetMotion(s);
+    resetMotion(s, { now });
     s.command = null;
     s.freePos = normalizeFreePoint(from) || s.freePos || null;
     s.room = fromRoom?.id || s.room;
@@ -2663,7 +2688,7 @@ export function applyHomeAction(state, input = {}) {
     if (!p) return { state: s, changed: false, event: null };
     const room = roomAtPoint(p);
     if (!room) return { state: s, changed: false, event: null };
-    resetMotion(s, { nextDecisionAt: now + 5 * MIN });
+    resetMotion(s, { now, nextDecisionAt: now + 5 * MIN });
     s.command = null;
     s.freePos = p;
     s.room = room.id;
@@ -2675,7 +2700,7 @@ export function applyHomeAction(state, input = {}) {
     // 她要往床上走或者就地躺下：先把旧的路线/过渡/座椅姿态清干净，
     // 否则「坐在沙发上点哄睡」会带着 sit + 座面高度去走路（同一类鬼畜）。
     const wasInBed = inBed;
-    resetMotion(s);
+    resetMotion(s, { now });
     s.command = null;
     s.sleepPending = !wasInBed;
     if (wasInBed) {
@@ -2718,7 +2743,7 @@ export function applyHomeAction(state, input = {}) {
     if (s.asleep) { s.asleep = false; s.sleepPending = false; s.lamp = true; }
     // 点播动画同理：坐在家具上点播会带着 sit + 座面高度演动作，
     // 客户端 onFurniture 成立 → 每帧 snap。统一清一遍。
-    resetMotion(s, { reactionUntil: now + 15_000 });
+    resetMotion(s, { now, reactionUntil: now + 15_000 });
     s.command = null;
     s.kind = 'freestyle';
     s.clip = clip;
@@ -2760,7 +2785,7 @@ export function applyHomeAction(state, input = {}) {
     // 统一清理：freeTarget / 旧 route / 半截过渡 / 姿态高度全归零。
     // 少清任何一个都会让两套目标源抢同一个身体（来回奔波），或者让客户端
     // 同时认为「在走路」和「在家具上」（每帧 snap → 鬼畜）。
-    resetMotion(s);
+    resetMotion(s, { now });
     s.command = { room, spot, until: now + 5 * MIN, by: sanitizeText(input.by, 24) };
     // 这是「主人让她去哪」：记一次交互，并给到站后的清醒保护期兜底。
     s.lastInteractionAt = now;

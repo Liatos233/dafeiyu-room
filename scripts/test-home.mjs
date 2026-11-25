@@ -933,51 +933,160 @@ test('睡觉 8 小时，需求不会爆表', () => {
 });
 
 test('睡觉时需求涨得比清醒时慢', () => {
-  const t0 = Date.now();
-  // 清醒 4 小时
-  let a = normalizeHomeState({}, t0);
-  a.asleep = false;
-  a.needs = { hunger: 0.1, thirst: 0.1, fatigue: 0.1, pain: 0, hygiene: 0.1, bladder: 0.1 };
-  a.lastTickAt = t0;
-  a = advanceHomeState(a, t0 + 4 * HOUR, {}).state;
+  // 注意：必须用「在床上」的状态。normalizeHomeState 有一条业务规则：
+  //   人不在 her_room 的 bed 上 -> asleep 一律重置为 false（还在走过去的路上）。
+  // 早先这个测试只写 `a.asleep = true` 而没设 room/spot，
+  // 于是每次进 advanceHomeState 都被重置成清醒，测出来"睡=醒 100%"，
+  // 一直误报失败。不是代码错，是测试漏了前提。
+  let a = atState({ needs: { hunger: 0.1, thirst: 0.1, fatigue: 0.1, pain: 0, hygiene: 0.1, bladder: 0.1 } });
+  a = advanceHomeState(a, T0 + 4 * HOUR, {}).state;
   const awakeRise = a.needs.hunger - 0.1;
 
-  // 睡着 4 小时（同样的起点）
-  let b = normalizeHomeState({}, t0);
-  b.asleep = true;
-  b.needs = { hunger: 0.1, thirst: 0.1, fatigue: 0.6, pain: 0, hygiene: 0.1, bladder: 0.1 };
-  b.lastTickAt = t0;
-  b = advanceHomeState(b, t0 + 4 * HOUR, {}).state;
+  let b = atState({
+    room: 'her_room', spot: 'bed', pose: 'lie', elev: 0.52,
+    asleep: true, kind: 'sleep',
+    needs: { hunger: 0.1, thirst: 0.1, fatigue: 0.6, pain: 0, hygiene: 0.1, bladder: 0.1 }
+  });
+  b = advanceHomeState(b, T0 + 4 * HOUR, {}).state;
   const asleepRise = b.needs.hunger - 0.1;
 
+  assert.equal(b.asleep, true, '在床上就该一直在睡（这条先确立，否则后面的断言没意义）');
   assert.ok(asleepRise > 0, '睡着时还是会饿，只是慢');
   assert.ok(asleepRise < awakeRise * 0.6, `睡着时涨得应该不到清醒的 60%，实际 ${(asleepRise / awakeRise * 100).toFixed(0)}%`);
 });
 
+test('不在床上时 asleep 会被重置（还在走过去的路上）', () => {
+  // 这条是 normalizeHomeState 的业务规则，之前没有任何测试守着它，
+  // 才导致上面三个睡眠测试静默失效。
+  const walking = atState({ room: 'living', spot: 'sofa', asleep: true });
+  const n = normalizeHomeState(walking, T0);
+  assert.equal(n.asleep, false, '不在床上的 asleep 必须被重置');
+  assert.equal(n.sleepPending, true, '应该转入「正在准备睡」而不是凭空消失');
+});
+
+test('走到一半再下指令：位置不能跳回出发点', () => {
+  // 用户报的「点她就鬼畜回开始位置再走，再点又闪回去」。
+  //
+  // 根因链：
+  //   ① 位置只有一个来源：motionOf(state) —— 有 route 就从 route 推，
+  //      没 route 就退回 spotOf(room, spot).pos（那个 spot 的**固定坐标**）。
+  //   ② applyHomeAction('command') 调 resetMotion()，它把 route 清成 null。
+  //   ③ 于是建新路线时 currentPosition() 拿不到「她此刻在哪」，
+  //      只能退回旧 spot 的固定坐标 —— 也就是她出发前站的位置。
+  //   ④ 新路线从那个点起步 → 视觉上「闪现回起点」。
+  let s = atState({
+    room: 'living', spot: 'sofa', pose: 'sit', elev: 0.48, nextDecisionAt: 0
+  });
+  s = applyHomeAction(s, { action: 'command', room: 'kitchen', spot: 'stove', at: T0 }).state;
+
+  // 按真实心跳节奏推进（服务端大约 200~250ms 一次），
+  // 直到她真正出发（先起身 1800ms，再 beginRoute）。
+  let t = T0;
+  for (let i = 0; i < 40 && !s.route; i += 1) {
+    t += 250;
+    s = advanceHomeState(s, t, {}).state;
+  }
+  assert.ok(s.route, `应该已经出发，实际 spot=${s.spot} sleeping=${!!s.dismounting}`);
+  const startPos = currentPosition(s, t);
+
+  // 再走 1.5 秒，记录半途位置
+  for (let i = 0; i < 6; i += 1) {
+    t += 250;
+    s = advanceHomeState(s, t, {}).state;
+  }
+  const midPos = currentPosition(s, t);
+  const moved = Math.hypot(midPos[0] - startPos[0], midPos[1] - startPos[1]);
+  assert.ok(moved > 0.5, `1.5 秒应该走出去一段，实际只走了 ${moved.toFixed(2)}m`);
+
+  // 半途改主意：点她去别处
+  s = applyHomeAction(s, { action: 'command', room: 'bathroom', spot: 'sink', at: t + 20 }).state;
+  t += 60;
+  s = advanceHomeState(s, t, {}).state;
+
+  const afterPos = currentPosition(s, t);
+  const jump = Math.hypot(afterPos[0] - midPos[0], afterPos[1] - midPos[1]);
+  assert.ok(jump < 0.6,
+    `改指令后位置不能跳（从 (${midPos[0].toFixed(2)},${midPos[1].toFixed(2)}) ` +
+    `跳到 (${afterPos[0].toFixed(2)},${afterPos[1].toFixed(2)})，跳了 ${jump.toFixed(2)}m）`);
+});
+
+test('去菜园途中反复下发同一指令：既不闪现也不卡住', () => {
+  // 对应「让她去菜园，反复鬼畜像卡在那里」。
+  // 检查两件事：
+  //   ① 每次点完不能出现位置倒退（闪现）
+  //   ② 整体仍然在往前推进（不能卡死在原地）
+  let s = atState({ room: 'living', spot: 'sofa', pose: 'sit', elev: 0.48, nextDecisionAt: 0 });
+  s = applyHomeAction(s, { action: 'command', room: 'garden', spot: 'plot1', at: T0 }).state;
+
+  let t = T0;
+  // 先让她走出去（起身 1800ms + 进入路线）
+  for (let i = 0; i < 40 && !s.route; i += 1) { t += 250; s = advanceHomeState(s, t, {}).state; }
+  assert.ok(s.route, '应该已经出发去菜园');
+
+  let maxBack = 0;
+  let travelled = 0;
+  let prevPos = currentPosition(s, t);
+
+  for (let round = 0; round < 6; round += 1) {
+    // 每轮：先走 1 秒
+    for (let i = 0; i < 4; i += 1) {
+      t += 250;
+      s = advanceHomeState(s, t, {}).state;
+      const p = currentPosition(s, t);
+      travelled += Math.hypot(p[0] - prevPos[0], p[1] - prevPos[1]);
+      prevPos = p;
+    }
+    // 中途再点一次同一个菜园
+    const before = currentPosition(s, t);
+    s = applyHomeAction(s, { action: 'command', room: 'garden', spot: 'plot1', at: t + 10 }).state;
+    // 只推进**两个心跳**（500ms）。正常走路 500ms 约 0.5m；
+    // 若发生「位置被钉到目的地」的闪现，这里会跳出好几米。
+    // （不能推进太多：那样测到的就只是正常行走距离了。）
+    t += 250; s = advanceHomeState(s, t, {}).state;
+    t += 250; s = advanceHomeState(s, t, {}).state;
+    const after = currentPosition(s, t);
+    const back = Math.hypot(before[0] - after[0], before[1] - after[1]);
+    if (back > maxBack) maxBack = back;
+    prevPos = after;
+    travelled += back;
+  }
+
+  assert.ok(maxBack < 1.2, `每次重下指令最多位移了 ${maxBack.toFixed(2)}m（500ms 正常应约 0.5m，闪现会 >2m）`);
+  assert.ok(travelled > 3, `整体应该走了不少路，实际只走了 ${travelled.toFixed(2)}m（卡住会很小）`);
+
+  // 最后必须真的走到（对应「像卡在那里一样」）。
+  let arrived = false;
+  for (let i = 0; i < 240; i += 1) {
+    t += 250;
+    s = advanceHomeState(s, t, {}).state;
+    if (s.room === 'garden' && s.spot === 'plot1' && !s.route) { arrived = true; break; }
+  }
+  assert.ok(arrived, `最终应该走到菜园 plot1，实际 room=${s.room} spot=${s.spot} route=${!!s.route}`);
+});
+
 test('睡一晚能把疲劳补回来，但不会 30 分钟就满血', () => {
-  const t0 = Date.now();
-  let s = normalizeHomeState({}, t0);
-  s.asleep = true;
-  s.needs.fatigue = 1.0;
-  s.lastTickAt = t0;
+  const bed = () => atState({
+    room: 'her_room', spot: 'bed', pose: 'lie', elev: 0.52,
+    asleep: true, kind: 'sleep',
+    needs: { hunger: 0.3, thirst: 0.3, fatigue: 1.0, pain: 0, hygiene: 0.3, bladder: 0.3 }
+  });
 
   // 30 分钟
-  let half = advanceHomeState(s, t0 + 0.5 * HOUR, {}).state;
+  const half = advanceHomeState(bed(), T0 + 0.5 * HOUR, {}).state;
   assert.ok(half.needs.fatigue > 0.6, `30 分钟不该回满，实际剩 ${half.needs.fatigue.toFixed(2)}`);
 
   // 3 小时
-  let three = advanceHomeState(s, t0 + 3 * HOUR, {}).state;
+  const three = advanceHomeState(bed(), T0 + 3 * HOUR, {}).state;
   assert.ok(three.needs.fatigue < 0.05, `3 小时应该基本回满，实际剩 ${three.needs.fatigue.toFixed(2)}`);
 });
 
 test('睡觉时卫生也在涨（不是只有清醒才脏）', () => {
-  const t0 = Date.now();
-  let s = normalizeHomeState({}, t0);
-  s.asleep = true;
-  s.needs.hygiene = 0.20;
-  s.needs.fatigue = 0.8;
-  s.lastTickAt = t0;
-  const after = advanceHomeState(s, t0 + 6 * HOUR, {}).state;
+  const s = atState({
+    room: 'her_room', spot: 'bed', pose: 'lie', elev: 0.52,
+    asleep: true, kind: 'sleep',
+    needs: { hunger: 0.2, thirst: 0.2, fatigue: 0.8, pain: 0, hygiene: 0.20, bladder: 0.2 }
+  });
+  const after = advanceHomeState(s, T0 + 6 * HOUR, {}).state;
   assert.ok(after.needs.hygiene > 0.35, `睡觉也会变脏，6h 后应 >0.35，实际 ${after.needs.hygiene.toFixed(2)}`);
   assert.ok(after.needs.hygiene < 0.75, `但不该一夜就脏透，实际 ${after.needs.hygiene.toFixed(2)}`);
 });
