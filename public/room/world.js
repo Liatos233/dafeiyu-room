@@ -3058,6 +3058,39 @@ function buildPoolDeck(world, M) {
           + Math.sin((x + y) * 1.3 + t1 * 0.7) * this.amp * 0.45;
       }
       this.geo.attributes.position.needsUpdate = true;
+      // 浮体随水漂：和水面共用同一个 t，所以波峰到浮体底下时它自然被托起来。
+      // 时间在看不见时也要走（不能用 performance.now 直接驱动，否则
+      // 页面切到后台回来会跳帧）——这里 t 本来就是 dt 累加的。
+      const fl = world.poolFloats;
+      if (fl && fl.length) {
+        const tt = this.t;
+        for (let k = 0; k < fl.length; k += 1) {
+          const f = fl[k];
+          const n = f.node;
+          // 平移：两个不同周期的圆周叠加，形成不重复的缓慢漂流
+          const a = tt * f.driftFreq * Math.PI * 2 + f.driftPhase;
+          const b = tt * f.driftFreq * 1.7 + f.driftPhase * 2.3;
+          let x = f.baseX + Math.cos(a) * f.driftR + Math.cos(b) * f.driftR * 0.45;
+          let z = f.baseZ + Math.sin(a) * f.driftR * 0.8 + Math.sin(b) * f.driftR * 0.4;
+          // 克制在池子里（留出浮体半径），否则会漂到池框上/漂出水面
+          const x0 = POOL_X0 + f.pad, x1 = POOL_X1 - f.pad;
+          const z0 = POOL_Z0 + f.pad, z1 = POOL_Z1 - f.pad;
+          if (x < x0) x = x0 + (x0 - x); else if (x > x1) x = x1 - (x - x1);
+          if (z < z0) z = z0 + (z0 - z); else if (z > z1) z = z1 - (z - z1);
+          // 高度：用和水面完全相同的正弦取样，所以浮体总是踩在波面上
+          const wy = Math.sin(x * 2.1 + tt * 1.6) * this.amp
+            + Math.sin(z * 3.4 - tt * 2.3) * this.amp * 0.7
+            + Math.sin((x + z) * 1.3 + tt * 1.6 * 0.7) * this.amp * 0.45;
+          // 额外一层自己的起伏（浮力回弹），比波面略大一点点
+          const bob = Math.sin(tt * f.bobFreq + f.bobPhase) * f.bobAmp;
+          n.position.set(x, -0.096 + wy + bob, z);
+          // 自转
+          n.rotation.y = f.baseRotY + tt * f.spinSpeed;
+          // 倾斜：随波起伏微微摇（浮体边缘总有一侧先入水）
+          n.rotation.x = Math.sin(tt * f.bobFreq * 0.8 + f.tiltPhase) * f.tiltAmp;
+          n.rotation.z = Math.cos(tt * f.bobFreq * 0.62 + f.tiltPhase * 1.4) * f.tiltAmp * 0.8;
+        }
+      }
     }
   };
 
@@ -3455,30 +3488,58 @@ function buildPoolDeck(world, M) {
     palm(12.85, 13.35, 0.48);
   }
 
-  // A7. 水面漂浮物：浮圈 + 浮板（漂在池面上，和挂在柱子上的救生圈不同）
+  // A7. 水面漂浮物：浮圈 + 浮板
+  //
+  // 以前这三个是写死的静态摆件：位置/朝向/高度全部固定。而水面每帧在起伏，
+  // 它们却纹丝不动 —— 看起来像被钉在水面上。真实泳池里的东西会随水漂：
+  //   · 上下起伏（跟着水波，波峰托起来、波谷沉下去）
+  //   · 缓慢自转 + 被水面往复推着平移（有边界，不会漂出池子）
+  //   · 轻微倾斜（浮体边缘总有一侧先入水）
+  // 所以每个浮体挂一个 holder，每帧由 poolSurf 统一驱动（和水面共用一个时钟）。
   {
+    const WATER_Y = -0.096;
     const floats = [
       { x: 3.1, z: 11.05, r: 0.0, kind: 'ring' },
-      { x: 6.4, z: 11.9, r: 0.7, kind: 'ring' },
+      { x: 6.4, z: 11.9, r: 0.7, kind: 'ring', small: true },
       { x: 8.4, z: 10.7, r: 0.3, kind: 'board' }
     ];
-    const WATER_Y = DECK_TOP - 0.09;   // 水面略低于露台完成面
+    world.poolFloats = [];
     for (const f of floats) {
+      const holder = new THREE.Group();
+      holder.position.set(f.x, WATER_Y, f.z);
+      p.add(holder);
       if (f.kind === 'ring') {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.075, 10, 24), M.fabricOchre);
+        const R = f.small ? 0.19 : 0.26;
+        const T = f.small ? 0.062 : 0.075;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(R, T, 10, 24), M.fabricOchre);
         ring.rotation.x = -Math.PI / 2;
-        ring.rotation.z = f.r;
-        ring.position.set(f.x, WATER_Y, f.z);
-        p.add(ring);
-        // 白色条纹
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.078, 8, 10, Math.PI / 2.6), M.fabricCream);
+        holder.add(ring);
+        // 白色条纹：和浮圈共用 holder 的局部坐标，所以会跟着一起转
+        const band = new THREE.Mesh(new THREE.TorusGeometry(R, T + 0.003, 8, 10, Math.PI / 2.6), M.fabricCream);
         band.rotation.copy(ring.rotation);
-        band.position.copy(ring.position);
-        p.add(band);
+        holder.add(band);
       } else {
-        // 浮板要有一部分压入水面；把板心下沉 3cm，避免看起来像悬在水上。
-        rbox(p, 0.46, 0.045, 0.30, 0.06, M.fabricBlue, f.x, WATER_Y - 0.03, f.z, f.r);
+        const board = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.045, 0.30), M.fabricBlue);
+        board.position.y = -0.012;
+        holder.add(board);
       }
+      holder.rotation.y = f.r;
+      // 每个浮体独立相位/频率/速度：整池东西同步摆动很假
+      const s = world.poolFloats.length;
+      world.poolFloats.push({
+        node: holder,
+        baseX: f.x, baseZ: f.z, baseRotY: f.r,
+        bobPhase: s * 2.1 + f.x * 0.7,
+        bobAmp: f.kind === 'ring' ? 0.016 : 0.011,
+        bobFreq: 1.15 + s * 0.23,
+        spinSpeed: f.kind === 'ring' ? (s % 2 ? -0.11 : 0.14) : 0.045,
+        driftR: f.kind === 'ring' ? 0.34 : 0.22,
+        driftPhase: s * 1.9 + f.z,
+        driftFreq: 0.035 + s * 0.011,
+        tiltAmp: f.kind === 'ring' ? 0.055 : 0.035,
+        tiltPhase: s * 1.3,
+        pad: f.kind === 'ring' ? 0.36 : 0.28
+      });
     }
   }
 
