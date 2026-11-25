@@ -132,19 +132,19 @@ class TestQuestion(unittest.TestCase):
 
 class TestOwnerDm(unittest.TestCase):
     def test_owner_dm_true(self):
-        self.assertTrue(perceive.is_owner_dm("aiocqhttp:FriendMessage:630151911", "630151911"))
-        self.assertTrue(perceive.is_owner_dm("大肥鱼:FriendMessage:630151911", "630151911"))
+        self.assertTrue(perceive.is_owner_dm("aiocqhttp:FriendMessage:000000000", "000000000"))
+        self.assertTrue(perceive.is_owner_dm("大肥鱼:FriendMessage:000000000", "000000000"))
 
     def test_group_is_false(self):
         # 已确认只服务私聊主人
-        self.assertFalse(perceive.is_owner_dm("aiocqhttp:GroupMessage:397853582", "630151911"))
+        self.assertFalse(perceive.is_owner_dm("aiocqhttp:GroupMessage:000000001", "000000000"))
 
     def test_other_person_dm_false(self):
-        self.assertFalse(perceive.is_owner_dm("aiocqhttp:FriendMessage:123456", "630151911"))
+        self.assertFalse(perceive.is_owner_dm("aiocqhttp:FriendMessage:123456", "000000000"))
 
     def test_malformed_false(self):
-        for bad in ["", "630151911", "a:b", "a:b:c:d", None]:
-            self.assertFalse(perceive.is_owner_dm(bad, "630151911"), f"「{bad}」应判 False")
+        for bad in ["", "000000000", "a:b", "a:b:c:d", None]:
+            self.assertFalse(perceive.is_owner_dm(bad, "000000000"), f"「{bad}」应判 False")
 
 
 if __name__ == "__main__":

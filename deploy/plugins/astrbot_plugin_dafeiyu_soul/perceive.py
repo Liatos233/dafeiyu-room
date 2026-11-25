@@ -248,7 +248,7 @@ def is_question(text: str) -> bool:
 
 
 def is_owner_dm(umo: str, owner_id: str) -> bool:
-    """是不是主人私聊。umo 形如 `platform:FriendMessage:630151911`。
+    """是不是主人私聊。umo 形如 `platform:FriendMessage:000000000`。
 
     只认私聊（FriendMessage）；群聊一律返回 False —— 已确认只服务私聊主人。
     """

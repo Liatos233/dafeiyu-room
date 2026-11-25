@@ -140,7 +140,7 @@ class DafeiyuSoul(Star):
 
     @property
     def owner_id(self) -> str:
-        return str(self._cfg("owner.owner_id", "630151911"))
+        return str(self._cfg("owner.owner_id", "000000000"))
 
     # ══════════════════════════════════════════════════
     # 状态读写

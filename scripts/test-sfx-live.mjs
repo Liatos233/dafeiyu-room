@@ -5,7 +5,7 @@
 // "构建产物里确实带上了音效代码，并且素材能从线上取到"。
 //
 // 跑法：node scripts/test-sfx-live.mjs [url]
-//   默认 http://101.245.76.51:3100/room/
+//   默认 http://203.0.113.10:3100/room/
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ import { join } from 'node:path';
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const PORT = 9336;
-const URL = process.argv[2] || 'http://101.245.76.51:3100/room/';
+const URL = process.argv[2] || 'http://203.0.113.10:3100/room/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const userDir = mkdtempSync(join(tmpdir(), 'sfx-live-'));

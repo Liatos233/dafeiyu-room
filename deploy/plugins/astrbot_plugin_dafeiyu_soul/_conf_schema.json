@@ -31,7 +31,7 @@
         "type": "string",
         "description": "主人的 QQ 号",
         "hint": "只认这个号的私聊；群聊和陌生人一律不影响她的心",
-        "default": "630151911"
+        "default": "000000000"
       }
     }
   },
