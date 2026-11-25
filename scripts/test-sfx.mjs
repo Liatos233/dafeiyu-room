@@ -358,6 +358,114 @@ test('「跑」用真实速度判定，不靠 clip 名', () => {
   assert.ok(/speed > 1\.25/.test(src), '跑步的速度阈值不见了');
 });
 
+console.log('\n环境音');
+
+/** 读 ambience.js 的源码（剥掉注释，避免注释里的字样干扰断言）。 */
+function ambCode() {
+  return fs.readFileSync(path.join(ROOT, 'public', 'room', 'ambience.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+test('室内低通不再把鸟叫/雨声细节切光', () => {
+  // 1200Hz 会把鸟叫(2200-3800Hz)、雨声细节(2400-3200Hz)、蟋蟀(4200Hz)全切掉，
+  // 只剩风声 —— 这是"风喧宾夺主"的根因（不是风变响了，是别的声源被消音了）。
+  const src = ambCode();
+  assert.ok(/const INDOOR_CUTOFF = (\d+)/.test(src), '找不到 INDOOR_CUTOFF');
+  const v = Number(/const INDOOR_CUTOFF = (\d+)/.exec(src)[1]);
+  // 要容得下鸟叫的下沿(2200Hz)，但不必容蟋蟀(4200Hz)
+  assert.ok(v >= 2200, `室内低通 ${v}Hz 仍会切掉鸟叫`);
+  assert.ok(v < 4200, `室内低通 ${v}Hz 太宽，蟋蟀该被滤掉`);
+  assert.ok(!/indoor \? 1200 :/.test(src), '还硬编码着 1200Hz');
+});
+
+test('proc 条目的 gain 真的生效（曾经从未生效）', () => {
+  // 旧条件是 `entry.gain !== undefined && entry.sample`，
+  // 而 proc 条目没有 sample 字段 → 所有 proc 的 gain 全被忽略。
+  const src = ambCode();
+  assert.ok(!/entry\.gain !== undefined && entry\.sample/.test(src), 'gain 的 sample 条件还在');
+  // gain 现在走参数直传给各 make*
+  for (const fn of ['makeWind', 'makeRain', 'makeSnow', 'makeAurora', 'makeTraffic', 'makeMist', 'makeGrit']) {
+    assert.ok(new RegExp(`function ${fn}\\(ctx, dest[^)]*gain`).test(src), `${fn} 没接 gain 参数`);
+  }
+});
+
+test('风声有"让位"静默段（风不再一直响）', () => {
+  const src = ambCode();
+  assert.ok(/function makeWindDucker/.test(src), '缺少让位定时器');
+  // 必须挂到风节点上
+  assert.ok(/makeWindDucker\(state\.ctx/.test(src), 'ducker 没被挂上');
+  // 停床层时必须清掉定时器，否则换天气后旧定时器会压新节点
+  assert.ok(/b\.ducker\?\.stop\(\)/.test(src), 'stopBeds 没清 ducker 定时器');
+  // 基准增益要用函数延迟读（采样风是 2.2 秒渐入的）
+  assert.ok(/\(\) => n\.gain\.gain\.value/.test(src), 'ducker 基准没用延迟读取');
+});
+
+test('阵风频率加快（原来慢到听不出变化）', () => {
+  const src = ambCode();
+  // 原来 0.08/0.05Hz（12~20 秒一轮）= 恒定呼呼声
+  const lfo = /lfo\.frequency\.value = ([\d.]+) \+ gust/.exec(src);
+  assert.ok(lfo, '找不到阵风 LFO 频率');
+  assert.ok(Number(lfo[1]) >= 0.15, `阵风 LFO ${lfo[1]}Hz 太慢，听不出变化`);
+  // 音量起伏幅度要够大，"风小了"得接近无声
+  assert.ok(/volGain\.gain\.value = 0\.0[45]/.test(src), '音量起伏幅度太小');
+});
+
+test('每种天气都至少有两层声源（不能只有风）', () => {
+  const src = ambCode();
+  const body = /function sceneLayers[\s\S]*?\n\}/.exec(src);
+  assert.ok(body, '找不到 sceneLayers');
+
+  // 逐个 case 提取层数。注意 case 标签可能**连续多个**（fall-through）：
+  //   case 'night':
+  //   case 'starry':
+  //   case 'dusk':
+  //     return [...]
+  // 所以要把连续的 case 标签合并成一个分组，再取它下面的 return 数组。
+  const seg = body[0];
+  const groups = [];
+  const re = /((?:case '[\w]+':\s*)+)\s*return\s*\[([\s\S]*?)\];/g;
+  let m;
+  while ((m = re.exec(seg)) !== null) {
+    const names = [...m[1].matchAll(/case '(\w+)'/g)].map((x) => x[1]);
+    const layers = (m[2].match(/\{ (?:sample|proc):/g) || []).length;
+    groups.push({ names, layers });
+  }
+  assert.ok(groups.length >= 15, `解析出的天气组太少：${groups.length}`);
+
+  const solo = groups.filter((g) => g.layers <= 1);
+  assert.deepEqual(solo.map((g) => `${g.names.join('/')}(${g.layers}层)`), [],
+    `这些天气只有一层声（听起来就是单一呼呼声）：${solo.map((g) => g.names.join('/')).join(', ')}`);
+});
+
+test('房间底噪覆盖所有室内房间（原来只有厨房和卫生间）', () => {
+  const src = ambCode();
+  const body = /const ROOM_HUM = \{([\s\S]*?)\n\};/.exec(src);
+  assert.ok(body, '找不到 ROOM_HUM 表');
+  const keys = [...body[1].matchAll(/(\w+):\s*\{/g)].map((m) => m[1]);
+  for (const r of ['kitchen', 'bathroom', 'laundry', 'living', 'dining', 'corridor', 'foyer', 'her_room']) {
+    assert.ok(keys.includes(r), `缺少房间底噪 ${r}`);
+  }
+  // 卧室该最静，厨房/浴室最响
+  const gainOf = (k) => Number(new RegExp(`${k}:\\s*\\{[^}]*gain:\\s*([\\d.]+)`).exec(body[1])[1]);
+  assert.ok(gainOf('her_room') < gainOf('living'), '卧室应比客厅更静');
+  assert.ok(gainOf('bathroom') > gainOf('living'), '浴室应比客厅更响');
+});
+
+test('新增声源的频段不与风重叠（否则只是加了个更小声的风）', () => {
+  const src = ambCode();
+  // mist（雾/雪的空气感）必须在室内低通截止点以下，否则衰减一半等于没加
+  const mist = /function makeMist[\s\S]*?bp\.frequency\.value = ([\d.]+)/.exec(src);
+  assert.ok(mist, '找不到 makeMist');
+  const cutoff = Number(/const INDOOR_CUTOFF = (\d+)/.exec(src)[1]);
+  assert.ok(Number(mist[1]) < cutoff, `mist 中心 ${mist[1]}Hz ≥ 低通截止 ${cutoff}Hz，会被衰减掉一半`);
+  // grit（沙/冰的颗粒）同理
+  const grit = /function makeGrit[\s\S]*?bp\.frequency\.value = ([\d.]+)/.exec(src);
+  assert.ok(grit, '找不到 makeGrit');
+  assert.ok(Number(grit[1]) > 1200 && Number(grit[1]) < cutoff,
+    `grit 中心 ${grit[1]}Hz 应落在中频段(1200~${cutoff})内`);
+});
+
 console.log('\n试听页');
 
 test('试听页存在、可独立打开，且接线方式与正式一致', () => {

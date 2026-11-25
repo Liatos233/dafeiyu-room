@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>环境音试听台 · 大肥鱼的房间</title>
+<style>
+  :root {
+    --paper: #f7f3ea; --ink: #2b2620; --muted: #8a8175;
+    --line: #d9d2c4; --accent: #4a7c59; --card: #fffdf8; --warn: #b4523f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#1c1a17; --ink:#eae4d8; --muted:#8a8175; --line:#3a352d; --accent:#7fb08f; --card:#252220; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 18px 60px; background: var(--paper); color: var(--ink);
+    font: 15px/1.6 -apple-system, "Segoe UI", "Noto Serif SC", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .panel h2 { font-size: 13px; margin: 0 0 12px; font-weight: 600; letter-spacing: .02em; }
+  .row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  label { font-size: 13px; color: var(--muted); min-width: 72px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .val { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 52px; text-align: right; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  button {
+    appearance: none; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--paper)); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 9px; }
+  .mono { font: 12px/1.55 ui-monospace, Consolas, monospace; color: var(--muted); }
+  .warn { color: var(--warn); }
+  .ok { color: var(--accent); }
+  .bar { height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; min-width: 54px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>环境音试听台</h1>
+  <div class="sub">
+    逐个天气 × 房间试听环境音，并实时显示各频段能量占比。
+    「风占比」低说明声源有层次；高说明只剩风在响。
+  </div>
+
+  <div class="panel">
+    <h2>总控</h2>
+    <div class="row">
+      <label>总音量</label>
+      <input type="range" id="vol" min="0" max="100" value="45" />
+      <span class="val" id="volVal">45%</span>
+    </div>
+    <div class="row">
+      <label>采样窗口</label>
+      <input type="range" id="window" min="6" max="40" value="16" />
+      <span class="val" id="winVal">16 次</span>
+    </div>
+    <div class="hint">
+      频段划分：风 &lt;400Hz ｜ 低 400–1200 ｜ 中 1200–2800 ｜ 高 2800–8000 ｜ 超高 &gt;8000
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>天气</h2>
+    <div class="grid" id="weathers"></div>
+    <h2 style="margin-top:16px">房间</h2>
+    <div class="grid" id="rooms"></div>
+    <div class="hint">
+      室外房间（阳台/泳池/菜园）没有室内低通，风声更明显是正常的。
+      选「客厅」听日常感最准。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>当前频谱</h2>
+    <table>
+      <thead><tr><th>频段</th><th class="num">占比</th><th></th><th class="num">风占比</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="hint" id="verdict"></div>
+  </div>
+
+  <div class="panel">
+    <h2>全部天气 × 客厅（风占比排行）</h2>
+    <table>
+      <thead><tr><th>天气</th><th class="num">风%</th><th class="num">低%</th><th class="num">中%</th><th class="num">高%</th><th class="num">超高%</th><th>评价</th></tr></thead>
+      <tbody id="allrows"></tbody>
+    </table>
+    <div class="hint">点某一行可切到该天气。数值随风的静默段波动，多点几次看趋势。</div>
+  </div>
+</div>
+
+<script type="module">
+import { ambience } from './ambience.js';
+
+const $ = (id) => document.getElementById(id);
+const WEATHERS = [
+  ['day','晴天'],['overcast','阴天'],['rain','雨天'],['storm','雷雨'],['snow','雪天'],
+  ['fog','雾天'],['haze','霾'],['sand','沙尘'],['night','夜晚'],['dusk','黄昏'],
+  ['dawn','黎明'],['rainbow','彩虹'],['starry','星空'],['aurora','极光'],['meteor','流星雨'],
+  ['sleet','雨夹雪'],['hail','冰雹'],['blizzard','暴雪'],['typhoon','台风']
+];
+const ROOMS = [
+  ['living','客厅'],['kitchen','厨房'],['dining','餐厅'],['her_room','她的房间'],
+  ['bathroom','卫生间'],['laundry','家政间'],['corridor','走廊'],['foyer','玄关'],
+  ['balcony','阳台'],['pool','泳池'],['garden','菜园'],['yard','小径']
+];
+
+let weather = 'day';
+let room = 'living';
+
+function init() {
+  if (ambience.init()) {
+    ambience.setVolume(Number($('vol').value) / 100);
+    ambience.setEnabled(true);
+    apply();
+  }
+}
+document.addEventListener('pointerdown', init, { once: true });
+document.addEventListener('keydown', init, { once: true });
+
+function apply() {
+  try { ambience.setScene({ weather, room }); } catch { /* 忽略 */ }
+}
+
+$('vol').addEventListener('input', (e) => {
+  init();
+  const v = Number(e.target.value) / 100;
+  ambience.setVolume(v);
+  $('volVal').textContent = `${e.target.value}%`;
+});
+$('window').addEventListener('input', (e) => {
+  $('winVal').textContent = `${e.target.value} 次`;
+  measure();
+});
+
+for (const [k, label] of WEATHERS) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.k = k;
+  b.addEventListener('click', () => {
+    init(); weather = k; apply(); mark(); measure();
+  });
+  $('weathers').appendChild(b);
+}
+for (const [k, label] of ROOMS) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.k = k;
+  b.addEventListener('click', () => {
+    init(); room = k; apply(); mark(); measure();
+  });
+  $('rooms').appendChild(b);
+}
+function mark() {
+  document.querySelectorAll('#weathers button').forEach((b) => b.classList.toggle('on', b.dataset.k === weather));
+  document.querySelectorAll('#rooms button').forEach((b) => b.classList.toggle('on', b.dataset.k === room));
+}
+
+const BAND_LABEL = ['风 <400Hz', '低 400–1200Hz', '中 1200–2800Hz', '高 2800–8000Hz', '超高 >8000Hz'];
+
+async function measure() {
+  init();
+  apply();
+  const n = Number($('window').value);
+  const acc = [];
+  for (let i = 0; i < n; i += 1) {
+    await new Promise((r) => setTimeout(r, 80));
+    const s = ambience.spectrum();
+    if (s && s.total > 0) acc.push(s.shares);
+  }
+  if (!acc.length) return;
+  const avg = acc[0].map((_, bi) => acc.reduce((t, a) => t + a[bi], 0) / acc.length);
+
+  $('rows').innerHTML = avg.map((v, i) => `
+    <tr>
+      <td>${BAND_LABEL[i]}</td>
+      <td class="num">${(v * 100).toFixed(1)}%</td>
+      <td><div class="bar"><i style="width:${Math.min(100, v * 100).toFixed(1)}%"></i></div></td>
+      <td class="num">${i === 0 ? `${(avg[0] * 100).toFixed(1)}%` : ''}</td>
+    </tr>`).join('');
+
+  const w = avg[0];
+  const mid = avg[2] + avg[3] + avg[4];
+  let v;
+  if (w > 0.85) v = `<span class="warn">几乎全是低频</span>（${['aurora','meteor','storm','typhoon','hail'].includes(weather) ? '这类天气本来就该这样' : '考虑补一层中频'}）`;
+  else if (w > 0.55) v = `<span class="warn">风仍突出</span>（中+高仅 ${(mid * 100).toFixed(1)}%）`;
+  else v = `<span class="ok">层次正常</span>（中+高 ${(mid * 100).toFixed(1)}%）`;
+  $('verdict').innerHTML = `当前 ${WEATHERS.find((x) => x[0] === weather)?.[1] || weather} / ${ROOMS.find((x) => x[0] === room)?.[1] || room}：${v}`;
+}
+
+async function measureAll() {
+  init();
+  const rows = [];
+  for (const [k] of WEATHERS) {
+    ambience.setScene({ weather: k, room: 'living' });
+    await new Promise((r) => setTimeout(r, 2400));
+    const acc = [];
+    for (let i = 0; i < 12; i += 1) {
+      await new Promise((r) => setTimeout(r, 80));
+      const s = ambience.spectrum();
+      if (s && s.total > 0) acc.push(s.shares);
+    }
+    if (!acc.length) continue;
+    const avg = acc[0].map((_, bi) => acc.reduce((t, a) => t + a[bi], 0) / acc.length);
+    rows.push({ k, avg });
+  }
+  rows.sort((a, b) => a.avg[0] - b.avg[0]);
+  $('allrows').innerHTML = rows.map(({ k, avg }) => {
+    const label = WEATHERS.find((x) => x[0] === k)?.[1] || k;
+    const mid = avg[2] + avg[3] + avg[4];
+    const note = avg[0] > 0.85 ? '纯低频（这类天气合理）'
+      : avg[0] > 0.55 ? '风偏多' : mid > 0.08 ? '层次正常' : '较单调';
+    return `<tr data-k="${k}" style="cursor:pointer">
+      <td>${label}</td>
+      <td class="num">${(avg[0] * 100).toFixed(1)}</td>
+      <td class="num">${(avg[1] * 100).toFixed(1)}</td>
+      <td class="num">${(avg[2] * 100).toFixed(1)}</td>
+      <td class="num">${(avg[3] * 100).toFixed(1)}</td>
+      <td class="num">${(avg[4] * 100).toFixed(1)}</td>
+      <td class="${avg[0] > 0.55 ? 'warn' : 'ok'}">${note}</td>
+    </tr>`;
+  }).join('');
+  $('allrows').querySelectorAll('tr').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      weather = tr.dataset.k; apply(); mark(); measure();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+}
+
+mark();
+init();
+measure();
+setTimeout(measureAll, 600);
+</script>
+</body>
+</html>
