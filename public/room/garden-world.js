@@ -9,6 +9,9 @@ export const GARDEN_PLOTS = Object.freeze(Array.from({ length: 8 }, (_, id) => O
 const TAU = Math.PI * 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const CROP_LABELS = {radish:'小萝卜',carrot:'胡萝卜',lettuce:'生菜',tomato:'番茄',cucumber:'黄瓜',eggplant:'茄子',pepper:'甜椒',pumpkin:'南瓜',corn:'玉米',strawberry:'草莓',potato:'土豆',cabbage:'卷心菜'};
+// 幼苗形态按作物类型分：root=贴地叶丛 / leaf=莲座 / vine=匍匐藤 / corn=直立单秆 /
+// berry=矮丛三出叶 / fruit=细杆对生叶。和 garden-state.js 的 CROPS.type 保持一致。
+const CROP_TYPES = {radish:'root',carrot:'root',lettuce:'leaf',tomato:'fruit',cucumber:'vine',eggplant:'fruit',pepper:'fruit',pumpkin:'vine',corn:'corn',strawberry:'berry',potato:'root',cabbage:'leaf'};
 
 export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}) {
   const group = new THREE.Group(); group.name = 'feiyu-kitchen-garden';
@@ -25,8 +28,21 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
     stone: material(0xd0c4a6, .95), stone2: material(0xbdb49e, .98),
     stem: material(0x5e8237), leaf: material(0x588b40), leafLight: material(0x80a84d), leafDark: material(0x386840),
     red: material(0xc84b3e, .4), pink: material(0xbf4d66, .5), orange: material(0xe0943d, .55),
+    // 南瓜单独一色：原来和胡萝卜共用 M.orange，两块地放在一起撞色、分不出谁是谁
+    pumpkinOrange: material(0xd98324, .62),
+    // 南瓜棱纹沟槽用的深橙（低多边形风格下靠色差表棱）
+    pumpkinDark: material(0x9c5a12, .7),
+    // 未熟果 / 沟槽用的深色，避免沟槽和叶同色看不出来
+    greenDark: material(0x3f5c35, .8),
+    // 卷心菜：外层偏白绿、菜球更浅，和生菜的亮绿拉开
+    cabbage: material(0x9dbb78, .78),
+    cabbageCore: material(0xc3d5a2, .72),
+    // 土豆收获：土面裂缝用更深的土色，和地面拉开一点
+    soilCrack: material(0x4a3324, .95),
     yellow: material(0xe0bd57, .5), purple: material(0x624065, .38), greenFruit: material(0x62884b, .5),
     cucumber: material(0x3e7345, .5), white: material(0xf2e6c9, .55), potato: material(0xb69762, .9),
+    // 黄瓜刺点：比瓜身浅一点，低多边形下点出粗糙感
+    cucumberSpike: material(0x86ab63, .7),
     terracotta: world.mats.terracotta, teal: material(0x5e8882, .6), brass: world.mats.brass,
     seed: material(0xd2bc86), roof: material(0x516a65, .8), cream: material(0xe9dfc6),
     water: material(0x567e86, .18, {metalness:.25}), selected: material(0xffda7d, .65, {emissive:0x9d6b23,emissiveIntensity:.15})
@@ -396,39 +412,109 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
     }
     for(let index=0;index<coords.length;index++) {
       const [x,z]=coords[index];
+      // 幼苗形态按 type 区分：以前 stage 0/1 对 12 种作物完全一样（都是土堆+种子 /
+      // 一根细杆+两片叶），种下番茄和种下南瓜前 45% 的生长时间画面毫无区别。
+      const ctype=CROP_TYPES[plot.cropId]||'leaf';
       if(stage===0) {
-        p('ball',M.earth,x,.025,z,.11,.032,.085);p('ball',M.seed,x,.054,z,.022,.012,.015);continue;
+        // 播种：土堆 + 种子。根菜种子更靠中心（埋得深），叶菜稍散
+        p('ball',M.earth,x,.025,z,.11,.032,.085);
+        if(ctype==='root')p('ball',M.seed,x,.038,z,.022,.012,.015);
+        else p('ball',M.seed,x,.054,z,.022,.012,.015);
+        continue;
       }
       if(stage===1) {
-        b.rod(M.stem,[x,.01,z],[x,.11,z],.008);leaf(x,.09,z,.16,.13,.7,.45,true);leaf(x,.09,z,.14,.12,3.9,.5);continue;
+        // 幼苗整体放大一档：之前和土面几乎分不开，远看像一排小绿点。
+        const K = 1.45;
+        if(ctype==='root') {
+          // 根菜（萝卜/胡萝卜/土豆）：贴地小叶丛，几乎不抽高
+          for(let j=0;j<4;j++)leaf(x,.045,z,.19*K,.12*K,j*TAU/4+.4,.85,j%2===0);
+        } else if(ctype==='leaf') {
+          // 叶菜（生菜/卷心菜）：莲座状，多片平铺
+          for(let j=0;j<6;j++)leaf(x,.04,z,.21*K,.15*K,j*TAU/6+.2,.75,j%2===0);
+        } else if(ctype==='vine') {
+          // 藤蔓（南瓜/黄瓜）：抽出一根匍匐主藤 + 卷须叶
+          b.rod(M.stem,[x,.02,z],[x+.22,.07,z+.14],.009);
+          leaf(x+.22,.075,z+.14,.19*K,.13*K,.9,.75,true);
+          leaf(x,.06,z,.15*K,.11*K,1.2,.95);
+        } else if(ctype==='corn') {
+          // 玉米：直立单秆、细高
+          b.rod(M.stem,[x,.012,z],[x,.30,z],.009);
+          leaf(x,.22,z,.26*K,.07*K,-.5,.5,true);leaf(x,.27,z,.22*K,.065*K,2.6,.55);
+        } else if(ctype==='berry') {
+          // 草莓：矮丛 + 三出小叶
+          for(let j=0;j<3;j++)leaf(x,.035,z,.15*K,.12*K,j*TAU/3+.5,.8,j%2===0);
+        } else {
+          // fruit（番茄/茄子/甜椒）：细杆 + 对生叶
+          b.rod(M.stem,[x,.012,z],[x,.19,z],.009);
+          leaf(x,.15,z,.20*K,.16*K,.7,.5,true);leaf(x,.17,z,.17*K,.13*K,3.9,.55);
+        }
+        continue;
       }
       const scale=mature?1:.72;
       if(plot.cropId==='radish') {
-        p('ball',mature?M.pink:M.white,x,.06,z,.12*scale,.12*scale,.115*scale);
-        p('cone',M.white,x,.006,z,.05,.17,.05);
-        crown(x,.14,z,5,.31*scale,.14);
-      } else if(plot.cropId==='carrot') {
-        p('cone',M.orange,x,.025,z,.082*scale,.27*scale,.082*scale);
+        // 小萝卜：根茎**埋在土里**，成熟才鼓出来；叶丛向上簇生
+        const bulge=mature?1:.45;
+        p('ball',mature?M.pink:M.white,x,.03,z,.115*scale*bulge,.10*scale*bulge,.11*scale*bulge);
+        p('cone',M.white,x,.004,z,.045,.13,.045);
+        // 埋土：把下半截用土色盖住
+        p('ball',M.earth,x,.012,z,.12*scale,.022*scale,.115*scale);
         for(let j=0;j<5;j++) {
-          const a=j*TAU/5,xx=x+Math.cos(a)*.13,zz=z+Math.sin(a)*.13;
-          b.rod(M.stem,[x,.11,z],[xx,.41*scale,zz],.006);
-          for(let k=1;k<4;k++)leaf(x+(xx-x)*k/4,.1+k*.07*scale,z+(zz-z)*k/4,.12,.065,a+(k%2?1.1:-1.1),.6,k%2===0);
+          const a=j*TAU/5;
+          b.rod(M.stem,[x,.08,z],[x+Math.cos(a)*.05,.30*scale,z+Math.sin(a)*.05],.005);
+          for(let k=1;k<3;k++)leaf(x+Math.cos(a)*.03*k,.08+k*.09*scale,z+Math.sin(a)*.03*k,.15*scale,.075*scale,a+(k%2?1.0:-1.0),.5,k%2===0);
+        }
+      } else if(plot.cropId==='carrot') {
+        // 胡萝卜：根茎埋在土里（stage 2 只露一点锥尖），缨叶从根顶部**向上簇生**。
+        // 以前是 5 根向四周放射的细杆 → 看着像蜘蛛腿，而且橙色根全程露在土面。
+        const rootTip=mature?.27*scale:.10*scale;
+        p('cone',M.orange,x,.012,z,.082*scale,rootTip*2.2,.082*scale);
+        // 露出土面的部分：用土色压住锥体下半段，模拟"还埋着"
+        p('ball',M.earth,x,.02,z,.095*scale,.03*scale,.09*scale);
+        // 缨：5 束羽状叶竖着向上，不外撇
+        for(let j=0;j<5;j++) {
+          const a=j*TAU/5;
+          const tipX=x+Math.cos(a)*.05,tipZ=z+Math.sin(a)*.05;
+          b.rod(M.stem,[x,.06,z],[tipX,.40*scale,tipZ],.006);
+          // 每束上再分小叶，形成羽状
+          for(let k=1;k<4;k++){
+            const t=k/4;
+            const px=x+(tipX-x)*t,pz=z+(tipZ-z)*t;
+            leaf(px,.06+t*.34*scale,pz,.13*scale,.06*scale,a+(k%2?1.0:-1.0),.35,k%2===0);
+          }
         }
       } else if(plot.cropId==='lettuce') {
+        // 生菜：叶子从中心向外**平铺舒展**（莲座），整体矮、散、亮绿
         crown(x,.02,z,9,.39*scale,.31*scale);crown(x,.065,z,6,.27*scale,.24*scale);
         p('ball',M.leafLight,x,.13*scale,z,.1*scale,.13*scale,.1*scale);
       } else if(plot.cropId==='cabbage') {
-        crown(x,.025,z,7,.35*scale,.34*scale);
-        p('ball',M.leafLight,x,.17*scale,z,.2*scale,.19*scale,.2*scale);
-        for(let j=0;j<4;j++)leaf(x,.13*scale,z,.25*scale,.24,j*TAU/4,1.05,true);
+        // 卷心菜：**单颗紧实菜球**，外叶先向外包，再收成高一点的圆球。
+        // 以前和生菜一样是「莲座+小球」，两块地放一起远看分不出谁是谁。
+        crown(x,.02,z,6,.30*scale,.26*scale);          // 外层老叶（更平、更深）
+        for(let j=0;j<5;j++)leaf(x,.10*scale,z,.22*scale,.20,j*TAU/5+.4,.95,true); // 包裹叶
+        p('ball',M.cabbage,x,.20*scale,z,.19*scale,.20*scale,.19*scale);  // 菜球本体（偏白绿）
+        p('ball',M.cabbageCore,x,.13*scale,z,.14*scale,.12*scale,.14*scale); // 下部略收，显紧实
       } else if(plot.cropId==='pumpkin') {
+        // 藤叶铺开：三条主藤带叶，模拟南瓜匍匐铺满土面
         for(let j=0;j<3;j++) {
           const a=j*TAU/3;const xx=x+Math.cos(a)*.25,zz=z+Math.sin(a)*.31;
           b.rod(M.stem,[x,.03,z],[xx,.04,zz],.014);leaf(xx,.04,zz,.34,.32,a,.3,j%2===0);
         }
         const fx=x-.03,fz=z+.12,rr=.2*scale;
-        for(let j=0;j<7;j++)p('ball',mature?M.orange:M.greenFruit,fx+Math.cos(j*TAU/7)*rr*.42,rr*.65,fz+Math.sin(j*TAU/7)*rr*.42,rr*.7,rr*.72,rr*.7);
-        b.rod(M.darkwood,[fx,rr*1.3,fz],[fx+.025,rr*1.65,fz],.025);
+        // 瓜体：扁椭球（宽 > 高）+ 8 道深色纵向沟槽。
+        // 试过用 8 瓣椭球围一圈拼棱纹，但瓣间重叠太密 → 渲染出来仍是一个光滑球，
+        // 所以改成「整颗扁球 + 表面刻沟」，低多边形风格下棱纹更清楚。
+        const bodyMat=mature?M.pumpkinOrange:M.greenFruit;
+        const grooveMat=mature?M.pumpkinDark:M.greenDark;
+        p('ball',bodyMat,fx,rr*.60,fz,rr*.95,rr*.72,rr*.95);
+        const grooves=8;
+        for(let j=0;j<grooves;j++) {
+          const a=j*TAU/grooves;
+          const gx=fx+Math.cos(a)*rr*.90,gz=fz+Math.sin(a)*rr*.90;
+          p('box',grooveMat,gx,rr*.60,gz,.022,rr*1.15,.022,0,-a,0);
+        }
+        // 瓜蒂
+        b.rod(M.stem,[fx,rr*1.24,fz],[fx+.02,rr*1.50,fz],.026);
+        if(mature)p('cone',M.stem,fx+Math.cos(.6)*.05,rr*1.54,fz+Math.sin(.6)*.05,.03,.07,.03);
       } else if(plot.cropId==='strawberry') {
         crown(x,.03,z,7,.26*scale,.23);crown(x,.11,z,4,.17,.15);
         for(let j=0;j<3;j++) {
@@ -439,9 +525,25 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
           for(let k=0;k<3;k++)leaf(xx,.128,zz,.06,.035,k*TAU/3,.15);
         }
       } else if(plot.cropId==='potato') {
-        b.rod(M.stem,[x,0,z],[x,.32*scale,z],.015);crown(x,.12,z,7,.28*scale,.18);crown(x,.27*scale,z,4,.18,.14);
-        if(mature)for(let j=0;j<3;j++)p('ball',M.potato,x+Math.cos(j*2.1)*.12,.025,z+Math.sin(j*2.1)*.12,.075,.05,.052,0,j,.1);
+        // 土豆：地上是叶丛，成熟时**土面裂缝里露出块茎**。
+        // 以前成熟也就多画三个土色球埋在贴地位置，等于看不见，收获毫无提示。
+        b.rod(M.stem,[x,0,z],[x,.32*scale,z],.015);
+        crown(x,.12,z,7,.28*scale,.18);crown(x,.27*scale,z,4,.18,.14);
+        // 小花
         p('ball',M.white,x,.35*scale,z,.025,.02,.025);
+        if(mature) {
+          // 土面隆起 + 放射状裂缝（深色细条），让"地下有东西"看得见
+          p('ball',M.earth,x,.02,z,.26,.05,.22);
+          for(let j=0;j<5;j++) {
+            const a=j*TAU/5+.5;
+            p('box',M.soilCrack,x+Math.cos(a)*.14,.035,z+Math.sin(a)*.13,.02,.012,.19,0,-a,0);
+          }
+          // 露头的土豆：半埋，只露上半球
+          for(let j=0;j<3;j++) {
+            const a=j*TAU/3+.8;
+            p('ball',M.potato,x+Math.cos(a)*.13,.045,z+Math.sin(a)*.12,.062,.045,.058,0,a,0);
+          }
+        }
       } else if(plot.cropId==='corn') {
         const h=1.23*scale;b.rod(M.stem,[x,0,z],[x,h,z],.025);
         for(let j=0;j<6;j++)leaf(x,.2+j*.13*scale,z,.47*scale,.11,j%2?Math.PI+.3:.3,.35+(j%2)*.15,j%3===0);
@@ -455,10 +557,13 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
       } else {
         const h=(plot.cropId==='cucumber'?1.15:.83)*scale;
         b.rod(M.stem,[x,.01,z],[x+.035,h,z],.019);
-        if(['tomato','cucumber'].includes(plot.cropId)) {
-          b.rod(M.endgrain,[x-.18,0,z+.07],[x,h+.12,z+.07],.016);
-          b.rod(M.endgrain,[x+.18,0,z+.07],[x,h+.12,z+.07],.016);
-          for(let j=1;j<4;j++)b.rod(M.endgrain,[x-.18+j*.035,j*(h/4),z+.07],[x+.18-j*.035,j*(h/4),z+.07],.01);
+        // 支架：整排共用一副矮架（以前每株各画一套 → 4 株就是 8 根竿子，像搭脚手架）。
+        // 现在只在第一株画一次，且压到植株高度以内。
+        if(['tomato','cucumber'].includes(plot.cropId) && index===0) {
+          const fh=h*.78;
+          b.rod(M.endgrain,[x-.62,0,z+.10],[x-.62,fh,z+.10],.014);
+          b.rod(M.endgrain,[x+.62,0,z+.10],[x+.62,fh,z+.10],.014);
+          for(let j=1;j<3;j++)b.rod(M.endgrain,[x-.62+j*.41,j*(fh/3),z+.10],[x+.62-j*.41,j*(fh/3),z+.10],.009);
         }
         for(let j=0;j<5;j++) {
           const a=j*2.4;const yy=.2+j*(h-.25)/5,xx=x+Math.cos(a)*.17,zz=z+Math.sin(a)*.17;
@@ -470,15 +575,28 @@ export function createGardenWorld(world, renderer, { quality = 'balanced' } = {}
               p('ball',mature?M.red:M.greenFruit,fx,fy,fz,.092*scale,.085*scale,.092*scale);
               for(let k=0;k<3;k++)leaf(fx,fy+.08*scale,fz,.06,.035,k*TAU/3,.03);
             } else if(plot.cropId==='cucumber') {
+              // 黄瓜：细长弯瓜 + 表面刺点 + 顶花
               p('ball',M.cucumber,fx,fy-.06,fz,.052*scale,.17*scale,.052*scale,0,a,.12);
-              if(quality!=='low')for(let k=0;k<3;k++)p('ball',M.leafLight,fx+.042,fy-.16+k*.07,fz,.006,.009,.006);
+              if(quality!=='low') {
+                for(let k=0;k<3;k++)p('ball',M.leafLight,fx+.042,fy-.16+k*.07,fz,.006,.009,.006);
+                // 密刺：沿瓜身两侧点几颗浅色小点，才有黄瓜的粗糙质感
+                for(let k=0;k<4;k++){
+                  const t=k/3,py=fy-.15+t*.14;
+                  p('ball',M.cucumberSpike,fx+Math.cos(a+.9)*.05*scale,py,fz+Math.sin(a+.9)*.05*scale,.006,.008,.006);
+                  p('ball',M.cucumberSpike,fx+Math.cos(a-.9)*.05*scale,py,fz+Math.sin(a-.9)*.05*scale,.006,.008,.006);
+                }
+              }
+              p('cone',M.yellow,fx,fy+.10*scale,fz,.016,.03,.016);
             } else if(plot.cropId==='eggplant') {
               p('ball',mature?M.purple:M.greenFruit,fx,fy-.03,fz,.072*scale,.14*scale,.07*scale,0,a,.18);
               p('cone',M.leafDark,fx,fy+.085,fz,.07,.06,.07);
             } else {
+              // 甜椒：厚实方圆的**单果**（每处只挂 1 颗），之前每处挂 3 颗小球 → 远看像一串小灯笼
               const color=mature?(index%2?M.yellow:M.red):M.greenFruit;
-              for(let k=0;k<3;k++)p('ball',color,fx+Math.cos(k*TAU/3)*.037,fy-.02,fz+Math.sin(k*TAU/3)*.037,.055*scale,.085*scale,.055*scale);
-              b.rod(M.stem,[fx,fy+.06,fz],[fx+.015,fy+.12,fz],.01);
+              p('ball',color,fx,fy-.03,fz,.078*scale,.10*scale,.078*scale,0,a,0);
+              // 甜椒的方形肩：用四片小叶包住果实上半部
+              for(let k=0;k<4;k++)leaf(fx,fy+.06*scale,fz,.075*scale,.05*scale,k*TAU/4+.4,.5,k%2===0);
+              b.rod(M.stem,[fx,fy+.09*scale,fz],[fx+.015,fy+.14*scale,fz],.011);
             }
           }
         }

@@ -1,0 +1,30 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>菜园建模四阶段预览</title><style>body{margin:0;background:#eef3ea}canvas{display:block}aside{position:absolute;left:24px;top:20px;background:#fffcf1e8;color:#304638;border-radius:14px;padding:14px 20px;font:13px/1.6 system-ui}h1{font-size:18px;margin:0 0 4px}p{margin:2px 0;font-size:12px}label{font-size:12px;margin-right:10px;cursor:pointer}</style><canvas></canvas><aside><h1>菜园建模 · 四阶段</h1><p id="info">—</p><p id="ctrl"></p></aside>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="module">
+import * as THREE from './vendor/three.module.js';import {createWorld} from './world.js';import {createGardenWorld} from './garden-world.js';import {getGardenFraming} from './garden-camera.js';
+const r=new THREE.WebGLRenderer({canvas:document.querySelector('canvas'),antialias:true});r.setSize(innerWidth,innerHeight);r.setPixelRatio(1);r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=1.04;
+const w=createWorld(r,{quality:'balanced'});w.setCeilingVisible(false);w.setLabelsVisible(false);w.updateEnvironment({hour:14,lamp:false});
+const g=createGardenWorld(w,r,{quality:'balanced'});
+// 8 畦，每畦一种作物，stage 由 URL 参数 stage 控制
+const ALL=['radish','carrot','lettuce','tomato','cucumber','eggplant','pepper','strawberry'];
+const ALL2=['potato','cabbage','pumpkin','corn'];
+function apply(stage){
+  const ids = stage==='all' ? ALL : ALL.map(()=>ALL[0]);
+  g.update({plots:ALL.map((cropId,id)=>({id,tilled:true,cropId,stage: Number(stage),mature: Number(stage)===3,moisture:.6,fertilized:false}))});
+  document.getElementById('info').textContent = `stage=${stage} · ${ALL.join(' / ')}`;
+}
+const c=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.08,150);
+function draw(){r.setSize(innerWidth,innerHeight);c.aspect=innerWidth/innerHeight;const f=getGardenFraming(innerWidth,innerHeight,innerWidth);c.fov=f.fov;c.setViewOffset(innerWidth,innerHeight,f.offsetX,f.offsetY,innerWidth,innerHeight);c.position.set(f.target[0]+Math.sin(f.az)*Math.cos(f.elev)*f.radius,f.target[1]+Math.sin(f.elev)*f.radius,f.target[2]+Math.cos(f.az)*Math.cos(f.elev)*f.radius);c.lookAt(...f.target);w.updateCutaway(c.position,new THREE.Vector3(...f.target),true);r.render(w.scene,c);window.showcaseReady=true;window.showcaseStats={...r.info.render};}
+const params=new URLSearchParams(location.search);
+const stage=params.get('stage')||'3';
+const cropParam=params.get('crops');
+const CROP_LIST = cropParam ? cropParam.split(',') : ['radish','carrot','lettuce','tomato','cucumber','eggplant','pepper','strawberry'];
+ApplyList(CROP_LIST, stage);
+function ApplyList(list, st){
+  g.update({plots:list.map((cropId,id)=>({id,tilled:true,cropId,stage:Number(st),mature:Number(st)===3,moisture:.6,fertilized:false}))});
+  document.getElementById('info').textContent = `stage=${st} · ${list.join(' / ')}`;
+  draw();
+}
+addEventListener('resize',()=>{draw();});
+draw();
+</script></html>
