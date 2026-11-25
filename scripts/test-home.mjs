@@ -1169,6 +1169,20 @@ test('落盘签名必须包含上/下座过渡，且下座跨 tick 不被重建'
   }
 });
 
+test('房间上下文必须是第二人称（不能靠模型自己把「她」换算成「我」）', () => {
+  // 这段文字的唯一读者是小蓝鱼自己（room_status 工具 + room_link 插件每轮注入）。
+  // 以前写成「她在客厅…」再让插件补一句「请把『她』当成『我』」，
+  // 实测翻车两次：
+  //   · 「她在菜园采收」被记成「Liatos 在菜园采收」
+  //   · 把自己的状态安到主人头上，问出「来说说看 又卡哪儿了」
+  // 所以数据源必须是「你」，让模型没有换算余地。
+  const src = fs.readFileSync(new URL('../src/bridge.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('`你此刻在${whereNow}'), '房间上下文的主体不是第二人称');
+  assert.ok(src.includes('【你自己此刻】'), '缺少显式主语标注');
+  assert.ok(!src.includes('`她在${view.her.roomName}'), '还有第三人称「她在…」的上下文');
+  assert.ok(!src.includes('她窗外天气'), '天气归属还是第三人称');
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {

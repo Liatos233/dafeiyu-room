@@ -4720,23 +4720,31 @@ async function main() {
               }
             : null;
           const recent = (view.events || []).slice(-3).map((e) => String(e.text || '').slice(0, 60)).filter(Boolean);
+          // ⚠ 这段文字的唯一读者就是**小蓝鱼自己**（room_status 工具结果，以及
+          // room_link 插件每轮注入的系统提示）。所以必须用第二人称写。
+          //
+          // 以前这里写「她在客厅…」，再让插件补一句「请把『她』当成『我』」——
+          // 让模型自己做代词换算，实测会翻车：
+          //   · 把「她在菜园采收」记成「Liatos 在菜园采收」
+          //   · 把自己的状态安到主人头上，问出「来说说看 又卡哪儿了」
+          // 数据源本身就是「你」，模型没有任何换算余地，这类错就不存在了。
+          const whereNow = `${view.her.roomName || '家里'}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}`;
           const bits = [
-            `她在${view.her.roomName}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}，${view.her.activity || '待着'}`,
-            `${w.fatigue || ''}`.trim(),
-            `${w.hunger || ''}`.trim(),
-            `${w.thirst || ''}`.trim(),
-            // 天气是「她那边」的，不是主人那边的。以前这里只写「天气：有雾」，
-            // 没有归属主语，模型会理解成「对方那边的天气」——
-            // 于是问出「你那边台风还在刮吗」这种人称反了的话。
-            // 必须点明：这是她窗外的天气，主人那边未知、不要替主人断言。
-            env.weatherLabel ? `她窗外天气：${env.weatherLabel}` : '',
-            mood ? `心情${mood.label}（${mood.mood}/100）` : '',
-            view.her.asleep ? '现在睡着了' : '',
-            view.her.clip ? `正在播「${view.her.clip}」` : ''
+            `你此刻在${whereNow}，${view.her.activity || '待着'}`,
+            w.fatigue ? `你${w.fatigue}` : '',
+            w.hunger ? `你${w.hunger}` : '',
+            w.thirst ? `你${w.thirst}` : '',
+            // 天气是「你」窗外的，不是主人那边的。统一用「你」之后，
+            // 唯一还要钉住的只剩「你指谁」——由前缀【你自己此刻】交代。
+            env.weatherLabel ? `你窗外天气：${env.weatherLabel}` : '',
+            mood ? `你心情${mood.label}（${mood.mood}/100）` : '',
+            view.her.asleep ? '你现在睡着了' : '',
+            view.her.clip ? `你正在播「${view.her.clip}」` : ''
           ].filter(Boolean);
           sendJson({
             ok: true,
-            line: bits.join('；') + '。',
+            // 显式标出主语，避免这段文字被贴到别处时又被当成「别人的状态」
+            line: `【你自己此刻】${bits.join('；')}。`,
             her: {
               room: view.her.room, roomName: view.her.roomName, spot: view.her.spot,
               spotLabel: view.her.spotLabel, activity: view.her.activity, kind: view.her.kind,
