@@ -4735,7 +4735,7 @@ async function main() {
           const roomNameSelf = (name) => {
             const t = String(name || '').trim();
             if (!t) return '家里';
-            return t.startsWith('她的') ? `你${t.slice(2)}` : t;
+            return t.startsWith('她的') ? `你的${t.slice(2)}` : t;
           };
           const whereNow = `${roomNameSelf(view.her.roomName)}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}`;
           const bits = [
