@@ -1181,6 +1181,9 @@ test('房间上下文必须是第二人称（不能靠模型自己把「她」�
   assert.ok(src.includes('【你自己此刻】'), '缺少显式主语标注');
   assert.ok(!src.includes('`她在${view.her.roomName}'), '还有第三人称「她在…」的上下文');
   assert.ok(!src.includes('她窗外天气'), '天气归属还是第三人称');
+  // 房间名 her_room 的显示名是「她的房间」；放进第二人称句子里会变成
+  // 「你此刻在她的房间」，句中又冒出一个「她」——同一个诱因，必须换掉。
+  assert.ok(src.includes('roomNameSelf'), '房间名没有做第二人称安全转换（会出现「你在她的房间」）');
 });
 
 if (process.exitCode) {

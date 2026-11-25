@@ -4728,7 +4728,16 @@ async function main() {
           //   · 把「她在菜园采收」记成「Liatos 在菜园采收」
           //   · 把自己的状态安到主人头上，问出「来说说看 又卡哪儿了」
           // 数据源本身就是「你」，模型没有任何换算余地，这类错就不存在了。
-          const whereNow = `${view.her.roomName || '家里'}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}`;
+          // 房间名里 her_room 的显示名是「她的房间」。放进第二人称句子里就变成
+          // 「你此刻在她的房间·书桌前」——「她」在句中出现了，模型又会怀疑
+          // 说的是别人（这正是上一版翻车的同一个诱因）。所以描述自己时用
+          // 第二人称安全的房名：「你的房间」。
+          const roomNameSelf = (name) => {
+            const t = String(name || '').trim();
+            if (!t) return '家里';
+            return t.startsWith('她的') ? `你${t.slice(2)}` : t;
+          };
+          const whereNow = `${roomNameSelf(view.her.roomName)}${view.her.spotLabel ? '·' + view.her.spotLabel : ''}`;
           const bits = [
             `你此刻在${whereNow}，${view.her.activity || '待着'}`,
             w.fatigue ? `你${w.fatigue}` : '',
