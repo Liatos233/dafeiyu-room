@@ -5280,4 +5280,7 @@ async function boot() {
 }
 
 boot();
+  // 调试出口：量浮体真实坐标用（跟随水面的动没有逻辑状态可查）。
+  window.__world = world;
+
 
